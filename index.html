@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Local ChatGPT</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <aside class="sidebar">
+      <div class="logo">Local ChatGPT v1.5</div>
+      
+      <button id="new-conv-btn" class="new-btn">+ 新对话</button>
+
+
+      <nav class="conv-nav">
+        <ul id="conversation-list"></ul>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="settings-btn" onclick="showSettings()">
+          ⚙️ 设置
+        </button>
+      </div>
+    </aside>
+  <main class="main-area">
+  <div class="chat-main">
+    <section id="chat-area" class="chat-area">
+      <header class="chat-header" style="display:flex;align-items:center;">
+        <h1 id="chat-title" style="flex:1;margin:0;">对话</h1>
+        <button id="delete-current-btn" title="删除当前会话"
+          style="background:#FF2D00;border:none;color:white;font-size:0.9rem;padding:6px 12px;border-radius:4px;margin-left:8px;cursor:pointer;">
+          删除
+        </button>
+      </header>
+
+      <div class="messages" id="messages"></div>
+      <div class="input-area">
+         <select id="model">
+            <optgroup label="Reasoning models">
+              <option value="o4-mini">o4-mini</option>
+              <option value="o3">o3</option>
+              <option value="o3-mini">o3-mini</option>
+              <option value="o1">o1</option>
+              <option value="o1-mini">o1-mini</option>
+              <option value="o1-pro">o1-pro</option>
+            </optgroup>
+            <optgroup label="Flagship chat">
+              <option value="gpt-4.1">gpt-4.1</option>
+              <option value="gpt-4o">gpt-4o</option>
+              <option value="gpt-4o-audio">gpt-4o-audio</option>
+              <option value="chatgpt-4o">chatgpt-4o</option>
+            </optgroup>
+            <optgroup label="Cost-optimized">
+              <option value="4.1-mini">4.1-mini</option>
+              <option value="gpt-4o-mini">gpt-4o-mini</option>
+              <option value="gpt-4o-mini-audio">gpt-4o-mini-audio</option>
+            </optgroup>
+            <optgroup label="Older GPT">
+              <option value="gpt-4-turbo">gpt-4-turbo</option>
+              <option value="gpt-4">gpt-4</option>
+              <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
+            </optgroup>
+          </select>
+          <textarea
+          id="prompt"
+          placeholder="输入你的问题，Enter 发送 / ShiftEnter 换行"
+        ></textarea>
+        <button onclick="send()">发送</button>
+      </div>
+    </section>
+
+    <!-- 设置区域 -->
+    <section id="settings-area" class="settings-area" style="display:none;">
+      <h2>设置</h2>
+      <div class="setting-item">
+        <label>清除所有历史（谨慎使用！）</label>
+        <button onclick="clearAllHistory()">清除</button>
+      </div>
+      <div class="setting-item">
+        <label>主题模式（还不能用）</label>
+        <button id="toggle-theme-btn">切换浅/深色</button>
+      </div>
+      <div class="setting-group">
+<label>OpenAI API Key（设置后刷新生效）</label>
+  <input id="api-key" type="password" placeholder="输入你的 API Key" />
+  <button id="save-api-key" onclick="saveApiKey()">保存</button>
+</div>
+
+      <div class="setting-item">
+        <label for="ui-scale-slider">界面缩放（测试功能）</label>
+        <input
+          id="ui-scale-slider"
+          type="range"
+          min="0.8"
+          max="1.4"
+          step="0.1"
+          value="1"
+        />
+        <span id="ui-scale-value">100%</span>
+      </div>
+    </section>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<script type="module" src="script.js"></script>
+
+  
+</body>
+</html>

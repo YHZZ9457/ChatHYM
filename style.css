@@ -1,0 +1,579 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: 'Roboto', sans-serif;
+  background: #202123;
+  color: #ececf1;
+}
+.container { display: flex; height: 100vh; }
+.sidebar {
+  width: 260px;
+  background: #111;
+  display: flex;
+  flex-direction: column;
+}
+.logo {
+  text-align: center;
+  font-size: 1.4rem;
+  font-weight: 500;
+  padding: 20px 0;
+}
+.new-btn {
+  margin: 0 20px 10px;
+  padding: 8px;
+  background: #10a37f;
+  border: none;
+  border-radius: 5px;
+  color: #fff;
+  cursor: pointer;
+}
+.new-btn:hover { filter: brightness(0.9); }
+.conv-nav { flex: 1; overflow-y: auto; padding: 0 10px; }
+.conv-nav ul { list-style: none; }
+.conv-nav ul li {
+  padding: 10px;
+  margin-bottom: 5px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+.conv-nav ul li:hover { background: #2a2b32; }
+.conv-nav ul li.active { background: #343541; }
+.sidebar-footer {
+  padding: 10px;
+  border-top: 1px solid #343541;
+}
+.settings-btn {
+  width: 100%;
+  padding: 10px;
+  background: none;
+  border: none;
+  color: #ececf1;
+  cursor: pointer;
+  border-radius: 5px;
+}
+.settings-btn:hover { background: #343541; }
+.main-area { flex: 1; display: flex; flex-direction: column; }
+.chat-area, .settings-area { flex: 1; display: flex; flex-direction: column; }
+.chat-header {
+  padding: 20px;
+  border-bottom: 1px solid #343541;
+  font-size: 1.2rem;
+  font-weight: 500;
+}
+
+
+.message { margin-bottom: 16px; max-width: 70%; }
+.message.user { margin-left: auto; }
+.message .text {
+  background-color: #2e2f3a;
+  border-radius: 16px;
+  padding: 8px 16px;
+  margin: 8px 0;
+  line-height: 1.6;
+  max-width: 100%;
+  word-break: break-word;
+  overflow-wrap: break-word;
+  display: inline-block;
+  vertical-align: top;
+  white-space: pre-wrap;
+}
+
+.message .text p:first-child {
+  margin-top: 0;
+}
+.message .text p:last-child {
+  margin-bottom: 0;
+}
+.message .text p {
+  margin-top: 0.5em;
+  margin-bottom: 0.5em;
+}
+
+.message .text pre {
+  background: #1e1e1e;
+  padding: 12px;
+  border-radius: 10px;
+  overflow-x: auto;
+}
+
+.message .text code {
+  background: #1e1e1e;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 0.95em;
+  color: #eee;
+}
+
+
+/* 让标题不要顶出圆角框边界 */
+.message .text h1,
+.message .text h2,
+.message .text h3 {
+  font-size: 1.1rem;
+  font-weight: bold;
+}
+
+/* 美化代码块和 inline code */
+.message .text {
+  background-color: #2e2f3a;
+  border-radius: 16px;
+  padding: 12px 16px;
+  margin: 8px 0;
+  line-height: 1.6;
+  max-width: 100%;
+  word-break: break-word;
+  white-space: pre-wrap;        /* 保留换行 */
+}
+
+.message .text pre {
+  max-width: 100%;             /* 不超过外层宽度 */
+  overflow-x: auto;
+}
+
+
+.message.user .text { background: #4a86f7; color: #fff; }
+.message.assistant .text { background: #343541; color: #ececf1; }
+.input-area {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-top: 1px solid #343541;
+  background: #202123;
+  z-index: 10;
+}
+select {
+  width: 180px;
+  border-radius: 5px;
+  background: #343541;
+  color: #ececf1;
+  border: none;
+  padding: 8px;
+}
+textarea {
+  flex: 1;
+  resize: none;
+  border: none;
+  border-radius: 5px;
+  padding: 10px;
+  background: #343541;
+  color: #ececf1;
+  height: 50px;
+  font-size: 0.95rem;
+}
+.button, button {
+  background: #10a37f;
+  border: none;
+  padding: 0 20px;
+  border-radius: 5px;
+  color: #fff;
+  cursor: pointer;
+  font-size: 1rem;
+}
+button:hover { filter: brightness(0.9); }
+button:active { filter: brightness(0.8); }
+.settings-area { padding: 20px; }
+.setting-item { margin-bottom: 20px; }
+.setting-item label { display: block; margin-bottom: 8px; font-weight: 500; }
+
+/*=== 1. 全局铺满，页面本身不滚动 ===*/
+html, body {
+  margin: 0; padding: 0;
+  width: 100%; height: 100%;
+  overflow: hidden;       /* 禁止 body 出现滚动条 */
+}
+
+/*=== 2. Container 左侧 sidebar 固定，右侧 main-area 铺满剩余 ===*/
+.container {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+.sidebar {
+  flex: 0 0 260px;       /* 固定 260px 宽 */
+}
+.main-area {
+  flex: 1;               /* 扩张填满所有剩余 */
+  display: flex;
+  flex-direction: column;
+  position: relative;    /* 后面绝对定位的基准 */
+}
+
+/*=== 3. 聊天区 header、消息区、输入区都固定 ===*/
+.chat-header {
+  flex: 0 0 auto;
+  z-index: 10;
+}
+.messages {
+  position: absolute;    /* 绝对铺满 header 和 input 之间 */
+  top: 60px;             /* 约等于 .chat-header 的高度，可根据实际调整 */
+  bottom: 70px;          /* 约等于 .input-area 的高度 */
+  left: 0; right: 0;
+  overflow-y: auto;      /* 只给消息区滚动 */
+  padding: 20px;
+}
+.messages::-webkit-scrollbar {
+  width: 8px;
+}
+.messages::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.2);
+  border-radius: 4px;
+}
+.input-area {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  display: flex;
+  padding: 10px 20px;
+  background: #202123;
+  border-top: 1px solid #343541;
+  align-items: center;
+  z-index: 10;
+}
+
+/*=== 4. 下拉只在 input-area，dropdown 弹出不会滚动整页 ===*/
+.input-area select {
+  width: 180px;
+  max-height: 200px;    /* 最大高度 */
+  overflow-y: auto;     /* 超高出现内部滚动 */
+  z-index: 1000;        /* 抬到最上面 */
+}
+
+/*=== 5. 放大发送按钮 ===*/
+.input-area button {
+  padding: 12px 24px;
+  font-size: 1.1rem;
+  border-radius: 0.5rem;
+  margin-left: 8px;
+}
+
+/*=== 6. 气泡强制可见、防止被 overflow 隐藏 ===*/
+
+.message.user {
+  margin-left: auto;
+}
+/* 1. 让 messages 区域用 Flex 垂直布局 */
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;           /* 气泡之间留点间距 */
+}
+
+/* 2. 每条消息本身也用 Flex，宽度自适应内容 */
+.message {
+  display: inline-flex;
+  max-width: 70%;     /* 气泡最大宽度，可根据喜好调整 */
+  padding: 8px 12px;
+  border-radius: 16px;
+  word-break: break-word;
+}
+
+/* 3. 系统/助手消息左对齐 */
+.message.assistant {
+  align-self: flex-start;
+  background: #343541;
+}
+
+/* 4. 用户消息右对齐 */
+.message.user {
+  align-self: flex-end;
+  background: #2979ff;
+  color: white;
+}
+
+
+/* 去掉内部 .text 的背景和内边距，避免双层气泡 */
+.message .text {
+  background: transparent !important;
+  padding: 0 !important;
+  margin: 0;
+  white-space: pre-wrap;
+}
+.message .text h1,
+.message .text h2,
+.message .text h3,
+.message .text p,
+.message .text ul,
+.message .text ol,
+.message .text li,
+.message .text pre,
+.message .text code {
+  margin: 0.5em 0;
+  line-height: 1.6;
+  word-break: break-word;
+}
+
+.message .text pre {
+  background: #1e1e1e;
+  padding: 12px;
+  border-radius: 10px;
+  overflow-x: auto;
+}
+
+.message .text code {
+  background: #1e1e1e;
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-family: monospace;
+  font-size: 0.95em;
+  color: #eee;
+}
+
+
+/* 鼠标悬停和选中高亮效果 */
+#conversation-list li:hover {
+  background: #2e2f33;
+}
+#conversation-list li.active {
+  background: #38393f;
+}
+
+/* 默认暗色主题 */
+body.dark-theme {
+  background-color: #121212;
+  color: white;
+}
+body.dark-theme .container,
+body.dark-theme .sidebar,
+body.dark-theme .main-area {
+  background-color: #1e1e1e;
+  color: white;
+}
+body.dark-theme .message.user {
+  background-color: #2979ff;
+  color: white;
+}
+body.dark-theme .message.assistant {
+  background-color: #343541;
+  color: white;
+}
+
+/* 浅色主题 */
+body.light-theme {
+  background-color: #f5f5f5;
+  color: #222;
+}
+body.light-theme .container,
+body.light-theme .sidebar,
+body.light-theme .main-area {
+  background-color: #ffffff;
+  color: #222;
+}
+body.light-theme .message.user {
+  background-color: #007bff;
+  color: white;
+}
+body.light-theme .message.assistant {
+  background-color: #e5e5e5;
+  color: #222;
+}
+
+/* —— 对话项的“更多”按钮 —— */
+.conv-nav ul li {
+  position: relative;
+}
+.conv-nav ul li .more-btn {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 1.2rem;
+  display: none;
+}
+.conv-nav ul li:hover .more-btn {
+  display: block;
+}
+
+/* 弹出删除菜单 */
+.conv-nav ul li .more-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: #2a2b32;
+  border: 1px solid #444;
+  border-radius: 4px;
+  padding: 4px 0;
+  display: none;
+  z-index: 100;
+}
+.conv-nav ul li .more-menu.show {
+  display: block;
+}
+.conv-nav ul li .more-menu button {
+  width: 100%;
+  background: none;
+  border: none;
+  color: #ececf1;
+  padding: 6px 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.conv-nav ul li .more-menu button:hover {
+  background: #3b3c43;
+}
+
+/* 主题按钮样式微调 */
+#toggle-theme-btn {
+  padding: 6px 12px;
+  border-radius: 4px;
+  background: #10a37f;
+  color: white;
+  border: none;
+  cursor: pointer;
+}
+#toggle-theme-btn:hover {
+  filter: brightness(0.9);
+}
+
+/* 仅放大第一个 setting-item 的按钮 */
+.settings-area .setting-item:nth-of-type(1) button {
+  padding: 9px 24px;
+  font-size: 1.0rem;
+}
+
+/* 对话列表，每项相对定位 */
+#conversation-list li {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+}
+
+#delete-current-btn {
+  background: transparent;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  margin-left: 8px;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+#delete-current-btn:hover {
+  opacity: 1;
+}
+#delete-current-btn:hover {
+  background: #c9302c !important;
+}
+
+/* 1. 左侧设置区域底部横线／主区左边分隔对齐 */
+.sidebar {
+  position: relative;
+  border-right: 1px solid #343541;  /* 给整个侧边栏增加右侧边框 */
+}
+.main-area {
+  /* 如果之前对主区也有边框，删掉它，交给侧边栏画线 */
+  border-left: none !important;
+}
+
+/* 2. 放大多行输入框 */
+#prompt {
+  /* 如果是<input>，改成 textarea 更好；以下只做尺寸增大 */
+  min-height: 4em;         /* 至少4行文字的高度 */
+  max-height: 8em;         /* 最多8行，超高滚动 */
+  resize: vertical;         /* 用户可以拖拽调整高度 */
+  font-size: 1rem;         /* 字体稍大更易阅读 */
+  padding: 0.75em 1em;     
+}
+
+/* 如果改成 <textarea id="prompt">，则这段生效；否则先把 HTML 里替换 input 为 textarea： */
+/*
+<div class="input-area">
+  <select id="model">…</select>
+  <textarea id="prompt" placeholder="输入你的问题，Enter 发送／Shift+Enter 换行"></textarea>
+  <button id="send-button">发送</button>
+</div>
+*/
+
+/* 根变量默认缩放 */
+:root {
+  --ui-scale: 1;
+}
+
+:root {
+  --ui-scale: 1;
+}
+/* 用 zoom 而非 transform */
+body {
+  zoom: var(--ui-scale);
+}
+/* 确保可滚动 */
+html, body {
+  overflow: auto;
+  height: 100%;
+}
+
+/* 隐藏对话标题下的边框线 */
+#chat-title {
+  border-bottom: none !important;
+  box-shadow: none !important;
+}
+.header, .title-bar, .chat-header {
+  border-bottom: none !important;
+  box-shadow: none !important;
+}
+
+/* 修复 Markdown 列表项间距 */
+.message .text ul,
+.message .text ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.message .text li {
+  margin: 0.2em 0;
+  line-height: 1.6;
+}
+
+/* 嵌套列表增加额外缩进 */
+.message .text ul ul,
+.message .text ol ol {
+  padding-left: 1.2em;
+  margin-top: 0.2em;
+  margin-bottom: 0.2em;
+}
+
+/* 保持列表符号样式一致 */
+.message .text ul {
+  list-style-type: disc;
+}
+
+.message .text ol {
+  list-style-type: decimal;
+}
+/* 去掉气泡自身的底部留白 */
+.message {
+  margin-bottom: 0 !important;
+}
+/* 去掉气泡内部最后一个元素的下外边距 */
+.message .text > *:last-child {
+  margin-bottom: 0 !important;
+}
+
+#api-key {
+  width: 100%;
+  padding: 8px;
+  margin: 8px 0;
+  font-size: 14px;
+  border-radius: 4px;
+  border: 1px solid #555;
+  background: #222;
+  color: #fff;
+}
+
+.setting-group button {
+  padding: 6px 12px;
+  background-color: #22c55e;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+}
+
+.setting-group button:hover {
+  background-color: #16a34a;
+}

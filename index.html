@@ -1,19 +1,44 @@
 <!DOCTYPE html>
 <html lang="zh">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>Local ChatGPT</title>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap"
-    rel="stylesheet"
-  />
+  <title>LocalGPT with MathJax</title>
+
+  <!-- 页面样式 -->
   <link rel="stylesheet" href="style.css" />
+
+  <!-- MathJax 配置：支持 $$…$$ 和 \[…\] -->
+  <script type="text/javascript">
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$','$$'], ['\\[','\\]']]
+      },
+      options: {
+        ignoreHtmlClass: '.*',
+        processHtmlClass: '.*'
+      }
+    };
+  </script>
+
+  <!-- 推荐：自动跟进最新 3.x 版本 -->
+  <script
+    id="MathJax-script"
+    defer
+    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
 </head>
+
+
+
 <body>
   <div class="container">
     <aside class="sidebar">
-      <div class="logo">Local ChatGPT v1.5</div>
+      <div class="logo">LocalGPT v2.0</div>
       
       <button id="new-conv-btn" class="new-btn">+ 新对话</button>
 
@@ -23,21 +48,16 @@
       </nav>
       <div class="sidebar-footer">
         <button class="settings-btn" onclick="showSettings()">
-          ⚙️ 设置
+         ⚙️ 设置
         </button>
       </div>
     </aside>
   <main class="main-area">
-  <div class="chat-main">
-    <section id="chat-area" class="chat-area">
-      <header class="chat-header" style="display:flex;align-items:center;">
-        <h1 id="chat-title" style="flex:1;margin:0;">对话</h1>
-        <button id="delete-current-btn" title="删除当前会话"
-          style="background:#FF2D00;border:none;color:white;font-size:0.9rem;padding:6px 12px;border-radius:4px;margin-left:8px;cursor:pointer;">
-          删除
-        </button>
-      </header>
-
+   <section id="chat-area" class="chat-area">
+    <header class="chat-header">
+      <h1 id="chat-title">对话</h1>
+      <button id="delete-current-btn" title="删除当前会话">删除</button>
+    </header>
       <div class="messages" id="messages"></div>
       <div class="input-area">
          <select id="model">
@@ -74,43 +94,49 @@
       </div>
     </section>
 
-    <!-- 设置区域 -->
-    <section id="settings-area" class="settings-area" style="display:none;">
-      <h2>设置</h2>
-      <div class="setting-item">
-        <label>清除所有历史（谨慎使用！）</label>
-        <button onclick="clearAllHistory()">清除</button>
-      </div>
-      <div class="setting-item">
-        <label>主题模式（还不能用）</label>
-        <button id="toggle-theme-btn">切换浅/深色</button>
-      </div>
-      <div class="setting-group">
-<label>OpenAI API Key（设置后刷新生效）</label>
-  <input id="api-key" type="password" placeholder="输入你的 API Key" />
-  <button id="save-api-key" onclick="saveApiKey()">保存</button>
-</div>
+<!-- 设置区域 -->
+<section id="settings-area" class="settings-area" style="display:none;">
+  <h2>设置</h2>
 
-      <div class="setting-item">
-        <label for="ui-scale-slider">界面缩放（测试功能）</label>
-        <input
-          id="ui-scale-slider"
-          type="range"
-          min="0.8"
-          max="1.4"
-          step="0.1"
-          value="1"
-        />
-        <span id="ui-scale-value">100%</span>
-      </div>
-    </section>
+  <!-- 清除历史 -->
+  <div class="setting-item">
+    <label>清除所有历史</label>
+    <button class="danger" onclick="clearAllHistory()">清除</button>
   </div>
-</main>
 
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- 切换主题：务必包裹在自己的 setting-item -->
+  <div class="setting-item">
+    <label>切换浅色/深色主题（beta）</label>
+    <button id="toggle-theme-btn">切换主题</button>
+
+  </div>
+
+  <!-- API Key -->
+  <div class="setting-item">
+    <label>OpenAI API Key（设置后刷新生效）</label>
+    <!-- 正确的 placeholder -->
+    <input id="api-key" type="password" placeholder="输入你的 API Key" />
+    <button onclick="saveApiKey()">保存</button>
+  </div>
+
+  <!-- 界面缩放 -->
+  <div class="setting-item">
+    <label for="ui-scale-slider">界面缩放（测试功能）</label>
+    <input
+      id="ui-scale-slider"
+      type="range"
+      min="0.8"
+      max="1.4"
+      step="0.1"
+      value="1"
+    />
+    <span id="ui-scale-value">100%</span>
+  </div>
+</section>
+
 
 <script type="module" src="script.js"></script>
 
-  
+
 </body>
 </html>

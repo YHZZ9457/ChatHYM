@@ -6,30 +6,36 @@ let conversations = []
 let currentConversationId = null
 
 
-function appendMessage(role, text, save = true) {
-  const msgsElem = document.getElementById('messages');
+function appendMessage(role, text) {
+  const container = document.getElementById('messages');
   const div = document.createElement('div');
   div.className = 'message ' + (role === 'assistant' ? 'assistant' : 'user');
-  const isMarkdownExample = text.includes('# ') || text.includes('```');
-  const parsed = (role === 'assistant' && typeof marked !== 'undefined')
-    ? marked.parse(text).trim().replace(/<p>(\s|&nbsp;)*<\/p>$/g, '')
-    : text;
-    const promptElem = document.getElementById('prompt');
 
-  div.innerHTML = `<div class="text">${parsed}</div>`;
-  msgsElem.appendChild(div);
-  msgsElem.scrollTop = msgsElem.scrollHeight;
+  // —— 核心改动：只有在 marked 存在时才用 marked.parse —— 
+  const contentHtml = (typeof marked !== 'undefined')
+    ? marked.parse(text)
+    : escapeHtml(text);
+    
 
-  if (save) {
-    const conv = conversations.find(c => c.id === currentConversationId);
-    if (conv) {
-      conv.messages.push({ role, content: text });
-      saveConversations();
-    }
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'text';
+  contentDiv.innerHTML = contentHtml;
+
+  container.appendChild(div).appendChild(contentDiv);
+  container.scrollTop = container.scrollHeight;
+
+  // MathJax 渲染
+  if (window.MathJax && MathJax.typesetPromise) {
+    MathJax.typesetPromise([contentDiv]).catch(console.error);
   }
 }
 
-
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 
 
 // 1. Del会话函数，必须最先定义
@@ -85,6 +91,9 @@ function loadApiKeyToInput() {
 
 // —— 第二部分：DOMContentLoaded 初始化 —— 
 document.addEventListener('DOMContentLoaded', () => {
+document.getElementById('settings-btn').addEventListener('click', () => {
+  document.getElementById('settings-area').classList.toggle('visible');
+});
   loadApiKeyToInput();
   loadConversations();
   renderConversationList();
@@ -126,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
   // 主题初始化
-  const saved = localStorage.getItem('chat-theme') || 'dark';
+  const saved = localStorage.getItem('theme') || 'dark';
   document.body.classList.add(saved + '-theme');
 
   // 主题切换按钮
@@ -136,7 +145,7 @@ document.addEventListener('DOMContentLoaded', () => {
       document.body.classList.toggle('dark-theme');
       document.body.classList.toggle('light-theme');
       localStorage.setItem(
-        'chat-theme',
+        'theme',
         document.body.classList.contains('dark-theme') ? 'dark' : 'light'
       );
     });
@@ -156,7 +165,7 @@ if (themeBtn) {
     document.body.classList.toggle('dark-theme');
     document.body.classList.toggle('light-theme');
     localStorage.setItem(
-      'chat-theme',
+      'theme',
       document.body.classList.contains('dark-theme') ? 'dark' : 'light'
     );
   });
@@ -410,6 +419,33 @@ window.showSettings = showSettings;
 
 bindPromptOnce();
 
+// === 主题切换逻辑 ===
+
+function applyStoredTheme() {
+  // 把 'light' 改成 'dark'，这样 localStorage 里没值时就走暗色
+  const theme = localStorage.getItem('theme') || 'dark';
+  if (theme === 'dark') {
+    document.body.classList.add('dark-theme');
+  } else {
+    document.body.classList.remove('dark-theme');
+  }
+}
+
+// 切换主题并存储（从暗→亮或从亮→暗）
+function toggleTheme() {
+  // toggle 会反转 dark-theme 类
+  const isDark = document.body.classList.toggle('dark-theme');
+  // 然后把反转后的状态存起来：true＝暗色，false＝亮色
+  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+}
+
+// 绑定按钮
+document.addEventListener('DOMContentLoaded', () => {
+  applyStoredTheme();  // 加载时应用“默认暗色”或用户上次选的
+  document
+    .getElementById('toggle-theme-btn')
+    .addEventListener('click', toggleTheme);
+});
 
 
 

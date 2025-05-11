@@ -10,18 +10,16 @@
   <link rel="stylesheet" href="style.css" />
 
   <!-- MathJax 配置：支持 $$…$$ 和 \[…\] -->
-  <script type="text/javascript">
-    window.MathJax = {
-      tex: {
-        inlineMath: [['$', '$'], ['\\(', '\\)']],
-        displayMath: [['$$','$$'], ['\\[','\\]']]
-      },
-      options: {
-        ignoreHtmlClass: '.*',
-        processHtmlClass: '.*'
-      }
-    };
-  </script>
+<script type="text/javascript">
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$','$$'], ['\\[','\\]']]
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
 
   <!-- 推荐：自动跟进最新 3.x 版本 -->
   <script
@@ -38,7 +36,7 @@
 <body>
   <div class="container">
     <aside class="sidebar">
-      <div class="logo">LocalGPT v2.0</div>
+      <div class="logo">LocalGPT v2.1</div>
       
       <button id="new-conv-btn" class="new-btn">+ 新对话</button>
 
@@ -71,14 +69,13 @@
             </optgroup>
             <optgroup label="Flagship chat">
               <option value="gpt-4.1">gpt-4.1</option>
-              <option value="gpt-4o">gpt-4o</option>
-              <option value="gpt-4o-audio">gpt-4o-audio</option>
+              <option value="gpt-4o">gpt-4o</option>              
               <option value="chatgpt-4o">chatgpt-4o</option>
             </optgroup>
             <optgroup label="Cost-optimized">
-              <option value="4.1-mini">4.1-mini</option>
-              <option value="gpt-4o-mini">gpt-4o-mini</option>
-              <option value="gpt-4o-mini-audio">gpt-4o-mini-audio</option>
+              <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+              <option value="gpt-4o-mini">gpt-4o-mini</option>              
+              <option value="gpt-4.1-nano">gpt-4.1-nano</option>
             </optgroup>
             <optgroup label="Older GPT">
               <option value="gpt-4-turbo">gpt-4-turbo</option>
@@ -113,7 +110,7 @@
 
   <!-- API Key -->
   <div class="setting-item">
-    <label>OpenAI API Key（设置后刷新生效）</label>
+    <label>OpenAI API Key（需设置后使用）</label>
     <!-- 正确的 placeholder -->
     <input id="api-key" type="password" placeholder="输入你的 API Key" />
     <button onclick="saveApiKey()">保存</button>

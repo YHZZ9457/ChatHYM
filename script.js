@@ -1,7 +1,8 @@
-// —— 第一部分：全局函数定义 ——
+// ——— 顶部：针对 marked & MathJax 的配置 ———
+// 1. 关闭 marked 的 sanitize（保留所有反斜杠），启用 GitHub 风格
 
 // 全局变量
-let currentApiKey = localStorage.getItem('openai-api-key') || ''
+let currentApiKey = localStorage.getItem('openai-api-key') || '';
 let conversations = []
 let currentConversationId = null
 
@@ -65,13 +66,16 @@ if (wasCurrent) {
 
 function saveApiKey() {
   const key = document.getElementById('api-key').value.trim();
-  if (key) {
-    localStorage.setItem('openai-api-key', key);
-    alert('API Key 已保存');
-  } else {
+  if (!key) {
     alert('请输入有效的 API Key');
+    return;
   }
+  localStorage.setItem('openai-api-key', key);
+  console.log('[DEBUG] 已保存到 localStorage 的 API Key:', localStorage.getItem('openai-api-key'));
+  alert('API Key 已保存');
 }
+
+
 
 window.saveApiKey = saveApiKey;
 
@@ -81,57 +85,50 @@ function loadApiKeyToInput() {
   const saved = localStorage.getItem('openai-api-key');
   if (saved) {
     document.getElementById('api-key').value = saved;
-    currentApiKey = saved;
+    currentApiKey = saved;     // ← 确保也赋值给 currentApiKey
   }
 }
 
 
-
-// 2. 其他全局函数
-
-// —— 第二部分：DOMContentLoaded 初始化 —— 
+// —— 第二部分：DOMContentLoaded 初始化 ——
 document.addEventListener('DOMContentLoaded', () => {
-document.getElementById('settings-btn').addEventListener('click', () => {
-  document.getElementById('settings-area').classList.toggle('visible');
-});
+  // 加载并填充 API Key
   loadApiKeyToInput();
+
+  // 加载会话列表
   loadConversations();
   renderConversationList();
+
+  // 切换到第一个已有对话，或新建对话
   if (conversations.length) {
     loadConversation(conversations[0].id);
   } else {
     createNewConversation();
   }
 
-  // 模型下拉改变
-  const modelSel = document.getElementById('model');
-  if (modelSel) {
-    modelSel.addEventListener('change', () => {
-      const conv = getCurrentConversation();
-      if (conv) {
-        conv.model = modelSel.value;
-        saveConversations();
-      }
-    });
-  }
+  // 绑定“+ 新对话”按钮
+  const newConvBtn = document.getElementById('new-conv-btn');
+  if (newConvBtn) newConvBtn.addEventListener('click', createNewConversation);
 
-  // 绑定Del按钮（此时 deleteConversation 已经是全局可用的）
+  // 绑定“删除当前对话”按钮
   const deleteBtn = document.getElementById('delete-current-btn');
-  console.log('[DEBUG] deleteBtn:', deleteBtn);
   if (deleteBtn) {
     deleteBtn.addEventListener('click', () => {
-      console.log('[DEBUG] delete button clicked');
       if (!currentConversationId) return;
       const conv = conversations.find(c => c.id === currentConversationId);
-      console.log('[DEBUG] deleting:', conv);
       if (conv && confirm(`确认删除「${conv.title}」吗？`)) {
         deleteConversation(currentConversationId);
       }
     });
   }
 
-  // …此处继续你的其它初始化：快捷键、渲染列表、加载会话等…
+  // 绑定“切换主题”按钮
+  const themeBtn = document.getElementById('toggle-theme-btn');
+  if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
+
+  // 其它需要在页面加载后执行的初始化…
 });
+
 
 
   // 主题初始化
@@ -277,6 +274,7 @@ function saveConversations() {
   localStorage.setItem('conversations', JSON.stringify(conversations));
 }
 function loadConversations() {
+  currentApiKey = localStorage.getItem('openai-api-key') || '';
   const data = localStorage.getItem('conversations');
   conversations = data ? JSON.parse(data) : [];
 }
@@ -364,41 +362,62 @@ function clearAllHistory() {
 window.clearAllHistory = clearAllHistory;
 
 async function send() {
+  const apiKey = localStorage.getItem('openai-api-key') || '';
+  if (!apiKey) {
+    alert('请先在设置里保存你的 API Key');
+    return;
+  }
+
   const input = document.getElementById('prompt');
   const prompt = input.value.trim();
   if (!prompt) return;
 
-  appendMessage('user', prompt); // 会 save user 消息
-  input.value = '';
+  // 1. 渲染到界面
+  appendMessage('user', prompt);
 
+  // 2. 同步到对话数据里
   const conv = conversations.find(c => c.id === currentConversationId);
   if (!conv) return;
+  conv.messages.push({ role: 'user', content: prompt });
 
+  input.value = '';
+
+  // 3. 调用 OpenAI
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + currentApiKey
+      'Authorization': 'Bearer ' + apiKey
     },
     body: JSON.stringify({
       model: conv.model,
       messages: conv.messages.map(m => ({
-        role: m.role === 'bot' ? 'assistant' : m.role,
+        role:    m.role === 'bot' ? 'assistant' : m.role,
         content: m.content
       }))
     })
   });
 
-  const data = await res.json();
-  const reply = data.choices[0].message.content;
+  // 4. 处理响应
+  if (!res.ok) {
+    const err = await res.text();
+    alert(`接口返回 ${res.status}：${err}`);
+    return;
+  }
+const data  = await res.json();
+// ← 一定要先把它取出来并存到一个变量
+const reply = data.choices[0].message.content;
 
-  // ✅ 只渲染，不保存，由 appendMessage 自动 save
-  appendMessage('assistant', reply); // save=true by default
+appendMessage('assistant', reply);
+// ← 然后把 reply 推入数组
+conv.messages.push({ role: 'assistant', content: reply });
+// ← 最后写回 localStorage
+saveConversations();
 
-  // ❌ 不要再 push 或 save 第二次！
-  // conv.messages.push(...)
-  // saveConversations()
 }
+
+window.send = send;
+
 
 
 

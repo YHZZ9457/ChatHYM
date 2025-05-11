@@ -1,9 +1,9 @@
 
-Local ChatGPT v2.0
+Local ChatGPT v2.1
 
-更新了一下界面，不过部分功能还是有问题，先这样吧
+更新了一下界面，现在浅色模式没问题了，应该基本可以正常使用了
 
-新增了对Markdown和数学公式的支持
+支持Markdown和数学公式
 
 使用前需要在设置里面自己填入ChatGPT的API-Keys，然后刷新一下
 

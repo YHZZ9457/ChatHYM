@@ -60,7 +60,7 @@ function appendLoading() {
   div.className = 'message assistant loading';
   const span = document.createElement('div');
   span.className = 'text';
-  span.textContent = '正在输入…';
+  span.textContent = '对方正在输入…';
   div.appendChild(span);
   container.appendChild(div);
   container.scrollTop = container.scrollHeight;

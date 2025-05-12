@@ -590,3 +590,12 @@ body.dark-theme {
 .message .text a:hover {
   color: #004999 !important;
 }
+
+/* 聊天消息中的图片自适应宽度、保持纵横比 */
+.message .text img {
+  display: block;             /* 单独一行，自动撑开容器 */
+  max-width: 100% !important; /* 最宽不超过气泡宽度 */
+  height: auto !important;    /* 高度按比例自适应 */
+  margin: 8px 0;              /* 上下加点间距 */
+  border-radius: 4px;         /* 圆润点儿，可选 */
+}

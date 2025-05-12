@@ -1,10 +1,31 @@
 // ——— 顶部：针对 marked & MathJax 的配置 ———
 // 1. 关闭 marked 的 sanitize（保留所有反斜杠），启用 GitHub 风格
 
+
+
 // 全局变量
 let currentApiKey = localStorage.getItem('openai-api-key') || '';
 let conversations = []
 let currentConversationId = null
+
+// —— 最顶部，保证在 appendMessage 之前 —— 
+function pruneEmptyNodes(container) {
+  // 先删空文本节点
+  Array.from(container.childNodes).forEach(node => {
+    if (node.nodeType === Node.TEXT_NODE && !node.textContent.trim()) {
+      node.remove();
+    }
+  });
+  // 再删空或只有 <br> 的段落
+  container.querySelectorAll('p').forEach(p => {
+    const txt = p.textContent.replace(/\u00A0/g, '').trim();
+    if (!txt || (p.children.length === 1 && p.children[0].tagName === 'BR')) {
+      p.remove();
+    }
+  });
+}
+
+
 
 
 function appendMessage(role, text) {
@@ -21,6 +42,7 @@ function appendMessage(role, text) {
   const contentDiv = document.createElement('div');
   contentDiv.className = 'text';
   contentDiv.innerHTML = contentHtml;
+  pruneEmptyNodes(contentDiv);
 
   container.appendChild(div).appendChild(contentDiv);
   container.scrollTop = container.scrollHeight;
@@ -30,6 +52,86 @@ function appendMessage(role, text) {
     MathJax.typesetPromise([contentDiv]).catch(console.error);
   }
 }
+
+// —— 在 appendMessage 同级位置（例如它后面）声明 appendLoading —— 
+function appendLoading() {
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'message assistant loading';
+  const span = document.createElement('div');
+  span.className = 'text';
+  span.textContent = '正在输入…';
+  div.appendChild(span);
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
+
+// —— 完整的 send() 实现 —— 
+async function send() {
+  const apiKey = localStorage.getItem('openai-api-key') || '';
+  if (!apiKey) {
+    alert('请先在设置里保存你的 API Key');
+    return;
+  }
+
+  const input = document.getElementById('prompt');
+  // 1. 去掉末尾多余换行，但保留中间换行
+  let prompt = input.value.replace(/\n+$/, '');
+  if (!prompt.trim()) {
+    return;  // 全空或只有空白，不发送
+  }
+
+  // 2. 渲染用户消息
+  appendMessage('user', prompt);
+  const conv = conversations.find(c => c.id === currentConversationId);
+  if (!conv) return;
+  conv.messages.push({ role: 'user', content: prompt });
+  input.value = '';
+
+  // 3. 渲染 loading 占位，并保留引用
+  const loadingDiv = appendLoading();
+
+  try {
+    // 4. 真正调用 OpenAI 接口（稳定版本中使用的方式）
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + apiKey
+      },
+      body: JSON.stringify({
+        model: conv.model,
+        messages: conv.messages.map(m => ({
+          role:    m.role === 'bot' ? 'assistant' : m.role,
+          content: m.content
+        }))
+      })
+    });
+
+    // 5. 如果接口跑出错误，抛出到 catch
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`接口返回 ${res.status}：${errText}`);
+    }
+
+    const data  = await res.json();
+    const reply = data.choices[0].message.content;
+
+    // 6. 接口返回后，先移除 loading，然后渲染真正的助手回复
+    loadingDiv.remove();
+    appendMessage('assistant', reply);
+    conv.messages.push({ role: 'assistant', content: reply });
+    saveConversations();
+
+  } catch (e) {
+    // 7. 出错也移除 loading，并显示错误信息
+    loadingDiv.remove();
+    appendMessage('assistant', `错误：${e.message}`);
+  }
+}
+window.send = send;
+
 
 function escapeHtml(str) {
   return str
@@ -316,68 +418,6 @@ function clearAllHistory() {
 
 window.clearAllHistory = clearAllHistory;
 
-async function send() {
-  const apiKey = localStorage.getItem('openai-api-key') || '';
-  if (!apiKey) {
-    alert('请先在设置里保存你的 API Key');
-    return;
-  }
-
-  const input = document.getElementById('prompt');
-  const prompt = input.value.trim();
-  if (!prompt) return;
-
-  // 1. 渲染到界面
-  appendMessage('user', prompt);
-
-  // 2. 同步到对话数据里
-  const conv = conversations.find(c => c.id === currentConversationId);
-  if (!conv) return;
-  conv.messages.push({ role: 'user', content: prompt });
-
-  input.value = '';
-
-  // 3. 调用 OpenAI
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': 'Bearer ' + apiKey
-    },
-    body: JSON.stringify({
-      model: conv.model,
-      messages: conv.messages.map(m => ({
-        role:    m.role === 'bot' ? 'assistant' : m.role,
-        content: m.content
-      }))
-    })
-  });
-
-  // 4. 处理响应
-  if (!res.ok) {
-    const err = await res.text();
-    alert(`接口返回 ${res.status}：${err}`);
-    return;
-  }
-const data  = await res.json();
-// ← 一定要先把它取出来并存到一个变量
-const reply = data.choices[0].message.content;
-
-appendMessage('assistant', reply);
-// ← 然后把 reply 推入数组
-conv.messages.push({ role: 'assistant', content: reply });
-// ← 最后写回 localStorage
-saveConversations();
-
-}
-
-window.send = send;
-
-
-
-
-// 关键！将 send 函数暴露给 HTML
-window.send = send;
 
 function bindPromptOnce() {
 

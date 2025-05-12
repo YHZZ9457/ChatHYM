@@ -180,8 +180,7 @@ button{font-family:inherit;cursor:pointer;}
   margin: 0
 }
 .message .text {
-  /* 普通文本默认不保留回车 */
-  white-space: normal !important;
+  
   word-break: break-word;
   overflow-wrap: break-word;
 }
@@ -214,8 +213,6 @@ button{font-family:inherit;cursor:pointer;}
   border: none !important;
   box-shadow: none !important;
 
-  /* —— 关键：忽略原文里的换行，只在需要时自动换行 —— */
-  white-space: normal !important;
 }
 
 /* 只清除用户气泡内的 <p> 上下 margin */
@@ -564,3 +561,32 @@ body.dark-theme {
   scrollbar-width: thin;
 }
 
+/* 用户气泡保留换行 */
+.message.user .text {
+  white-space: pre-wrap !important;
+}
+/* loading 占位样式 */
+.message.assistant.loading {
+  opacity: 0.6;
+  font-style: italic;
+}
+
+/* 清除助手机泡内 <p> 的默认 margin */
+.message .text p {
+  margin: 0;
+}
+/* 隐藏所有真正空的 p（以防万一） */
+.message .text p:empty {
+  display: none !important;
+}
+
+/* 聊天框中所有链接显示为蓝色，并加下划线 */
+.message .text a {
+  color: #0066cc !important;
+  text-decoration: underline !important;
+}
+
+/* 鼠标移上去时加深一下色 */
+.message .text a:hover {
+  color: #004999 !important;
+}

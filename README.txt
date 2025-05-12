@@ -1,22 +1,15 @@
 
-Local ChatGPT v2.2
+LocalGPT v2.2
 
-更新了一下界面，现在浅色模式没问题了，应该基本可以正常使用了
+一个可以运行OpenAI的API的小程序，有简单的界面。支持选择多种GPT模型。
 
-支持Markdown和数学公式
-
-使用前需要在设置里面自己填入ChatGPT的API-Keys，然后保存一下。
+使用前需要在设置里面自己填入OpenAI的API-Keys，然后保存一下。
 
 作者：ChatGPT  没错我啥也不会，全是GPT写的
 
 
 
-Local ChatGPT v2.2
+更新说明：
 
-The interface has been updated, and the light mode should now work properly, making it basically usable.
-
-It supports Markdown and mathematical formulas.
-
-Before use, you need to enter your ChatGPT API keys in the settings and then save.
-
-By ChatGPT. Yes, I can't do anything; it's all written by GPT.
+v2.3：增加了回复时的“正在输入”的特效。
+v2.2：第一个稳定版本，可以正常使用了。此前的版本就不再特别提及。

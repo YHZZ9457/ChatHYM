@@ -1,12 +1,3 @@
-/* =========================================================
-   Local ChatGPT v1.5 Custom CSS (Re-refined)
-   重新整理并扩充版本，总行数 > 300。
-   解决：
-   1. 消息气泡缺失（布局层级/高度计算问题）
-   2. 侧栏高亮定位 & 新对话按钮对齐
-   3. 浅色主题配色、边框、阴影异常
-   ========================================================= */
-
 /* ===== 1. 主题变量 ===== */
 :root {
   /* 边框 */
@@ -85,10 +76,7 @@ button{font-family:inherit;cursor:pointer;}
   
 }
 .conv-nav li:hover{background:rgba(var(--primary-rgb),0.12);}
-.conv-nav li.active{
-  background:var(--primary);
-  color:#fff;
-}
+
 
 .sidebar-footer .settings-btn {
   font-size: 1rem;          /* 字体稍大 */
@@ -135,12 +123,28 @@ button{font-family:inherit;cursor:pointer;}
 /* 5-2 聊天内容 */
 .chat-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;position: relative;}
 
-#delete-current-btn {
-  position: absolute;
-  top: 16px;   /* 根据你的内边距微调 */
-  right: 16px;
-  margin: 0;
+
+/* —— 新增：归档按钮样式 —— */
+#archive-current-btn {
+  position: absolute !important;
+  top: 8px !important;
+  /* 让它紧挨删除按钮左侧 — 删除是 right:12px，这里设置一个合适的偏移 */
+  right: 80px !important;        /* 你可以根据按钮宽度微调这个值 */
+  padding: 6px 12px !important;
+  background: #fff !important;
+  color: #000 !important;
+  border: 1px solid #ccc !important;
+  border-radius: 4px !important;
+  font-size: 0.9rem !important;
+  cursor: pointer !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+  transition: background 0.2s ease, border-color 0.2s ease !important;
 }
+#archive-current-btn:hover {
+  background: #f7f7f7 !important;
+  border-color: #bbb !important;
+}
+
 .messages {
   flex: 1;
   overflow-y: auto;
@@ -361,20 +365,20 @@ button.danger:hover,#delete-current-btn:hover{background:#c53030!important;}
   list-style: none;
 }
 
-/* 让所有列表项成为块级元素，并左右留 20px */
-.conv-nav ul li {
-  display: block;           /* 块级，自动撑满容器宽度减去左右 margin */
+/* 列表项统一 */
+.conv-nav li {
+  display: block;
   margin: 0 20px 5px;
-  padding: 10px 16px;       /* 内边距可按需调整 */
+  padding: 10px 16px;
   border-radius: 8px;
   cursor: pointer;
 }
 
-/* 选中态高亮 */
-.conv-nav ul li.active {
-  background: var(--primary);
-  color: #fff;
+/* hover 高亮 */
+.conv-nav li:hover {
+  background: rgba(var(--primary-rgb), 0.12);
 }
+
 
 
 /* 通用：清除原生样式，统一排版 */
@@ -496,7 +500,7 @@ body.dark-theme .input-area select#model option:hover {
 /* ===== 覆盖：删除按钮样式 ===== */
 #delete-current-btn {
   position: absolute !important;
-  top: 12px !important;
+  top: 8px !important;
   right: 12px !important;
   padding: 6px 12px !important;
   background: #e53e3e !important;
@@ -598,4 +602,206 @@ body.dark-theme {
   height: auto !important;    /* 高度按比例自适应 */
   margin: 8px 0;              /* 上下加点间距 */
   border-radius: 4px;         /* 圆润点儿，可选 */
+}
+
+#edit-title-btn {
+  font-size: 0.9em;
+  vertical-align: middle;
+}
+#edit-title-btn:hover {
+  opacity: 0.7;
+}
+
+/* —— 美化对话标题编辑框 —— */
+#chat-title-input {
+  background-color: rgba(255,255,255,0.05); /* 轻微透明黑 */
+  border: 1px solid #555;                  /* 中灰边框 */
+  border-radius: 4px;                      /* 圆角 */
+  padding: 4px 8px;                        /* 内边距 */
+  color: #fff;                             /* 白色字体 */
+  font-weight: 550;                        /* 稍粗 */
+  font-family: inherit;                    /* 继承节奏 */
+  outline: none;                           /* 去掉默认 outline */
+  min-width: 120px;                        /* 最小宽度 */
+}
+
+/* 焦点时高亮边框 */
+#chat-title-input:focus {
+  border-color: #3399ff;
+  box-shadow: 0 0 4px rgba(51,153,255,0.6);
+}
+/* 针对两种主题分别优化编辑框可见性 */
+body.light-theme #chat-title-input {
+  /* 浅色主题下用深色半透明底、深灰边框 */
+  background-color: rgba(0, 0, 0, 0.05);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  color: var(--text-light);
+}
+
+body.dark-theme #chat-title-input {
+  /* 深色主题下用亮色半透明底、中灰边框 */
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: var(--text-dark);
+}
+
+/* 容器保持 inline-flex，让按钮靠右显示 */
+.scale-frame {
+  display: inline-flex;
+  margin-left: 8px;
+}
+
+/* 按钮组 */
+.scale-frame .scale-options {
+  display: flex;
+}
+
+/* 各按钮：固定宽度、高度，单行文字 */
+.scale-frame .scale-options button {
+  flex: none;               /* 不等分，使用固定宽度 */
+  width: 50px;              /* 根据文字长度调整 */
+  padding: 6px 0;           /* 垂直内边距，水平由 width 决定 */
+  margin: 0 2px;            /* 每个按钮左右留一点间距 */
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  text-align: center;
+  font-size: 0.9em;
+  line-height: 1;           /* 让文字垂直居中 */
+  cursor: pointer;
+  border-radius: 4px;       /* 全体一致圆角 */
+}
+
+/* 选中态仅改变边框颜色，不要背景高亮 */
+.scale-frame .scale-options button.active {
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+/* 去掉之前的 hover 背景高亮，仅加个边框反馈 */
+.scale-frame .scale-options button:hover {
+  border-color: var(--primary-color);
+}
+
+/* 把 ghost 隐掉，直接移动原始 li */
+.sortable-ghost {
+  opacity: 0 !important;
+}
+
+/* 被拖住的 li 加个样式提示一下 */
+.sortable-chosen {
+  background: rgba(var(--primary-rgb), 0.2) !important;
+  border: 1px dashed rgba(var(--primary-rgb), 0.5) !important;
+}
+
+
+/* 让所有列表项相对定位，便于 ::before 绝对定位画线 */
+#conversation-list li {
+  position: relative;        /* 新增：建立定位上下文 */
+  display: block;
+  margin: 0 20px 5px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+#conversation-list li:hover {
+  background: rgba(var(--primary-rgb), 0.12);  /* 自行调整 alpha 值，看着舒服就好 */
+  color: inherit;                             /* 保持文字原色 */
+}
+
+/* 拖拽时在空位处的元素上画一条蓝色分隔线 */
+#conversation-list li.sortable-ghost::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;           /* 如果想在上方画线，就 top:0 */
+  height: 2px;      /* 线的粗细 */
+  background: var(--primary-color);
+}
+
+.setting-item button {
+  min-width: 80px;
+}
+
+/* 分隔线 */
+.archive-divider {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.8em;
+  margin: 8px 0;
+}
+
+/* 已归档项样式 */
+.conversation-item.archived .title {
+  opacity: 0.6;
+}
+
+
+/* 1. 先把旧版 btn-delete / btn-archive（如果残留）彻底隐藏 */
+#conversation-list li .btn-delete,
+#conversation-list li .btn-archive {
+  display: none !important;
+}
+
+/* 2. 针对我们自己插入的 .del 按钮：默认不显示 */
+#conversation-list li .del {
+  position: absolute;        /* 新增：脱离文档流 */
+  right: 16px;               /* 距离右侧 16px */
+  top: 50%;                  /* 垂直中心线 */
+  transform: translateY(-50%);/* 垂直居中 */
+  
+  display: none;             /* 默认不显示 */
+  opacity: 0;
+  visibility: hidden;
+  
+  background: transparent !important;
+  border: none !important;
+  color: red !important;
+  font-size: 0.9rem !important;
+  cursor: pointer !important;
+}
+
+#conversation-list li:hover .del {
+  display: inline-block !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* 二级菜单默认收起 */
+.archived-list {
+  display: none;
+  margin-left: 16px;
+  padding-left: 0;
+  list-style: none;
+}
+
+/* 点击“已归档”时展开 */
+.archive-toggle.expanded + .archived-list {
+  display: block;
+}
+
+/* 样式美化 */
+.archive-toggle {
+  cursor: pointer;
+  font-weight: bold;
+  padding: 8px 16px;
+  user-select: none;
+}
+.archive-toggle::before {
+  content: '▶';
+  display: inline-block;
+  margin-right: 6px;
+  transform: rotate(0deg);
+  transition: transform 0.2s;
+}
+.archive-toggle.expanded::before {
+  transform: rotate(90deg);
+}
+
+/* —— 活动项高亮 —— */
+#conversation-list li.active {
+  background: var(--primary) !important;
+  color: #fff !important;
 }

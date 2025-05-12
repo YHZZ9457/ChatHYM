@@ -4,9 +4,39 @@
 
 
 // 全局变量
-let currentApiKey = localStorage.getItem('openai-api-key') || '';
 let conversations = []
 let currentConversationId = null
+let currentApiKey = '';
+
+/**
+ * 从 localStorage 读取所有会话，并做好安全检查
+ */
+function loadConversations() {
+  const data = localStorage.getItem('conversations');
+  let raw;
+
+  try {
+    raw = data ? JSON.parse(data) : [];
+  } catch (e) {
+    console.error('解析会话列表失败：', e);
+    raw = [];
+  }
+
+  if (!Array.isArray(raw)) raw = [];
+
+  // 丢弃 null/非对象/没 id 的条目，然后映射 archived 字段
+  conversations = raw
+    .filter(c => c && typeof c === 'object' && 'id' in c)
+    .map(c => ({
+      id:       c.id,
+      title:    c.title,
+      model:    c.model,
+      messages: Array.isArray(c.messages) ? c.messages : [],
+      archived: typeof c.archived === 'boolean' ? c.archived : false
+    }));
+}
+
+
 
 // —— 最顶部，保证在 appendMessage 之前 —— 
 function pruneEmptyNodes(container) {
@@ -33,10 +63,11 @@ function appendMessage(role, text) {
   const div = document.createElement('div');
   div.className = 'message ' + (role === 'assistant' ? 'assistant' : 'user');
 
-  // —— 核心改动：只有在 marked 存在时才用 marked.parse —— 
-  const contentHtml = (typeof marked !== 'undefined')
-    ? marked.parse(text)
-    : escapeHtml(text);
+// —— 好版本 ——（整行替换掉上面那段）
+const contentHtml = (typeof marked !== 'undefined')
+  ? marked.parse(text)
+  : escapeHtml(text);
+
     
 
   const contentDiv = document.createElement('div');
@@ -149,6 +180,7 @@ function deleteConversation(id) {
   conversations.splice(idx, 1);
   saveConversations();
   renderConversationList();
+  enableConversationDrag();
 if (wasCurrent) {
   if (conversations.length) {
     // 先尝试选中“同一索引”（原来是下一行），否则选中上一行
@@ -191,134 +223,47 @@ function loadApiKeyToInput() {
   }
 }
 
-// 页面加载后初始化（DOMContentLoaded）
+
+
+// —— 好版本，一体化初始化 —— 
 document.addEventListener('DOMContentLoaded', () => {
-  // 切换到第一个已有对话，或新建对话
-  if (conversations.length) {
-    loadConversation(conversations[0].id);
-  } else {
-    createNewConversation();
-  }
 
-  // 绑定“+ 新对话”按钮
-  const newConvBtn = document.getElementById('new-conv-btn');
-  if (newConvBtn) newConvBtn.addEventListener('click', createNewConversation);
-
-  // 绑定“删除当前对话”按钮
-  const deleteBtn = document.getElementById('delete-current-btn');
-  if (deleteBtn) {
-    deleteBtn.addEventListener('click', () => {
-      if (!currentConversationId) return;
-      const conv = conversations.find(c => c.id === currentConversationId);
-      if (conv && confirm(`确认删除「${conv.title}」吗？`)) {
-        deleteConversation(currentConversationId);
-      }
-    });
-  }
-
-  // 其它需要在页面加载后执行的初始化…
-});
-
-
-
-  // 渲染完页面再加载对话列表
-  // … 原来 renderConversationList 之前 …
-
-
-// 界面缩放
-const uiSlider = document.getElementById('ui-scale-slider');
-const uiValue  = document.getElementById('ui-scale-value');
-// 读取已存值或默认 1
-const savedScale = parseFloat(localStorage.getItem('ui-scale') || '1');
-document.documentElement.style.setProperty('--ui-scale', savedScale);
-if (uiSlider && uiValue) {
-  uiSlider.value = savedScale;
-  uiValue.textContent = Math.round(savedScale * 100) + '%';
-
-  uiSlider.addEventListener('input', () => {
-    const scale = parseFloat(uiSlider.value);
-    document.documentElement.style.setProperty('--ui-scale', scale);
-    uiValue.textContent = Math.round(scale * 100) + '%';
-    localStorage.setItem('ui-scale', scale);
-  });
-}
-
-
-// 渲染对话列表，带Del按钮（鼠标移入显示）
-function renderConversationList() {
-  const list = document.getElementById('conversation-list');
-  list.innerHTML = '';
-
-  conversations.forEach(conv => {
-    const li = document.createElement('li');
-    li.className = conv.id === currentConversationId ? 'active' : '';
-    li.style.display = 'flex';
-    li.style.justifyContent = 'space-between';
-    li.style.alignItems = 'center';
-    li.style.padding = '8px 16px';
-
-    const titleSpan = document.createElement('span');
-    titleSpan.textContent = conv.title;
-    titleSpan.style.flex = '1';
-    titleSpan.style.cursor = 'pointer';
-    titleSpan.addEventListener('click', () => loadConversation(conv.id));
-    titleSpan.addEventListener('dblclick', () => renameConversation(conv.id));
-    li.appendChild(titleSpan);
-
-    const del = document.createElement('button');
-    del.textContent = 'Del';
-    del.style.background = 'transparent';
-    del.style.border = 'none';
-    del.style.color = 'red';
-    del.style.cursor = 'pointer';
-    del.style.opacity = '0';
-    del.style.transition = 'opacity 0.2s';
-    del.addEventListener('click', e => {
-      e.stopPropagation();
-      if (confirm(`确认删除「${conv.title}」吗？`)) deleteConversation(conv.id);
-    });
-    li.appendChild(del);
-
-    li.addEventListener('mouseenter', () => del.style.opacity = '1');
-    li.addEventListener('mouseleave', () => del.style.opacity = '0');
-
-    list.appendChild(li);
-  });
-}
-
-
-// Enter 发送
-const promptElem = document.getElementById('prompt');
-promptElem.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    send();
-  }
-});
-
-
-
-// Initialize on load
-  loadConversations();
-  renderConversationList();
-  if (conversations.length > 0) {
-    loadConversation(conversations[0].id);
-  } else {
-    createNewConversation();
-  }
-
-  // Model change handler
-  document.getElementById('model').addEventListener('change', function() {
-    const conv = getCurrentConversation();
-    if (conv) {
-      conv.model = this.value;
-      saveConversations();
+  // 发送框回车发送
+  const promptElem = document.getElementById('prompt');
+  promptElem.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      send();
     }
   });
 
-  // Auto-save before window unload
-  window.addEventListener('beforeunload', saveConversations);
-;
+  // ========== 读取并应用上次界面缩放 ===========
+  const savedScale = parseFloat(localStorage.getItem('ui-scale'));
+  const opts = document.getElementById('ui-scale-options');
+  if (opts && !isNaN(savedScale)) {
+    document.documentElement.style.setProperty('--ui-scale', savedScale);
+    opts.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    const btn = opts.querySelector(`button[data-scale="${savedScale}"]`);
+    if (btn) btn.classList.add('active');
+  }
+
+  // ========== 绑定档位按钮点击事件 ===========
+  if (opts) {
+    opts.addEventListener('click', e => {
+      const btn = e.target.closest('button[data-scale]');
+      if (!btn) return;
+      const scale = parseFloat(btn.dataset.scale);
+      document.documentElement.style.setProperty('--ui-scale', scale);
+      localStorage.setItem('ui-scale', scale);
+      opts.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+  }
+
+}); // ← 这里是回调的闭合
+
+
+
 
 function getCurrentModel() {
     const modelInput = document.getElementById('model');
@@ -330,11 +275,7 @@ window.getCurrentModel = getCurrentModel;
 function saveConversations() {
   localStorage.setItem('conversations', JSON.stringify(conversations));
 }
-function loadConversations() {
-  currentApiKey = localStorage.getItem('openai-api-key') || '';
-  const data = localStorage.getItem('conversations');
-  conversations = data ? JSON.parse(data) : [];
-}
+
 
 
 
@@ -355,6 +296,27 @@ function renameConversation(id) {
 }
 
 
+// —— 拖拽重排会话列表 —— 
+function enableConversationDrag() {
+  const list = document.getElementById('conversation-list');
+  if (!list || typeof Sortable === 'undefined') return;
+
+  Sortable.create(list, {
+    animation: 150,
+    ghostClass: 'sortable-ghost',
+     chosenClass: 'sortable-chosen',
+    onEnd: evt => {
+      // 从数组中移动元素
+      const [moved] = conversations.splice(evt.oldIndex, 1);
+      conversations.splice(evt.newIndex, 0, moved);
+      saveConversations();
+      // 重新渲染列表并重新绑定拖拽
+      renderConversationList();
+      enableConversationDrag();
+    }
+  });
+}
+
 function createNewConversation() {
     // 创建新对话逻辑
     const id = Date.now().toString();
@@ -368,6 +330,7 @@ function createNewConversation() {
     saveConversations();
     renderConversationList();
     loadConversation(id);
+    
 }
 window.createNewConversation = createNewConversation; // VERY IMPORTANT
 
@@ -378,6 +341,13 @@ function loadConversation(id) {
   currentConversationId = id;
   const conv = conversations.find(c => c.id === id);
   if (!conv) return;
+
+    document.getElementById('chat-title').textContent = conv.title;
+  // 把“归档”按钮文案也更新
+  const arcBtn = document.getElementById('archive-current-btn');
+  if (arcBtn) {
+    arcBtn.textContent = conv.archived ? '取消归档' : '归档';
+  }
   // 切换界面显示
   document.getElementById('settings-area').style.display = 'none';
   document.getElementById('chat-area').style.display = 'flex';
@@ -387,7 +357,7 @@ function loadConversation(id) {
 
   const msgsElem = document.getElementById('messages');
   msgsElem.innerHTML = '';
-  conv.messages.forEach(m => appendMessage(m.role, m.content, false));
+  conv.messages.forEach(m => appendMessage(m.role, m.content));
   renderConversationList();
 }
 
@@ -420,18 +390,15 @@ window.clearAllHistory = clearAllHistory;
 
 
 function bindPromptOnce() {
-
-  promptElem.dataset.bound = 'true';  // 防止多次绑定
+  const promptElem = document.getElementById('prompt');
+  if (!promptElem || promptElem.dataset.bound === 'true') return;
+  promptElem.dataset.bound = 'true';
+  // 如果后续需要给 prompt 绑定事件，例如快捷键，可以写在这里
 }
 
+// 在页面 DOM 完全加载后调用一次
+document.addEventListener('DOMContentLoaded', bindPromptOnce);
 
-let promptBound = false;
-
-
-// 确保可以从 HTML onclick 里调用到
-window.showSettings = showSettings;
-
-bindPromptOnce();
 
 // === 主题切换逻辑 ===
 
@@ -469,4 +436,242 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 
+/**
+ * 启用行内编辑会话标题（单击即可）
+ */
+function enableInlineTitleEdit() {
+  const header = document.querySelector('.chat-header');
+  if (!header) return;
 
+  // 编辑函数：每次都可重复绑定
+  function editTitle() {
+    const oldH1 = document.getElementById('chat-title');
+    const oldName = oldH1.textContent;
+
+    // 创建 <input>
+    const input = document.createElement('input');
+    input.id = 'chat-title-input';
+    input.type = 'text';
+    input.value = oldName;
+
+    // 用于替换
+    header.replaceChild(input, oldH1);
+    input.focus();
+    input.setSelectionRange(oldName.length, oldName.length);
+
+    // 提交逻辑
+    function commit() {
+      const newName = input.value.trim() || oldName;
+      // 更新数据模型并持久化
+      const conv = conversations.find(c => c.id === currentConversationId);
+      if (conv) {
+        conv.title = newName;
+        saveConversations();
+      }
+      // 恢复 <h1>
+      const newH1 = document.createElement('h1');
+      newH1.id = 'chat-title';
+      newH1.textContent = newName;
+      newH1.style.cursor = 'pointer';
+      header.replaceChild(newH1, input);
+      // 重新绑定
+      newH1.addEventListener('click', editTitle);
+      // 同步侧栏
+      const li = document.querySelector(
+        `.conversation-item[data-id="${currentConversationId}"] .title`
+      );
+      if (li) li.textContent = newName;
+    }
+
+    // 取消逻辑
+    function cancel() {
+      header.replaceChild(oldH1, input);
+      oldH1.addEventListener('click', editTitle);
+    }
+
+    // 按键与失焦事件
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') commit();
+      if (e.key === 'Escape') cancel();
+    });
+    input.addEventListener('blur', commit);
+  }
+
+  // 初次绑定在现有标题上
+  const titleElem = document.getElementById('chat-title');
+  if (titleElem) {
+    titleElem.style.cursor = 'pointer';
+    titleElem.addEventListener('click', editTitle);
+  }
+}
+
+// 页面加载完成后启用
+window.addEventListener('DOMContentLoaded', enableInlineTitleEdit);
+
+/**
+ * 导出所有对话为 JSON 文件
+ */
+function exportAllHistory() {
+  // 从 localStorage 或内存读取所有会话
+  const data = JSON.stringify(conversations, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'chat_history.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// 把按钮和函数绑定
+document.addEventListener('DOMContentLoaded', () => {
+  const exportBtn = document.getElementById('export-history-btn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', exportAllHistory);
+  }
+})
+
+
+/**
+ * 渲染对话列表，分“未归档”与“已归档”两个区块，并带 Del 按钮和双击重命名
+ */
+
+function getCurrentConversation() {
+  return conversations.find(c => c.id === currentConversationId);
+}
+
+
+
+
+function toggleArchive(id) {
+  const conv = conversations.find(c => c.id === id);
+  if (!conv) return;
+  conv.archived = !conv.archived;
+  saveConversations();
+  renderConversationList();
+  if (currentConversationId === id) createNewConversation();
+}
+
+function renderConversationList() {
+  const list = document.getElementById('conversation-list');
+  list.innerHTML = '';
+// 未归档
+conversations
+  .filter(c => !c.archived)
+  .forEach(c => {
+    const li = document.createElement('li');
+    li.dataset.id = c.id;
+    li.textContent = c.title;
+    if (c.id === currentConversationId) {
+      li.classList.add('active');
+    }
+    li.addEventListener('click', () => loadConversation(c.id));
+    li.addEventListener('dblclick', () => renameConversation(c.id));
+
+    // Del 按钮
+    const del = document.createElement('button');
+    del.textContent = 'Del';
+    del.className = 'del';
+    del.addEventListener('click', e => {
+      e.stopPropagation();
+      // 二次确认
+      if (confirm(`确定要删除「${c.title}」吗？此操作无法恢复。`)) {
+        deleteConversation(c.id);
+      }
+    });
+
+    li.appendChild(del);
+    list.appendChild(li);
+  });
+  // 已归档
+  const archived = conversations.filter(c => c.archived);
+ if (archived.length) {
+   // 可折叠标题
+   const toggle = document.createElement('li');
+   toggle.className = 'archive-toggle';
+   toggle.textContent = `已归档 (${archived.length})`;
+   // 点击展开/收起
+   toggle.addEventListener('click', () => {
+     toggle.classList.toggle('expanded');
+   });
+   list.appendChild(toggle);
+
+   // 二级列表
+   const sub = document.createElement('ul');
+   sub.className = 'archived-list';
+   archived.forEach(c => {
+     const li = document.createElement('li');
+     li.dataset.id = c.id;
+     li.textContent = c.title;
+     li.classList.add('archived');
+     if (c.id === currentConversationId) li.classList.add('active');
+     li.addEventListener('click', () => loadConversation(c.id));
+     li.addEventListener('dblclick', () => renameConversation(c.id));
+     sub.appendChild(li);
+   });
+   list.appendChild(sub);
+  }
+    }
+
+
+// Bindings
+document.addEventListener('DOMContentLoaded', () => {
+  loadApiKeyToInput();
+  loadConversations();
+  renderConversationList();
+  enableConversationDrag();
+  if (conversations.length) loadConversation(conversations[0].id);
+  else createNewConversation();
+  document.getElementById('new-conv-btn').addEventListener('click', createNewConversation);
+  document.getElementById('archive-current-btn').addEventListener('click', () => toggleArchive(currentConversationId));
+  document.getElementById('delete-current-btn').addEventListener('click', () => {
+  if (!currentConversationId) return;
+  const conv = conversations.find(c => c.id === currentConversationId);
+  if (!conv) return;
+  // 二次确认
+  if (confirm(`确定要删除当前会话「${conv.title}」吗？此操作无法恢复。`)) {
+    deleteConversation(currentConversationId);
+  }
+});
+
+  document.getElementById('send-btn').addEventListener('click', send);
+  document.getElementById('prompt').addEventListener('keydown', e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); }});
+  document.getElementById('model').addEventListener('change', () => { getCurrentConversation().model = document.getElementById('model').value; saveConversations(); });
+  // —— 放到 DOMContentLoaded 回调里 ——
+
+// 先拿到隐藏的 <input type="file">
+const importInput = document.getElementById('import-file');
+if (importInput) {
+  importInput.addEventListener('change', async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const imported = JSON.parse(text);
+      if (!Array.isArray(imported)) throw new Error('JSON 顶层应为数组');
+
+      // 合并到现有 conversations，去重
+      imported.forEach(conv => {
+        if (!conversations.find(c => c.id === conv.id)) {
+          conversations.push(conv);
+        }
+      });
+
+      // 存储并刷新 UI
+      saveConversations();
+      renderConversationList();
+      if (imported.length) loadConversation(imported[0].id);
+
+      alert(`成功导入 ${imported.length} 条对话`);
+    } catch (err) {
+      console.error(err);
+      alert('导入失败：' + err.message);
+    } finally {
+      // 重置 input，以便下次能重新选同一个文件
+      importInput.value = '';
+    }
+  });
+}
+});

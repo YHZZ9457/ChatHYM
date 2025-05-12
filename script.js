@@ -89,16 +89,8 @@ function loadApiKeyToInput() {
   }
 }
 
-
-// —— 第二部分：DOMContentLoaded 初始化 ——
+// 页面加载后初始化（DOMContentLoaded）
 document.addEventListener('DOMContentLoaded', () => {
-  // 加载并填充 API Key
-  loadApiKeyToInput();
-
-  // 加载会话列表
-  loadConversations();
-  renderConversationList();
-
   // 切换到第一个已有对话，或新建对话
   if (conversations.length) {
     loadConversation(conversations[0].id);
@@ -122,51 +114,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // 绑定“切换主题”按钮
-  const themeBtn = document.getElementById('toggle-theme-btn');
-  if (themeBtn) themeBtn.addEventListener('click', toggleTheme);
-
   // 其它需要在页面加载后执行的初始化…
 });
 
 
 
-  // 主题初始化
-  const saved = localStorage.getItem('theme') || 'dark';
-  document.body.classList.add(saved + '-theme');
-
-  // 主题切换按钮
-  const btn = document.getElementById('toggle-theme-btn');
-  if (btn) {
-    btn.addEventListener('click', () => {
-      document.body.classList.toggle('dark-theme');
-      document.body.classList.toggle('light-theme');
-      localStorage.setItem(
-        'theme',
-        document.body.classList.contains('dark-theme') ? 'dark' : 'light'
-      );
-    });
-  }
-
   // 渲染完页面再加载对话列表
   // … 原来 renderConversationList 之前 …
 
-
-
-// —— 在 DOMContentLoaded 初始化部分，添加下面主题按钮绑定 ——
-
-// 主题切换按钮
-const themeBtn = document.getElementById('toggle-theme-btn');
-if (themeBtn) {
-  themeBtn.addEventListener('click', () => {
-    document.body.classList.toggle('dark-theme');
-    document.body.classList.toggle('light-theme');
-    localStorage.setItem(
-      'theme',
-      document.body.classList.contains('dark-theme') ? 'dark' : 'light'
-    );
-  });
-}
 
 // 界面缩放
 const uiSlider = document.getElementById('ui-scale-slider');
@@ -441,26 +396,33 @@ bindPromptOnce();
 // === 主题切换逻辑 ===
 
 function applyStoredTheme() {
-  // 把 'light' 改成 'dark'，这样 localStorage 里没值时就走暗色
   const theme = localStorage.getItem('theme') || 'dark';
   if (theme === 'dark') {
     document.body.classList.add('dark-theme');
+    document.body.classList.remove('light-theme');
   } else {
+    document.body.classList.add('light-theme');
     document.body.classList.remove('dark-theme');
   }
 }
 
-// 切换主题并存储（从暗→亮或从亮→暗）
 function toggleTheme() {
-  // toggle 会反转 dark-theme 类
-  const isDark = document.body.classList.toggle('dark-theme');
-  // 然后把反转后的状态存起来：true＝暗色，false＝亮色
-  localStorage.setItem('theme', isDark ? 'dark' : 'light');
+  // 如果当前是暗色，就切到亮色；否则切到暗色
+  if (document.body.classList.contains('dark-theme')) {
+    document.body.classList.remove('dark-theme');
+    document.body.classList.add('light-theme');
+    localStorage.setItem('theme', 'light');
+  } else {
+    document.body.classList.remove('light-theme');
+    document.body.classList.add('dark-theme');
+    localStorage.setItem('theme', 'dark');
+  }
 }
 
-// 绑定按钮
+
+// 在 DOMContentLoaded 里，只调用一次
 document.addEventListener('DOMContentLoaded', () => {
-  applyStoredTheme();  // 加载时应用“默认暗色”或用户上次选的
+  applyStoredTheme();
   document
     .getElementById('toggle-theme-btn')
     .addEventListener('click', toggleTheme);

@@ -253,9 +253,8 @@ body.dark-theme .message.user{
 .message pre,.message code{font-family:monospace;}
 .message pre{background:rgba(0,0,0,0.15);padding:8px;border-radius:6px;overflow-x:auto;}
 
-/* ===== 6. 输入区 ===== */
 .input-area {
-  position: absolute;   /* 从原来流式布局改为绝对定位 */
+  position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
@@ -269,8 +268,9 @@ body.dark-theme .message.user{
 }
 
 .input-area textarea {
-  padding: 6px;        /* 原来 10px 缩为 6px */
-  min-height: 40px;    /* 原来 40px 缩为 24px */
+  height: 50px;
+  padding: 6px;
+  min-height: 50px;
   font-size: 0.95rem;
   border: 1px solid var(--border-color);
   border-radius: 4px;
@@ -278,16 +278,27 @@ body.dark-theme .message.user{
   color: var(--text-color);
   resize: vertical;
   flex: 1;
+  /* 高度控制重点在这里 ↓↓↓ */
+  
+  max-height: 200px;        /* 防止撑太高 */
+  line-height: 1.6;
+  resize: vertical;         /* 允许手动拉高 */
+  overflow-y: auto;         /* 内容多时出现滚动条 */
 }
+
 .input-area button{
   padding:10px 22px;
   background:var(--primary);
   color:#fff;
-  border:none;border-radius:8px;
+  border:none;
+  border-radius:8px;
   font-size:0.95rem;
   flex:0 0 auto;
 }
-.input-area button:hover{background:rgba(var(--primary-rgb),0.9);}
+
+.input-area button:hover{
+  background:rgba(var(--primary-rgb),0.9);
+}
 
 /* 模型切换下拉靠左，保持层级 */
 .model-select select{z-index:1000;background:var(--bg-color);color:var(--text-color);border:1px solid var(--border-color);border-radius:6px;padding:6px;}
@@ -552,3 +563,4 @@ body.dark-theme {
   scrollbar-color: #444 #1f1f1f;
   scrollbar-width: thin;
 }
+

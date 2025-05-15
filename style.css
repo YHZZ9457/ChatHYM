@@ -131,6 +131,8 @@ button{font-family:inherit;cursor:pointer;}
   /* 让它紧挨删除按钮左侧 — 删除是 right:12px，这里设置一个合适的偏移 */
   right: 80px !important;        /* 你可以根据按钮宽度微调这个值 */
   padding: 6px 12px !important;
+  min-width: 55px; /* 新增：设置一个最小宽度，例如 60px，根据实际效果调整 */
+  text-align: center; /* 新增：确保文字在按钮内居中 */
   background: #fff !important;
   color: #000 !important;
   border: 1px solid #ccc !important;
@@ -145,111 +147,126 @@ button{font-family:inherit;cursor:pointer;}
   border-color: #bbb !important;
 }
 
+/* ===== 聊天消息相关 CSS - 修改开始 ===== */
+
+/* ===== 聊天消息相关 CSS - 统一的 messages 定义 ===== */
+
 .messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px 24px 75px;     /* 原有上下内边距 */
-  display: flex;               /* 用 flex 而不是 inline-flex */
+  flex: 1;                     /* 占据父容器 .chat-area 的剩余空间 */
+  overflow-y: auto;            /* 当内容超出高度时显示垂直滚动条 */
+  padding: 24px 24px 75px;     /* 上下左右内边距，底部为输入框留出空间 */
+  display: flex;
   flex-direction: column;
-  gap: 14px;
-  width: 100%;
-  max-width: 100%;
-  word-break: break-word;
+  gap: 14px;                   /* .message-wrapper 之间的间距 */
+  width: 100%;                 /* 宽度占满父容器 */
+  /* max-width: 100%; */      /* 通常不需要，width: 100% 即可 */
+  /* word-break: break-word; */ /* 这个更适合放在 .message 或 .message .text 上，以控制单个消息的断词 */
 }
-/* 确保用户消息这整个 flex-item 占满全行并靠右 */
 
+/* 单条消息的包裹层 */
+.message-wrapper {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: fit-content;
+  max-width: 85%; /* 或者你之前设置的，比如 80% 或 75% */
+}
 
+/* 用户消息的包裹层：整体靠右 */
+.user-message-wrapper {
+  align-self: flex-end;
+}
 
-/* ✅ 消息通用容器结构（无重复 padding） */
+/* 助手消息的包裹层：整体靠左 */
+.assistant-message-wrapper {
+  align-self: flex-start;
+}
+
+/* 消息气泡 (.message) 的样式 */
 .message {
-  max-width: 65%;
-  margin: 6px 0;
+  max-width: 100%; 
+  margin: 0; 
   padding: 8px 12px;
   border-radius: 16px;
   line-height: 1.5;
   font-size: 0.95rem;
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  word-break: break-word;
+  word-break: break-word; /* 将 word-break 移到这里 */
 }
 
-/* ✅ 用户气泡：右对齐 + 蓝色背景 */
+/* ... 你其他的 .message.user, .message.assistant, .delete-message-btn 等样式 ... */
+
+/* 用户气泡颜色 */
 .message.user {
-  align-self: flex-end;
-  display: inline-block !important;
-  background-color: var(--primary); /* 来自主题变量 */
+  background-color: var(--primary); /* 在新版 CSS 中应为 var(--primary-color) */
   color: white;
-  margin-right: 16px;
-  margin-left: auto;
-  text-align: left;
-  margin: 0
-}
-.message .text {
-  
-  word-break: break-word;
-  overflow-wrap: break-word;
+  text-align: left; 
 }
 
+/* 助手气泡颜色 */
 .message.assistant {
-  /* 水平自适应、左对齐不变 */
-  display: inline-block;
-  width: auto;
-  max-width: 65%;
-  min-width: 96px;
-
-  margin: 6px 0 6px 16px;
-  
-  /* 上下内边距缩成 4px，让单行文字高度和用户气泡一致 */
-  padding: 8px 12px;
-  
-  border-radius: 16px;
+  /* background-color: var(--bg-secondary); /* 假设你定义了这个变量 */
+  /* color: var(--text-color); */
+  /* 以下是你原有的深色主题下的助手气泡样式，浅色主题会覆盖 */
   background-color: rgba(255,255,255,0.06);
   color: var(--text-color);
-  word-break: break-word;
   text-align: left;
 }
-
-
-/* ✅ 清理内层 text 元素样式，避免重复边距撑开 */
-.message .text {
-  margin: 0 !important;
-  padding: 0 !important;
-  background: none !important;
-  border: none !important;
-  box-shadow: none !important;
-
-}
-
-/* 只清除用户气泡内的 <p> 上下 margin */
-.message.user .text p {
-  margin-top:    0 !important;
-  margin-bottom: 0 !important;
-}
-
-/* 5-2-1 浅色气泡 */
 body.light-theme .message.assistant{
-  align-self:flex-start;
   background:#f0f2f5;
   color:var(--text-color);
   border:1px solid rgba(0,0,0,0.06);
 }
-body.light-theme .message.user{
-  align-self:flex-end;
-  background:var(--primary);
-  color:#fff;
+/* ... (其他 message 样式如 pre, code, text p 等保持) ... */
+
+
+/* --- 删除单条消息按钮的样式 (修改后) --- */
+.delete-message-btn {
+  background: transparent;
+  border: none;
+  color: #888; 
+  cursor: pointer;
+  font-size: 1.2em; 
+  padding: 0;    
+  line-height: 1;
+  
+  /* --- 默认隐藏 --- */
+  opacity: 0;
+  visibility: hidden;
+  /* --- 结束默认隐藏 --- */
+  
+  transition: opacity 0.2s ease, visibility 0s linear 0.2s, color 0.2s ease; 
+  /* 解释:
+     - opacity 过渡 0.2s
+     - visibility 不立即过渡 (0s)，但在 opacity 过渡完成后 (linear 0.2s) 改变，
+       这样可以避免在元素透明但仍可见时发生意外交互。
+       或者更简单地，只过渡 opacity，然后用 display: none/block，但 display 不支持 transition。
+       对于简单的显隐，只控制 opacity 配合 visibility 效果通常不错。
+  */
+  
+  width: 20px;   
+  height: 20px;  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px; 
+  margin-top: 4px; 
 }
 
-/* 5-2-2 深色气泡 */
-body.dark-theme .message.assistant{
-  align-self:flex-start;
-  background:rgba(255,255,255,0.06);
-  color:var(--text-color);
-  border:1px solid rgba(255,255,255,0.08);
+/* 当鼠标悬停在整个消息包裹层上时，显示删除按钮 */
+.message-wrapper:hover .delete-message-btn {
+  opacity: 0.7; /* 或者 1，如果你希望完全不透明 */
+  visibility: visible;
+  transition-delay: 0s; /* 确保悬停时 visibility 立即生效 */
 }
-body.dark-theme .message.user{
-  align-self:flex-end;
-  background:var(--primary);
-  color:#fff;
+
+/* 当鼠标直接悬停在删除按钮上时 (可选，可以进一步增强反馈) */
+.delete-message-btn:hover {
+  color: #ff4d4d; 
+  opacity: 1; /* 确保在直接悬停时完全不透明 */
 }
+
+/* ===== 聊天消息相关 CSS - 修改结束 ===== */
 
 .message pre,.message code{font-family:monospace;}
 .message pre{background:rgba(0,0,0,0.15);padding:8px;border-radius:6px;overflow-x:auto;}
@@ -503,9 +520,11 @@ body.dark-theme .input-area select#model option:hover {
   top: 8px !important;
   right: 12px !important;
   padding: 6px 12px !important;
+  min-width: 55px; /* 新增：设置与归档按钮相同的最小宽度 */
+  text-align: center; /* 新增：确保文字在按钮内居中 */
   background: #e53e3e !important;
   color: #fff !important;
-  border: none !important;
+  border: 1px solid transparent !important;
   border-radius: 4px !important;
   font-size: 0.9rem !important;
   cursor: pointer !important;
@@ -573,6 +592,10 @@ body.dark-theme {
 .message.assistant.loading {
   opacity: 0.6;
   font-style: italic;
+  display: inline-block; /* 让其表现为行内块，宽度由内容决定 */
+  width: auto;           /* 明确宽度自适应 */
+  max-width: fit-content;/* 最大宽度也由内容决定，或者设置一个较小的值，如 200px */
+  align-self: flex-start;/* 确保它在 .messages 容器中是左对齐的 */
 }
 
 /* 清除助手机泡内 <p> 的默认 margin */
@@ -805,3 +828,275 @@ body.dark-theme #chat-title-input {
   background: var(--primary) !important;
   color: #fff !important;
 }
+
+/* 🧠 思考过程块整体容器 */
+.reasoning-block {
+  margin-bottom: 1em;
+}
+
+/* 标签：思考过程 */
+.reasoning-label {
+  font-weight: bold;
+  margin-bottom: 0.5em;
+}
+
+/* 内容区域：设为灰色字体 */
+.reasoning-content {
+  color: #aaa;
+  white-space: pre-wrap;
+  font-size: 0.95em;
+  line-height: 1.6;
+}
+
+/* 分隔线 */
+.reasoning-sep {
+  margin-top: 1em;
+  margin-bottom: 1em;
+  border: none;
+  border-top: 1px solid #555;
+}
+.model-note {
+  margin-top: 0.5em;
+  font-size: 0.85em;
+  color: #888;
+  text-align: left;
+  font-style: italic;
+}
+
+
+/* 代码块复制按钮 */
+.text pre {
+  position: relative; /* 建立定位上下文 */
+}
+
+.text pre .copy-btn {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  display: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.text pre .copy-btn:hover {
+  background: rgba(0,0,0,0.7);
+}
+
+/* 悬浮时显示 */
+.text pre:hover .copy-btn {
+  display: block;
+}
+
+/* 浅色模式下的 copy 按钮 */
+body.light-theme .text pre .copy-btn {
+  background: rgba(255,255,255,0.7) !important;
+  color: #333 !important;
+}
+body.light-theme .text pre .copy-btn:hover {
+  background: rgba(255,255,255,0.9) !important;
+}
+
+body.light-theme .reasoning-content {
+  color: #777; /* 具体可以根据需要微调 */
+}
+
+/* —— API Key 组 —— */
+.settings-area .api-key-group {
+  display: flex;
+  align-items: center;
+  margin-bottom: 0.75em;
+}
+.settings-area .api-key-group label {
+  width: 140px;
+  flex-shrink: 0;
+  font-size: 0.95rem;
+  color: var(--text-color);
+}
+.settings-area .api-key-group select,
+.settings-area .api-key-group input {
+  flex: 1;
+  padding: 6px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--bg-color);
+  color: var(--text-color);
+  font-size: 0.95rem;
+}
+.settings-area .api-key-group select:focus,
+.settings-area .api-key-group input:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+
+/* —— “保存当前 API Key” 蓝色按钮 —— */
+#save-api-btn {
+  display: inline-block;               /* 和其他按钮保持一致 */
+  margin: 0 20px 15px;                 /* 左右间距与其他按钮相同 */
+  padding: 10px 22px;                  /* 内边距一致 */
+  background: var(--primary) !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background 0.2s ease;
+  text-align: center;
+}
+#save-api-btn:hover {
+  background: rgba(var(--primary-rgb), 0.9) !important;
+}
+
+/* ————— 代码块复制按钮 ————— */
+.text pre {
+  position: relative;
+}
+.text pre .copy-btn {
+  position: absolute;
+  top: 4px;
+  right: 8px;
+  display: none;
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: background .2s;
+}
+.text pre:hover .copy-btn {
+  display: block;
+}
+/* 浅色主题下按钮配色 */
+body.light-theme .text pre .copy-btn {
+  background: rgba(255,255,255,0.7);
+  color: #333;
+}
+body.light-theme .text pre .copy-btn:hover {
+  background: rgba(255,255,255,0.9);
+}
+
+/* ===== 思考过程块的样式 (已调整为思考过程在回复上方) ===== */
+
+.reasoning-block {
+  /* margin-bottom: 12px; */ /* 这个是之前思考过程在下面时的间距，现在它在上面 */
+  margin-top: 0;          /* 如果是气泡内第一个元素，通常不需要上边距 */
+  margin-bottom: 10px;    /* 与下方的正式回复内容之间的间距 */
+
+  /* padding-top: 10px; */  /* 如果是第一个元素，可能不需要顶部内边距，或者由气泡整体padding控制 */
+  padding-top: 0;         /* 通常设为0，让标签和内容自然排列 */
+  padding-bottom: 10px;   /* 思考过程内容与下方分隔线/主要回复的间距 */
+
+  /* 分隔线应该在思考过程的底部，与主要回复内容分隔 */
+  border-top: none;       /* 移除可能存在的上边框 */
+  border-bottom: 1px dashed rgba(128, 128, 128, 0.3); /* 分隔线在底部 */
+
+  font-size: 0.9em;
+  line-height: 1.5;
+}
+
+/* 如果 reasoning-block 是消息气泡内的第一个可见子元素，
+   并且消息气泡本身有 padding-top，那么 reasoning-block 可能不需要额外的 margin-top。
+   这个 :first-child 选择器确保如果它是第一个，其顶部没有多余的边距。
+*/
+.message > .reasoning-block:first-child {
+  margin-top: 0;
+}
+/* (或者，如果你不希望它有任何上边距，无论是否第一个，都可以在 .reasoning-block 中直接设置 margin-top: 0;) */
+
+
+.reasoning-label {
+  font-weight: bold;
+  margin-bottom: 6px;
+  /* 颜色将由主题特定样式覆盖 */
+}
+
+.reasoning-content { /* 这是 <pre> 标签 */
+  white-space: pre-wrap;
+  word-break: break-all; /* 对于非常长的无空格字符串，可以考虑 break-word 可能更柔和 */
+  overflow-wrap: break-word;
+  padding: 8px 10px; /* 调整内边距，使其看起来更紧凑 */
+  border-radius: 4px;    /* 给 pre 标签也加个圆角 */
+  max-height: 200px;     /* 调整最大高度 */
+  overflow-y: auto;
+  /* 背景和文字颜色将由主题特定样式覆盖 */
+  font-size: 0.95em; /* 让 pre 内的文字大小与 reasoning-block 的 font-size 相对独立或一致 */
+}
+
+/* --- 浅色主题下的思考过程样式 --- */
+body.light-theme .reasoning-block {
+  /* border-top-color: rgba(0, 0, 0, 0.15); /* 改为 border-bottom-color */
+  border-bottom-color: rgba(0, 0, 0, 0.1); /* 浅色主题下的底部线条颜色 */
+}
+body.light-theme .reasoning-label {
+  color: #444; /* 标签颜色加深一点 */
+}
+body.light-theme .reasoning-content {
+  background-color: #f8f9fa; /* 非常浅的灰色 */
+  color: #333;
+  border: 1px solid #e9ecef;
+}
+/* 浅色主题下思考过程滚动条 */
+body.light-theme .reasoning-content::-webkit-scrollbar { width: 6px; }
+body.light-theme .reasoning-content::-webkit-scrollbar-thumb { background-color: #ced4da; border-radius: 3px; }
+body.light-theme .reasoning-content { scrollbar-color: #ced4da #f8f9fa; scrollbar-width: thin; }
+
+
+/* --- 深色主题下的思考过程样式 --- */
+body.dark-theme .reasoning-block {
+  /* border-top-color: rgba(255, 255, 255, 0.15); /* 改为 border-bottom-color */
+  border-bottom-color: rgba(255, 255, 255, 0.2); /* 深色主题下的底部线条颜色 */
+}
+body.dark-theme .reasoning-label {
+  color: #ccc;
+}
+body.dark-theme .reasoning-content {
+  background-color: rgba(255, 255, 255, 0.05); /* 深色背景 */
+  color: #ddd;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+/* 深色主题下思考过程滚动条 */
+body.dark-theme .reasoning-content::-webkit-scrollbar { width: 6px; }
+body.dark-theme .reasoning-content::-webkit-scrollbar-thumb { background-color: #444; border-radius: 3px; }
+body.dark-theme .reasoning-content { scrollbar-color: #444 rgba(255, 255, 255, 0.05); scrollbar-width: thin; }
+
+
+/*
+   不再需要这两个选择器了，因为我们直接在 .reasoning-block 设置了 margin-bottom
+   来控制与下方 .text 的间距。
+   而且 .text 相对于气泡顶部的间距，如果上面没有 reasoning-block，
+   则由气泡的 padding-top 控制；如果上面有 reasoning-block，
+   则由 reasoning-block 的 margin-bottom 和自身的 margin-top (如果有的话) 控制。
+*/
+/*
+.message .reasoning-block:first-child {
+    margin-top: 0;
+}
+
+.message .reasoning-block + .text {
+    margin-top: 10px;
+}
+*/
+
+/* 如果需要，可以给 .text (主要回复内容) 一个默认的 margin-top，
+   或者当它前面是 .reasoning-block 时才给它 margin-top。
+   但通常 .reasoning-block 的 margin-bottom 已经处理了间距。
+   如果 .reasoning-block 不存在，.text 应该是气泡内的第一个主要内容元素。
+*/
+.message > .text:first-child { /* 如果 .text 是气泡内第一个子元素 (即没有思考过程) */
+  margin-top: 0; /* 通常不需要上边距，由气泡的 padding 控制 */
+}
+.message > .reasoning-block + .text { /* 如果 .text 前面是 .reasoning-block */
+  margin-top: 10px; /* 确保主要回复和上面的思考过程之间有明确的间距 */
+}
+
+
+/* ===== 结束 思考过程块的样式 ===== */
+

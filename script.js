@@ -1,52 +1,80 @@
+// --- START OF FILE script.js ---
+
 // ——— 顶部：针对 marked & MathJax 的配置 ———
 // 1. 关闭 marked 的 sanitize（保留所有反斜杠），启用 GitHub 风格
-
-
+// (假设 marked.js 已经在外部配置好了，或者这只是一个占位注释)
 
 // 全局变量
-let conversations = []
-let currentConversationId = null
-let currentApiKey = '';
+let activeModel = ''; // 存储当前加载对话的模型
+let conversations = [];
+let currentConversationId = null;
 
-/**
- * 从 localStorage 读取所有会话，并做好安全检查
- */
+// --- 辅助函数 ---
+
+function storageKeyFor(provider) {
+  // 根据提供者返回本地存储的键名
+  return {
+    openai: 'openai-api-key',
+    deepseek: 'deepseek-api-key',
+    siliconflow: 'siliconflow-api-key',
+    gemini: 'gemini-api-key',
+  }[provider];
+}
+
+function escapeHtml(str) {
+  // 转义 HTML 特殊字符
+  return str
+    .replace(/&/g, '&') // 已修正
+    .replace(/</g, '<')
+    .replace(/>/g, '>');
+}
+
+function getCurrentModel() {
+  const modelInput = document.getElementById('model');
+  return modelInput ? modelInput.value : 'gpt-3.5-turbo';
+}
+
+function getCurrentConversation() {
+  return conversations.find(c => c.id === currentConversationId);
+}
+
+// --- Local Storage 管理 ---
+
 function loadConversations() {
   const data = localStorage.getItem('conversations');
   let raw;
-
   try {
     raw = data ? JSON.parse(data) : [];
   } catch (e) {
     console.error('解析会话列表失败：', e);
     raw = [];
   }
-
   if (!Array.isArray(raw)) raw = [];
 
-  // 丢弃 null/非对象/没 id 的条目，然后映射 archived 字段
   conversations = raw
     .filter(c => c && typeof c === 'object' && 'id' in c)
     .map(c => ({
-      id:       c.id,
-      title:    c.title,
-      model:    c.model,
+      id: c.id,
+      title: c.title,
+      model: c.model,
       messages: Array.isArray(c.messages) ? c.messages : [],
-      archived: typeof c.archived === 'boolean' ? c.archived : false
+      archived: typeof c.archived === 'boolean' ? c.archived : false,
+      isNew: typeof c.isNew === 'boolean' ? c.isNew : false,
     }));
 }
 
+function saveConversations() {
+  localStorage.setItem('conversations', JSON.stringify(conversations));
+}
 
+// --- DOM 操作与渲染 ---
 
-// —— 最顶部，保证在 appendMessage 之前 —— 
 function pruneEmptyNodes(container) {
-  // 先删空文本节点
   Array.from(container.childNodes).forEach(node => {
     if (node.nodeType === Node.TEXT_NODE && !node.textContent.trim()) {
       node.remove();
     }
   });
-  // 再删空或只有 <br> 的段落
   container.querySelectorAll('p').forEach(p => {
     const txt = p.textContent.replace(/\u00A0/g, '').trim();
     if (!txt || (p.children.length === 1 && p.children[0].tagName === 'BR')) {
@@ -55,36 +83,140 @@ function pruneEmptyNodes(container) {
   });
 }
 
-
-
-
-function appendMessage(role, text) {
+function appendMessage(role, text, modelForNote, reasoningText) {
   const container = document.getElementById('messages');
-  const div = document.createElement('div');
-  div.className = 'message ' + (role === 'assistant' ? 'assistant' : 'user');
+  const messageWrapperDiv = document.createElement('div');
+  messageWrapperDiv.className = 'message-wrapper';
 
-// —— 好版本 ——（整行替换掉上面那段）
-const contentHtml = (typeof marked !== 'undefined')
-  ? marked.parse(text)
-  : escapeHtml(text);
+  if (role === 'user') {
+    messageWrapperDiv.classList.add('user-message-wrapper');
+  } else {
+    messageWrapperDiv.classList.add('assistant-message-wrapper');
+  }
 
-    
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'message ' + (role === 'assistant' || role === 'model' ? 'assistant' : 'user');
+
+  let reasoningContentElementForMathJax = null; // 用于 MathJax 引用
+
+  // --- 1. 处理并添加思考过程 (如果存在) ---
+  if (reasoningText && (role === 'assistant' || role === 'model')) {
+    const reasoningBlockDiv = document.createElement('div');
+    reasoningBlockDiv.className = 'reasoning-block';
+
+    const label = document.createElement('div');
+    label.className = 'reasoning-label';
+    label.textContent = '思考过程:';
+    reasoningBlockDiv.appendChild(label);
+
+    reasoningContentElementForMathJax = document.createElement('pre'); // 使用新变量名以区分
+    reasoningContentElementForMathJax.className = 'reasoning-content';
+    reasoningContentElementForMathJax.textContent = reasoningText;
+    reasoningBlockDiv.appendChild(reasoningContentElementForMathJax);
+
+    messageDiv.appendChild(reasoningBlockDiv);
+  }
+
+  // --- 2. 处理并添加主要回复内容 ---
+  const safeText = typeof text === 'string' ? text : String(text || '');
+  let contentHtml = '';
+  // 即使主要内容为空，但如果是助手消息且有思考过程，也应该创建空的 contentDiv 以保持结构
+  if (safeText.trim() !== '' || ( (role === 'assistant' || role === 'model') && reasoningText ) ) {
+    contentHtml = (typeof marked !== 'undefined')
+      ? marked.parse(safeText)
+      : escapeHtml(safeText);
+  }
 
   const contentDiv = document.createElement('div');
   contentDiv.className = 'text';
-  contentDiv.innerHTML = contentHtml;
-  pruneEmptyNodes(contentDiv);
+  if (contentHtml.trim() !== '') {
+    contentDiv.innerHTML = contentHtml;
+  }
 
-  container.appendChild(div).appendChild(contentDiv);
+  contentDiv.querySelectorAll('pre').forEach(pre => {
+    pre.style.position = 'relative';
+    const btn = document.createElement('button');
+    btn.className = 'copy-btn';
+    btn.textContent = '复制';
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const codeElem = pre.querySelector('code');
+      let textToCopy = codeElem ? codeElem.innerText : (() => {
+        const clone = pre.cloneNode(true);
+        clone.querySelector('.copy-btn')?.remove();
+        return clone.innerText;
+      })();
+      navigator.clipboard.writeText(textToCopy).then(() => {
+        btn.textContent = '已复制';
+        setTimeout(() => btn.textContent = '复制', 2000);
+      });
+    });
+    pre.appendChild(btn);
+  });
+
+  pruneEmptyNodes(contentDiv);
+  // 只有当 contentDiv 确实有内容，或者它是助手消息（为了模型注释和思考过程的容器）时才添加
+  if (contentDiv.innerHTML.trim() !== '' || (role === 'assistant' || role === 'model')) {
+      messageDiv.appendChild(contentDiv);
+  }
+
+
+  // --- 3. 添加模型注释 (如果需要) ---
+  if ((role === 'assistant' || role === 'model') && modelForNote) {
+    const note = document.createElement('div');
+    note.className = 'model-note';
+    note.textContent = `模型：${modelForNote}`;
+    messageDiv.appendChild(note);
+  }
+
+  // --- 4. 创建并配置删除单条消息的按钮 ---
+  const deleteMsgBtn = document.createElement('button');
+  deleteMsgBtn.className = 'delete-message-btn';
+  deleteMsgBtn.textContent = '✕';
+  deleteMsgBtn.title = '删除此条消息';
+
+  deleteMsgBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const convId = messageWrapperDiv.dataset.conversationId;
+    const msgIndex = parseInt(messageWrapperDiv.dataset.messageIndex, 10);
+
+    if (convId && !isNaN(msgIndex)) {
+      deleteSingleMessage(messageWrapperDiv, convId, msgIndex);
+    } else {
+      console.error('无法删除消息：缺少对话ID或消息索引。', messageWrapperDiv.dataset);
+    }
+  });
+
+  // --- 5. 根据角色决定按钮和气泡在包裹层中的顺序 ---
+  if (role === 'user') {
+    messageWrapperDiv.appendChild(deleteMsgBtn);
+    messageWrapperDiv.appendChild(messageDiv);
+  } else { // assistant or model
+    messageWrapperDiv.appendChild(messageDiv);
+    messageWrapperDiv.appendChild(deleteMsgBtn);
+  }
+  
+  // --- 6. 将整个消息包裹层添加到消息容器中 ---
+  container.appendChild(messageWrapperDiv);
   container.scrollTop = container.scrollHeight;
 
-  // MathJax 渲染
+  // --- 7. MathJax 渲染逻辑 ---
   if (window.MathJax && MathJax.typesetPromise) {
-    MathJax.typesetPromise([contentDiv]).catch(console.error);
+    const elementsToTypeset = [];
+    if (messageDiv.contains(contentDiv) && contentDiv.innerHTML.trim() !== '') {
+        elementsToTypeset.push(contentDiv);
+    }
+    if (reasoningContentElementForMathJax && messageDiv.contains(reasoningContentElementForMathJax)) {
+        elementsToTypeset.push(reasoningContentElementForMathJax);
+    }
+    if (elementsToTypeset.length > 0) {
+        MathJax.typesetPromise(elementsToTypeset).catch(console.error);
+    }
   }
+
+  return messageWrapperDiv;
 }
 
-// —— 在 appendMessage 同级位置（例如它后面）声明 appendLoading —— 
 function appendLoading() {
   const container = document.getElementById('messages');
   const div = document.createElement('div');
@@ -98,188 +230,246 @@ function appendLoading() {
   return div;
 }
 
-// —— 完整的 send() 实现 —— 
-async function send() {
-  const apiKey = localStorage.getItem('openai-api-key') || '';
-  if (!apiKey) {
-    alert('请先在设置里保存你的 API Key');
-    return;
+function renderConversationList() {
+  const list = document.getElementById('conversation-list');
+  
+  let isArchivePreviouslyExpanded = false;
+  const oldArchiveToggle = list.querySelector('.archive-toggle');
+  if (oldArchiveToggle && oldArchiveToggle.classList.contains('expanded')) {
+    isArchivePreviouslyExpanded = true;
   }
 
-  const input = document.getElementById('prompt');
-  // 1. 去掉末尾多余换行，但保留中间换行
-  let prompt = input.value.replace(/\n+$/, '');
-  if (!prompt.trim()) {
-    return;  // 全空或只有空白，不发送
-  }
+  list.innerHTML = '';
 
-  // 2. 渲染用户消息
-  appendMessage('user', prompt);
-  const conv = conversations.find(c => c.id === currentConversationId);
-  if (!conv) return;
-  conv.messages.push({ role: 'user', content: prompt });
-  input.value = '';
+  conversations
+    .filter(c => !c.archived)
+    .forEach(c => {
+      const li = document.createElement('li');
+      li.className = 'conversation-item';
+      li.dataset.id = c.id;
 
-  // 3. 渲染 loading 占位，并保留引用
-  const loadingDiv = appendLoading();
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'title';
+      titleSpan.textContent = c.title;
+      li.appendChild(titleSpan);
 
-  try {
-    // 4. 真正调用 OpenAI 接口（稳定版本中使用的方式）
-    const res = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + apiKey
-      },
-      body: JSON.stringify({
-        model: conv.model,
-        messages: conv.messages.map(m => ({
-          role:    m.role === 'bot' ? 'assistant' : m.role,
-          content: m.content
-        }))
-      })
+      if (c.isNew) {
+        li.classList.add('new-conv');
+      }
+      if (c.id === currentConversationId) {
+        li.classList.add('active');
+      }
+
+      li.addEventListener('click', () => {
+        if (c.isNew) {
+            c.isNew = false;
+        }
+        loadConversation(c.id); 
+      });
+      li.addEventListener('dblclick', () => renameConversation(c.id));
+
+      const delBtn = document.createElement('button');
+      delBtn.textContent = 'Del';
+      delBtn.className = 'del';
+      delBtn.addEventListener('click', e => {
+        e.stopPropagation();
+        if (confirm(`确定要删除「${c.title}」吗？此操作无法恢复。`)) {
+          deleteConversation(c.id);
+        }
+      });
+      li.appendChild(delBtn);
+      list.appendChild(li);
     });
 
-    // 5. 如果接口跑出错误，抛出到 catch
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`接口返回 ${res.status}：${errText}`);
+  const archivedConversations = conversations.filter(c => c.archived);
+  if (archivedConversations.length) {
+    const toggle = document.createElement('li');
+    toggle.className = 'archive-toggle';
+    toggle.textContent = `已归档 (${archivedConversations.length})`;
+    
+    if (isArchivePreviouslyExpanded) {
+      toggle.classList.add('expanded');
     }
 
-    const data  = await res.json();
-    const reply = data.choices[0].message.content;
+    toggle.addEventListener('click', () => {
+        toggle.classList.toggle('expanded');
+        const subListElement = toggle.nextElementSibling;
+        if (subListElement && subListElement.classList.contains('archived-list')) {
+            subListElement.style.display = toggle.classList.contains('expanded') ? 'block' : 'none';
+        }
+    });
+    list.appendChild(toggle);
 
-    // 6. 接口返回后，先移除 loading，然后渲染真正的助手回复
-    loadingDiv.remove();
-    appendMessage('assistant', reply);
-    conv.messages.push({ role: 'assistant', content: reply });
-    saveConversations();
+    const subList = document.createElement('ul');
+    subList.className = 'archived-list';
+    
+    if (isArchivePreviouslyExpanded) {
+      subList.style.display = 'block';
+    } else {
+      subList.style.display = 'none'; 
+    }
 
-  } catch (e) {
-    // 7. 出错也移除 loading，并显示错误信息
-    loadingDiv.remove();
-    appendMessage('assistant', `错误：${e.message}`);
+    archivedConversations.forEach(c => {
+      const li = document.createElement('li');
+      li.className = 'conversation-item archived'; 
+      li.dataset.id = c.id;
+      
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'title';
+      titleSpan.textContent = c.title;
+      li.appendChild(titleSpan);
+
+      if (c.id === currentConversationId) {
+        li.classList.add('active');
+      }
+      li.addEventListener('click', () => loadConversation(c.id));
+      li.addEventListener('dblclick', () => renameConversation(c.id));
+      subList.appendChild(li);
+    });
+    list.appendChild(subList);
   }
-}
-window.send = send;
-
-
-function escapeHtml(str) {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  
+  enableConversationDrag(); 
 }
 
 
-// 1. Del会话函数，必须最先定义
-function deleteConversation(id) {
-  const idx = conversations.findIndex(c => c.id === id);
-  if (idx === -1) return;
-  const wasCurrent = conversations[idx].id === currentConversationId;
-  conversations.splice(idx, 1);
-  saveConversations();
-  renderConversationList();
-  enableConversationDrag();
-if (wasCurrent) {
-  if (conversations.length) {
-    // 先尝试选中“同一索引”（原来是下一行），否则选中上一行
-    const newIdx = idx < conversations.length ? idx : conversations.length - 1;
-    loadConversation(conversations[newIdx].id);
-  } else {
-    // 全都删完
-    currentConversationId = null;
-    document.getElementById('messages').innerHTML = '';
-    document.getElementById('chat-title').textContent = '对话';
+function enableConversationDrag() {
+  const list = document.getElementById('conversation-list');
+  if (!list || typeof Sortable === 'undefined') return;
+
+  if (list.sortableInstance) {
+    list.sortableInstance.destroy();
   }
-}
-}
 
-
-
-
-function saveApiKey() {
-  const key = document.getElementById('api-key').value.trim();
-  if (!key) {
-    alert('请输入有效的 API Key');
-    return;
-  }
-  localStorage.setItem('openai-api-key', key);
-  console.log('[DEBUG] 已保存到 localStorage 的 API Key:', localStorage.getItem('openai-api-key'));
-  alert('API Key 已保存');
-}
-
-
-
-window.saveApiKey = saveApiKey;
-
-
-
-function loadApiKeyToInput() {
-  const saved = localStorage.getItem('openai-api-key');
-  if (saved) {
-    document.getElementById('api-key').value = saved;
-    currentApiKey = saved;     // ← 确保也赋值给 currentApiKey
-  }
-}
-
-
-
-// —— 好版本，一体化初始化 —— 
-document.addEventListener('DOMContentLoaded', () => {
-
-  // 发送框回车发送
-  const promptElem = document.getElementById('prompt');
-  promptElem.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      send();
+  list.sortableInstance = Sortable.create(list, {
+    animation: 150,
+    ghostClass: 'sortable-ghost',
+    chosenClass: 'sortable-chosen',
+    filter: '.archive-toggle, .archived-list, .archived-item',
+    preventOnFilter: true,
+    onEnd: evt => {
+      if (evt.oldIndex === undefined || evt.newIndex === undefined) return;
+      const nonArchived = conversations.filter(c => !c.archived);
+      const [movedItem] = nonArchived.splice(evt.oldIndex, 1);
+      nonArchived.splice(evt.newIndex, 0, movedItem);
+      conversations = [...nonArchived, ...conversations.filter(c => c.archived)];
+      saveConversations();
+      renderConversationList();
     }
   });
+}
 
-  // ========== 读取并应用上次界面缩放 ===========
-  const savedScale = parseFloat(localStorage.getItem('ui-scale'));
-  const opts = document.getElementById('ui-scale-options');
-  if (opts && !isNaN(savedScale)) {
-    document.documentElement.style.setProperty('--ui-scale', savedScale);
-    opts.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-    const btn = opts.querySelector(`button[data-scale="${savedScale}"]`);
-    if (btn) btn.classList.add('active');
+// --- 对话逻辑 ---
+
+function createNewConversation() {
+  const id = Date.now().toString();
+  const newConv = {
+    id,
+    title: '新对话',
+    model: getCurrentModel(),
+    messages: [],
+    archived: false,
+    isNew: true,
+  };
+  conversations.unshift(newConv);
+  saveConversations();
+  loadConversation(id);
+}
+window.createNewConversation = createNewConversation;
+
+
+function loadConversation(id) {
+  const conv = conversations.find(c => c.id === id);
+  if (!conv) {
+    if (conversations.length > 0) {
+        // 尝试加载第一个未归档的，如果全归档了则加载第一个归档的
+        loadConversation(conversations.filter(c=>!c.archived)[0]?.id || conversations[0].id);
+    } else {
+        createNewConversation(); // 如果列表为空，则创建一个新对话
+    }
+    return;
   }
 
-  // ========== 绑定档位按钮点击事件 ===========
-  if (opts) {
-    opts.addEventListener('click', e => {
-      const btn = e.target.closest('button[data-scale]');
-      if (!btn) return;
-      const scale = parseFloat(btn.dataset.scale);
-      document.documentElement.style.setProperty('--ui-scale', scale);
-      localStorage.setItem('ui-scale', scale);
-      opts.querySelectorAll('button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
+  currentConversationId = id;
+  activeModel = conv.model;
+
+  document.getElementById('chat-title').textContent = conv.title;
+  const archiveBtn = document.getElementById('archive-current-btn');
+  if (archiveBtn) {
+    archiveBtn.textContent = conv.archived ? '取消归档' : '归档';
+  }
+  document.getElementById('model').value = conv.model;
+
+  document.getElementById('settings-area').style.display = 'none';
+  document.getElementById('chat-area').style.display = 'flex';
+
+  const messagesContainer = document.getElementById('messages');
+  messagesContainer.innerHTML = '';
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
+  renderConversationList();
+  enableInlineTitleEdit();
+
+  let messageIndex = 0;
+  conv.messages
+    .filter(m => {
+      // 同时确保消息有主要内容或者有思考过程才显示
+      // (或者如果角色是助手，即使都为空也显示一个空壳？目前逻辑是至少有其一)
+      const hasContent = typeof m.content === 'string' && m.content.trim() !== '';
+      const hasReasoning = typeof m.reasoning_content === 'string' && m.reasoning_content.trim() !== '';
+      return hasContent || hasReasoning || (m.role === 'user'); // 用户消息即使为空也显示(虽然不太可能)
+    })
+    .forEach(m => {
+      const messageElement = appendMessage(
+        m.role,
+        m.content, // content 可能为空字符串，appendMessage 内部会处理
+        m.model || conv.model,
+        m.reasoning_content || null // 传递保存的思考过程
+      );
+      // 确保 messageElement 真的被创建了 (appendMessage 应该总是返回它)
+      if (messageElement) {
+          messageElement.dataset.conversationId = conv.id;
+          messageElement.dataset.messageIndex = messageIndex;
+          messageIndex++;
+      }
     });
+  
+
+  
+}
+
+function deleteSingleMessage(messageElement, conversationId, messageIndex) {
+  const conv = conversations.find(c => c.id === conversationId);
+  if (!conv || messageIndex < 0 || messageIndex >= conv.messages.length) {
+    console.error('无法删除消息：无效的对话或消息索引。');
+    if (confirm('数据可能不一致。确实要从界面移除此条消息吗？')) {
+      messageElement.remove();
+    }
+    return;
   }
 
-}); // ← 这里是回调的闭合
+  const messageToConfirm = conv.messages[messageIndex];
+  let confirmTextPreview = messageToConfirm.content.substring(0, 50);
+  if (messageToConfirm.content.length > 50) {
+    confirmTextPreview += "...";
+  }
 
+  if (confirm(`确实要删除这条消息吗？\n\n"${confirmTextPreview}"`)) {
+    conv.messages.splice(messageIndex, 1);
+    saveConversations();
+    messageElement.remove();
 
+    // 更新后续消息的 messageIndex data-* 属性
+    const messagesContainer = document.getElementById('messages');
+    const remainingMessageElements = messagesContainer.querySelectorAll('.message-wrapper');
+    remainingMessageElements.forEach((el, newIndex) => {
+      el.dataset.messageIndex = newIndex;
+    });
 
-
-function getCurrentModel() {
-    const modelInput = document.getElementById('model');
-    return modelInput ? modelInput.value : 'gpt-3.5-turbo'; // 默认 fallback
+    console.log(`消息已删除 (对话ID: ${conversationId}, 原索引: ${messageIndex})`);
+  }
 }
-window.getCurrentModel = getCurrentModel;
 
 
-function saveConversations() {
-  localStorage.setItem('conversations', JSON.stringify(conversations));
-}
-
-
-
-
-// Prompt user to rename a conversation
 function renameConversation(id) {
   const conv = conversations.find(c => c.id === id);
   if (!conv) return;
@@ -288,122 +478,320 @@ function renameConversation(id) {
     conv.title = newTitle.trim();
     saveConversations();
     renderConversationList();
-    // If renaming current, update header
     if (id === currentConversationId) {
       document.getElementById('chat-title').textContent = conv.title;
     }
   }
 }
 
+function deleteConversation(id) {
+  const idx = conversations.findIndex(c => c.id === id);
+  if (idx === -1) return;
 
-// —— 拖拽重排会话列表 —— 
-function enableConversationDrag() {
-  const list = document.getElementById('conversation-list');
-  if (!list || typeof Sortable === 'undefined') return;
+  const wasCurrent = conversations[idx].id === currentConversationId;
+  conversations.splice(idx, 1);
+  saveConversations();
 
-  Sortable.create(list, {
-    animation: 150,
-    ghostClass: 'sortable-ghost',
-     chosenClass: 'sortable-chosen',
-    onEnd: evt => {
-      // 从数组中移动元素
-      const [moved] = conversations.splice(evt.oldIndex, 1);
-      conversations.splice(evt.newIndex, 0, moved);
-      saveConversations();
-      // 重新渲染列表并重新绑定拖拽
-      renderConversationList();
-      enableConversationDrag();
+  if (wasCurrent) {
+    if (conversations.length > 0) {
+      const nextNonArchived = conversations.filter(c => !c.archived);
+      const newIdToLoad = (nextNonArchived.length > 0) ? nextNonArchived[0].id : conversations[0].id;
+      loadConversation(newIdToLoad);
+    } else {
+      createNewConversation();
     }
-  });
-}
-
-function createNewConversation() {
-    // 创建新对话逻辑
-    const id = Date.now().toString();
-    const newConv = {
-        id,
-        title: '新对话',
-        model: getCurrentModel(), // 下面问题会补
-        messages: [],
-    };
-    conversations.push(newConv);
-    saveConversations();
+  } else {
     renderConversationList();
-    loadConversation(id);
-    
+  }
 }
-window.createNewConversation = createNewConversation; // VERY IMPORTANT
 
-
-
-
-function loadConversation(id) {
-  currentConversationId = id;
+function toggleArchive(id) {
   const conv = conversations.find(c => c.id === id);
   if (!conv) return;
+  conv.archived = !conv.archived;
+  conv.isNew = false;
+  saveConversations();
 
-    document.getElementById('chat-title').textContent = conv.title;
-  // 把“归档”按钮文案也更新
-  const arcBtn = document.getElementById('archive-current-btn');
-  if (arcBtn) {
-    arcBtn.textContent = conv.archived ? '取消归档' : '归档';
+  if (conv.archived && currentConversationId === id) {
+    const nextNonArchived = conversations.find(c => !c.archived);
+    if (nextNonArchived) {
+      loadConversation(nextNonArchived.id);
+    } else {
+      createNewConversation();
+    }
+  } else if (!conv.archived) {
+    loadConversation(conv.id);
+  } else {
+    renderConversationList();
   }
-  // 切换界面显示
-  document.getElementById('settings-area').style.display = 'none';
-  document.getElementById('chat-area').style.display = 'flex';
-  document.getElementById('chat-title').textContent = conv.title;
-  document.getElementById('model').value = conv.model;
-  document.getElementById('new-conv-btn').addEventListener('click', createNewConversation);
-
-  const msgsElem = document.getElementById('messages');
-  msgsElem.innerHTML = '';
-  conv.messages.forEach(m => appendMessage(m.role, m.content));
-  renderConversationList();
 }
 
 
-function showSettings() {
-    const settingsArea = document.getElementById('settings-area');
-    const chatArea = document.getElementById('chat-area');
-    if (settingsArea && chatArea) {
-        settingsArea.style.display = 'flex';
-        chatArea.style.display = 'none';
+async function send() {
+  const conv = getCurrentConversation();
+  if (!conv) {
+    alert("请先选择或创建一个对话。");
+    return;
+  }
+
+  let actualProvider;
+  const currentSelectedModel = conv.model;
+
+  // 根据当前选择的模型推断 API 提供商
+  if (currentSelectedModel.toLowerCase().includes('deepseek')) {
+    actualProvider = 'deepseek';
+  } else if (currentSelectedModel.toLowerCase().includes('gemini')) {
+    actualProvider = 'gemini';
+  } else if (currentSelectedModel.toLowerCase().startsWith('qwen/')) {
+    actualProvider = 'siliconflow';
+  } else if (
+    currentSelectedModel.toLowerCase().includes('gpt') ||
+    currentSelectedModel.toLowerCase().includes('o3') ||
+    currentSelectedModel.toLowerCase().includes('o4-mini')
+  ) {
+    actualProvider = 'openai';
+  } else {
+    const providerSel = document.getElementById('api-provider');
+    actualProvider = providerSel.value;
+    console.warn(`无法从模型 "${currentSelectedModel}" 自动推断提供商，将使用设置页面的选择: ${actualProvider}`);
+  }
+  console.log(`[发送] 模型: ${currentSelectedModel}, 推断的提供商: ${actualProvider}`);
+
+  const providerToUse = actualProvider;
+  const apiKeyStorageKey = storageKeyFor(providerToUse);
+  const apiKey = localStorage.getItem(apiKeyStorageKey) || '';
+
+  if (!apiKey) {
+    // ... (API Key 检查和提示，保持不变) ...
+    const providerSelectElement = document.getElementById('api-provider');
+    let providerDisplayName = providerToUse;
+    for (let i = 0; i < providerSelectElement.options.length; i++) {
+      if (providerSelectElement.options[i].value === providerToUse) {
+        providerDisplayName = providerSelectElement.options[i].text;
+        break;
+      }
     }
+    alert(`请先在“设置”中为 ${providerDisplayName} 保存 API Key`);
+    showSettings();
+    return;
+  }
+
+  const promptInput = document.getElementById('prompt');
+  const promptText = promptInput.value.replace(/\n$/, '');
+  if (!promptText.trim()) return;
+
+  // 1. 显示并保存用户消息 (只执行一次)
+  appendMessage('user', promptText, null, null);
+  const userRoleForStorage = 'user';
+  conv.messages.push({ role: userRoleForStorage, content: promptText, model: conv.model });
+  promptInput.value = '';
+  saveConversations(); // 保存包含用户消息的对话
+
+  const loadingDiv = appendLoading();
+
+  let apiUrl;
+  let headers = { 'Content-Type': 'application/json' };
+  let bodyPayload;
+  let assistantReply = '（无回复）'; // 初始化，如果API调用失败或无内容，会用这个
+  let thinkingProcess = null;
+
+  const mapMessagesForStandardProviders = (messages) => {
+    // ... (这个辅助函数保持不变) ...
+    return messages
+      .filter(m => typeof m.content === 'string' && m.content.trim() !== '')
+      .map(m => {
+        let finalRole;
+        if (m.role === 'user') {
+          finalRole = 'user';
+        } else if (m.role === 'assistant' || m.role === 'bot' || m.role === 'model') {
+          finalRole = 'assistant';
+        } else if (m.role === 'system') {
+          finalRole = 'system';
+        } else {
+          console.warn(`[发送消息映射] 发现无效角色: '${m.role}'，内容: "${String(m.content || '').substring(0,30)}..."。将默认为 'user'。`);
+          finalRole = 'user';
+        }
+        return { role: finalRole, content: m.content };
+      });
+  };
+
+  try {
+    // ... (switch 语句构建 apiUrl, headers, bodyPayload，保持不变) ...
+    switch (providerToUse) {
+      case 'openai':
+        apiUrl = 'https://api.openai.com/v1/chat/completions';
+        headers['Authorization'] = `Bearer ${apiKey}`;
+        bodyPayload = {
+          model: conv.model,
+          messages: mapMessagesForStandardProviders(conv.messages)
+        };
+        break;
+      case 'deepseek':
+        apiUrl = 'https://api.deepseek.com/chat/completions';
+        headers['Authorization'] = `Bearer ${apiKey}`;
+        bodyPayload = {
+          model: conv.model,
+          messages: mapMessagesForStandardProviders(conv.messages)
+        };
+        break;
+      case 'siliconflow':
+        apiUrl = 'https://api.siliconflow.cn/v1/chat/completions';
+        headers['Authorization'] = `Bearer ${apiKey}`;
+        bodyPayload = {
+          model: conv.model,
+          messages: mapMessagesForStandardProviders(conv.messages)
+        };
+        break;
+      case 'gemini':
+        apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${conv.model}:generateContent?key=${apiKey}`;
+        bodyPayload = {
+          contents: conv.messages
+            .filter(m => typeof m.content === 'string' && m.content.trim() !== '')
+            .map(m => {
+              let roleForGemini;
+              if (m.role === 'user') {
+                roleForGemini = 'user';
+              } else if (m.role === 'assistant' || m.role === 'bot' || m.role === 'model') {
+                roleForGemini = 'model';
+              } else {
+                console.warn(`[Gemini映射] 发现无效角色: '${m.role}'，默认为 'user'`);
+                roleForGemini = 'user';
+              }
+              return {
+                role: roleForGemini,
+                parts: [{ text: m.content }]
+              };
+            })
+        };
+        break;
+      default:
+        throw new Error('未知的或无法推断的 API Provider: ' + providerToUse);
+    }
+
+
+    const body = JSON.stringify(bodyPayload);
+    console.log(`[发送] 请求体发往 ${providerToUse} (${apiUrl}):`, body);
+
+    const response = await fetch(apiUrl, { method: 'POST', headers, body });
+    if (!response.ok) {
+      const errorText = await response.text();
+      let detail = "";
+      try {
+        const errJson = JSON.parse(errorText);
+        detail = errJson.error?.message || JSON.stringify(errJson);
+      } catch (e) {
+        detail = errorText;
+      }
+      throw new Error(`接口返回 ${response.status}：${detail}`);
+    }
+    const data = await response.json();
+
+    console.log("----------- API 响应数据 -----------");
+    console.log(JSON.stringify(data, null, 2));
+    console.log("------------------------------------");
+
+    if (providerToUse === 'gemini') {
+      // ... (Gemini 回复提取) ...
+        if (data.candidates && data.candidates.length > 0 &&
+            data.candidates[0].content && data.candidates[0].content.parts &&
+            data.candidates[0].content.parts.length > 0) {
+            assistantReply = data.candidates[0].content.parts[0].text;
+        } else if (data.promptFeedback && data.promptFeedback.blockReason) {
+            assistantReply = `请求被阻止：${data.promptFeedback.blockReason}`;
+            if (data.promptFeedback.safetyRatings) {
+            assistantReply += ` (Safety Ratings: ${JSON.stringify(data.promptFeedback.safetyRatings)})`;
+            }
+        }
+    } else {
+      if (data.choices && data.choices.length > 0 && data.choices[0].message) {
+        assistantReply = data.choices[0].message.content || '（无回复）';
+        if (data.choices[0].message.reasoning_content) {
+          thinkingProcess = data.choices[0].message.reasoning_content;
+        }
+      }
+    }
+    // 在 try 块的末尾，如果成功，assistantReply 和 thinkingProcess 已经被赋值
+
+  } catch (error) {
+    console.error('发送错误:', error);
+    assistantReply = `错误：${error.message}`; // 将错误信息赋给 assistantReply
+    thinkingProcess = null; // 错误情况下，不显示思考过程
+  } finally {
+    if (loadingDiv) {
+        loadingDiv.remove();
+    }
+
+    // --- 确保只在这里（finally块）执行一次助手消息的显示和保存 ---
+    const assistantRoleToDisplay = (providerToUse === 'gemini') ? 'model' : 'assistant';
+    appendMessage(assistantRoleToDisplay, assistantReply, conv.model, thinkingProcess);
+
+    const assistantRoleToStore = 'assistant'; // 内部存储统一用 'assistant'
+    // 只有当回复不是初始的“（无回复）”（意味着API调用至少返回了一些东西，或错误被捕获）
+    // 才将这条“助手回合”的消息保存到历史记录
+    if (assistantReply !== '（无回复）' || thinkingProcess) {
+        conv.messages.push({
+            role: assistantRoleToStore,
+            content: assistantReply,
+            model: conv.model,
+            reasoning_content: thinkingProcess
+        });
+        saveConversations(); // 保存包含助手回复/错误或思考过程的对话
+    }
+  }
+}
+window.send = send;
+
+// --- 设置与 UI 操作 ---
+
+function showSettings() {
+  document.getElementById('settings-area').style.display = 'flex';
+  document.getElementById('chat-area').style.display = 'none';
+  const providerSelect = document.getElementById('api-provider');
+  providerSelect.dispatchEvent(new Event('change'));
 }
 window.showSettings = showSettings;
 
-
+function showChatArea() {
+    document.getElementById('settings-area').style.display = 'none';
+    document.getElementById('chat-area').style.display = 'flex';
+    if (!currentConversationId && conversations.length > 0) {
+        loadConversation(conversations.filter(c=>!c.archived)[0]?.id || conversations[0].id);
+    } else if (!currentConversationId) {
+        createNewConversation();
+    }
+}
 
 
 function clearAllHistory() {
-  if (confirm('确认清除所有历史吗？')) {
-    localStorage.removeItem('conversations');
+  if (confirm('确认清除所有历史吗？此操作无法恢复。')) {
     conversations = [];
     currentConversationId = null;
-    renderConversationList();
+    activeModel = '';
+    saveConversations();
     document.getElementById('messages').innerHTML = '';
     document.getElementById('chat-title').textContent = '对话';
+    renderConversationList();
+    createNewConversation();
   }
 }
-
 window.clearAllHistory = clearAllHistory;
 
-
-function bindPromptOnce() {
-  const promptElem = document.getElementById('prompt');
-  if (!promptElem || promptElem.dataset.bound === 'true') return;
-  promptElem.dataset.bound = 'true';
-  // 如果后续需要给 prompt 绑定事件，例如快捷键，可以写在这里
+function exportAllHistory() {
+  const data = JSON.stringify(conversations, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `chat_history_${new Date().toISOString().slice(0,10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
-
-// 在页面 DOM 完全加载后调用一次
-document.addEventListener('DOMContentLoaded', bindPromptOnce);
+window.exportAllHistory = exportAllHistory;
 
 
-// === 主题切换逻辑 ===
-
-function applyStoredTheme() {
-  const theme = localStorage.getItem('theme') || 'dark';
+function applyTheme(theme) {
   if (theme === 'dark') {
     document.body.classList.add('dark-theme');
     document.body.classList.remove('light-theme');
@@ -411,267 +799,237 @@ function applyStoredTheme() {
     document.body.classList.add('light-theme');
     document.body.classList.remove('dark-theme');
   }
+  localStorage.setItem('theme', theme);
 }
 
 function toggleTheme() {
-  // 如果当前是暗色，就切到亮色；否则切到暗色
-  if (document.body.classList.contains('dark-theme')) {
-    document.body.classList.remove('dark-theme');
-    document.body.classList.add('light-theme');
-    localStorage.setItem('theme', 'light');
-  } else {
-    document.body.classList.remove('light-theme');
-    document.body.classList.add('dark-theme');
-    localStorage.setItem('theme', 'dark');
-  }
+  const newTheme = document.body.classList.contains('dark-theme') ? 'light' : 'dark';
+  applyTheme(newTheme);
 }
 
+function applyUiScale(scale, optionsContainer) {
+    document.documentElement.style.setProperty('--ui-scale', scale);
+    localStorage.setItem('ui-scale', String(scale));
+    if (optionsContainer) {
+        optionsContainer.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+        const activeButton = optionsContainer.querySelector(`button[data-scale="${scale}"]`);
+        if (activeButton) activeButton.classList.add('active');
+    }
+}
 
-// 在 DOMContentLoaded 里，只调用一次
-document.addEventListener('DOMContentLoaded', () => {
-  applyStoredTheme();
-  document
-    .getElementById('toggle-theme-btn')
-    .addEventListener('click', toggleTheme);
-});
-
-
-/**
- * 启用行内编辑会话标题（单击即可）
- */
 function enableInlineTitleEdit() {
-  const header = document.querySelector('.chat-header');
-  if (!header) return;
+  const chatHeader = document.querySelector('.chat-header');
+  const titleElement = document.getElementById('chat-title');
+  if (!chatHeader || !titleElement) return;
 
-  // 编辑函数：每次都可重复绑定
-  function editTitle() {
-    const oldH1 = document.getElementById('chat-title');
+  titleElement.removeEventListener('click', handleTitleClick);
+  titleElement.style.cursor = 'pointer';
+  titleElement.addEventListener('click', handleTitleClick);
+}
+
+function handleTitleClick() {
+    const chatHeader = this.parentElement;
+    const oldH1 = this;
     const oldName = oldH1.textContent;
 
-    // 创建 <input>
     const input = document.createElement('input');
     input.id = 'chat-title-input';
     input.type = 'text';
     input.value = oldName;
 
-    // 用于替换
-    header.replaceChild(input, oldH1);
+    chatHeader.replaceChild(input, oldH1);
     input.focus();
     input.setSelectionRange(oldName.length, oldName.length);
 
-    // 提交逻辑
-    function commit() {
+    function commitEdit() {
       const newName = input.value.trim() || oldName;
-      // 更新数据模型并持久化
-      const conv = conversations.find(c => c.id === currentConversationId);
-      if (conv) {
+      const conv = getCurrentConversation();
+      if (conv && conv.title !== newName) {
         conv.title = newName;
         saveConversations();
+        renderConversationList();
       }
-      // 恢复 <h1>
+      
       const newH1 = document.createElement('h1');
       newH1.id = 'chat-title';
       newH1.textContent = newName;
-      newH1.style.cursor = 'pointer';
-      header.replaceChild(newH1, input);
-      // 重新绑定
-      newH1.addEventListener('click', editTitle);
-      // 同步侧栏
-      const li = document.querySelector(
-        `.conversation-item[data-id="${currentConversationId}"] .title`
-      );
-      if (li) li.textContent = newName;
+      chatHeader.replaceChild(newH1, input);
+      enableInlineTitleEdit();
     }
 
-    // 取消逻辑
-    function cancel() {
-      header.replaceChild(oldH1, input);
-      oldH1.addEventListener('click', editTitle);
-    }
-
-    // 按键与失焦事件
+    input.addEventListener('blur', commitEdit);
     input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') commit();
-      if (e.key === 'Escape') cancel();
-    });
-    input.addEventListener('blur', commit);
-  }
-
-  // 初次绑定在现有标题上
-  const titleElem = document.getElementById('chat-title');
-  if (titleElem) {
-    titleElem.style.cursor = 'pointer';
-    titleElem.addEventListener('click', editTitle);
-  }
-}
-
-// 页面加载完成后启用
-window.addEventListener('DOMContentLoaded', enableInlineTitleEdit);
-
-/**
- * 导出所有对话为 JSON 文件
- */
-function exportAllHistory() {
-  // 从 localStorage 或内存读取所有会话
-  const data = JSON.stringify(conversations, null, 2);
-  const blob = new Blob([data], { type: 'application/json' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href     = url;
-  a.download = 'chat_history.json';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-}
-
-// 把按钮和函数绑定
-document.addEventListener('DOMContentLoaded', () => {
-  const exportBtn = document.getElementById('export-history-btn');
-  if (exportBtn) {
-    exportBtn.addEventListener('click', exportAllHistory);
-  }
-})
-
-
-/**
- * 渲染对话列表，分“未归档”与“已归档”两个区块，并带 Del 按钮和双击重命名
- */
-
-function getCurrentConversation() {
-  return conversations.find(c => c.id === currentConversationId);
-}
-
-
-
-
-function toggleArchive(id) {
-  const conv = conversations.find(c => c.id === id);
-  if (!conv) return;
-  conv.archived = !conv.archived;
-  saveConversations();
-  renderConversationList();
-  if (currentConversationId === id) createNewConversation();
-}
-
-function renderConversationList() {
-  const list = document.getElementById('conversation-list');
-  list.innerHTML = '';
-// 未归档
-conversations
-  .filter(c => !c.archived)
-  .forEach(c => {
-    const li = document.createElement('li');
-    li.dataset.id = c.id;
-    li.textContent = c.title;
-    if (c.id === currentConversationId) {
-      li.classList.add('active');
-    }
-    li.addEventListener('click', () => loadConversation(c.id));
-    li.addEventListener('dblclick', () => renameConversation(c.id));
-
-    // Del 按钮
-    const del = document.createElement('button');
-    del.textContent = 'Del';
-    del.className = 'del';
-    del.addEventListener('click', e => {
-      e.stopPropagation();
-      // 二次确认
-      if (confirm(`确定要删除「${c.title}」吗？此操作无法恢复。`)) {
-        deleteConversation(c.id);
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitEdit();
+      } else if (e.key === 'Escape') {
+        const restoredH1 = document.createElement('h1');
+        restoredH1.id = 'chat-title';
+        restoredH1.textContent = oldName;
+        chatHeader.replaceChild(restoredH1, input);
+        enableInlineTitleEdit();
       }
     });
-
-    li.appendChild(del);
-    list.appendChild(li);
-  });
-  // 已归档
-  const archived = conversations.filter(c => c.archived);
- if (archived.length) {
-   // 可折叠标题
-   const toggle = document.createElement('li');
-   toggle.className = 'archive-toggle';
-   toggle.textContent = `已归档 (${archived.length})`;
-   // 点击展开/收起
-   toggle.addEventListener('click', () => {
-     toggle.classList.toggle('expanded');
-   });
-   list.appendChild(toggle);
-
-   // 二级列表
-   const sub = document.createElement('ul');
-   sub.className = 'archived-list';
-   archived.forEach(c => {
-     const li = document.createElement('li');
-     li.dataset.id = c.id;
-     li.textContent = c.title;
-     li.classList.add('archived');
-     if (c.id === currentConversationId) li.classList.add('active');
-     li.addEventListener('click', () => loadConversation(c.id));
-     li.addEventListener('dblclick', () => renameConversation(c.id));
-     sub.appendChild(li);
-   });
-   list.appendChild(sub);
-  }
-    }
+}
 
 
-// Bindings
+// --- DOMContentLoaded: 主要设置 ---
 document.addEventListener('DOMContentLoaded', () => {
-  loadApiKeyToInput();
+  const storedTheme = localStorage.getItem('theme') || 'dark';
+  applyTheme(storedTheme);
+  document.getElementById('toggle-theme-btn')?.addEventListener('click', toggleTheme);
+
+  const uiScaleOptions = document.getElementById('ui-scale-options');
+  if (uiScaleOptions) {
+    const savedScale = parseFloat(localStorage.getItem('ui-scale')) || 1.0;
+    applyUiScale(savedScale, uiScaleOptions);
+    uiScaleOptions.addEventListener('click', e => {
+      const btn = e.target.closest('button[data-scale]');
+      if (btn) {
+        applyUiScale(parseFloat(btn.dataset.scale), uiScaleOptions);
+      }
+    });
+  }
+
+  const providerSelect = document.getElementById('api-provider');
+  const apiKeyInput = document.getElementById('api-key-input');
+  const saveApiKeyBtn = document.getElementById('save-api-btn');
+
+  if (providerSelect && apiKeyInput && saveApiKeyBtn) {
+    const loadAndDisplayApiKey = () => {
+      const selectedProvider = providerSelect.value;
+      const sk = storageKeyFor(selectedProvider);
+      const storedKey = localStorage.getItem(sk) || '';
+      console.log(`[API Key Load] Provider: ${selectedProvider}, StorageKey: ${sk}, Key from localStorage: '${storedKey}'`);
+      apiKeyInput.value = storedKey;
+      apiKeyInput.placeholder = `输入 ${providerSelect.options[providerSelect.selectedIndex].text} API Key`;
+    };
+
+    providerSelect.addEventListener('change', loadAndDisplayApiKey);
+
+    saveApiKeyBtn.addEventListener('click', () => {
+      const selectedProvider = providerSelect.value;
+      const sk = storageKeyFor(selectedProvider);
+      const keyValue = apiKeyInput.value.trim();
+
+      if (!keyValue) {
+        alert('请输入有效的 API Key。');
+        return;
+      }
+      localStorage.setItem(sk, keyValue);
+      console.log(`[API Key Save] Provider: ${selectedProvider}, StorageKey: ${sk}, Saved Key: '${keyValue}'`);
+      alert(`${providerSelect.options[providerSelect.selectedIndex].text} API Key 已保存！`);
+    });
+
+    console.log("[API Key Load] Dispatching initial load for api-provider");
+    loadAndDisplayApiKey();
+
+  } else {
+    console.error("API Key management elements not found in the DOM.");
+  }
+
   loadConversations();
   renderConversationList();
-  enableConversationDrag();
-  if (conversations.length) loadConversation(conversations[0].id);
-  else createNewConversation();
-  document.getElementById('new-conv-btn').addEventListener('click', createNewConversation);
-  document.getElementById('archive-current-btn').addEventListener('click', () => toggleArchive(currentConversationId));
-  document.getElementById('delete-current-btn').addEventListener('click', () => {
-  if (!currentConversationId) return;
-  const conv = conversations.find(c => c.id === currentConversationId);
-  if (!conv) return;
-  // 二次确认
-  if (confirm(`确定要删除当前会话「${conv.title}」吗？此操作无法恢复。`)) {
-    deleteConversation(currentConversationId);
+  
+  if (conversations.filter(c=>!c.archived).length > 0) {
+    loadConversation(conversations.filter(c=>!c.archived)[0].id);
+  } else if (conversations.length > 0) {
+    loadConversation(conversations[0].id);
   }
-});
+  else {
+    createNewConversation();
+  }
+  enableInlineTitleEdit();
 
-  document.getElementById('send-btn').addEventListener('click', send);
-  document.getElementById('prompt').addEventListener('keydown', e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); send(); }});
-  document.getElementById('model').addEventListener('change', () => { getCurrentConversation().model = document.getElementById('model').value; saveConversations(); });
-  // —— 放到 DOMContentLoaded 回调里 ——
 
-// 先拿到隐藏的 <input type="file">
-const importInput = document.getElementById('import-file');
-if (importInput) {
-  importInput.addEventListener('change', async e => {
-    const file = e.target.files[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const imported = JSON.parse(text);
-      if (!Array.isArray(imported)) throw new Error('JSON 顶层应为数组');
+  document.getElementById('send-btn')?.addEventListener('click', e => {
+    e.preventDefault();
+    send();
+  });
 
-      // 合并到现有 conversations，去重
-      imported.forEach(conv => {
-        if (!conversations.find(c => c.id === conv.id)) {
-          conversations.push(conv);
-        }
-      });
+  const promptInput = document.getElementById('prompt');
+  if (promptInput) {
+    promptInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    });
+  }
 
-      // 存储并刷新 UI
-      saveConversations();
-      renderConversationList();
-      if (imported.length) loadConversation(imported[0].id);
+  document.getElementById('new-conv-btn')?.addEventListener('click', createNewConversation);
 
-      alert(`成功导入 ${imported.length} 条对话`);
-    } catch (err) {
-      console.error(err);
-      alert('导入失败：' + err.message);
-    } finally {
-      // 重置 input，以便下次能重新选同一个文件
-      importInput.value = '';
+  document.getElementById('archive-current-btn')?.addEventListener('click', () => {
+    if (currentConversationId) toggleArchive(currentConversationId);
+  });
+
+  document.getElementById('delete-current-btn')?.addEventListener('click', () => {
+    if (!currentConversationId) return;
+    const conv = getCurrentConversation();
+    if (conv && confirm(`确定要删除当前会话「${conv.title}」吗？此操作无法恢复。`)) {
+      deleteConversation(currentConversationId);
     }
   });
-}
+
+  document.getElementById('model')?.addEventListener('change', (e) => {
+    const conv = getCurrentConversation();
+    if (conv) {
+      conv.model = e.target.value;
+      activeModel = conv.model;
+      saveConversations();
+    }
+  });
+
+  document.getElementById('show-settings-btn')?.addEventListener('click', showSettings);
+  document.getElementById('back-to-chat-btn')?.addEventListener('click', showChatArea);
+
+  document.getElementById('export-history-btn')?.addEventListener('click', exportAllHistory);
+  document.getElementById('clear-all-history-btn')?.addEventListener('click', clearAllHistory);
+  
+  const importFileInput = document.getElementById('import-file');
+  if (importFileInput) {
+    importFileInput.addEventListener('change', async e => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const importedConvs = JSON.parse(text);
+        if (!Array.isArray(importedConvs)) throw new Error('导入的 JSON 顶层必须是数组');
+        
+        let importedCount = 0;
+        importedConvs.forEach(importedConv => {
+          if (importedConv && typeof importedConv === 'object' && 'id' in importedConv && 'title' in importedConv && 'messages' in importedConv) {
+            if (!conversations.find(c => c.id === importedConv.id)) {
+              importedConv.messages = (Array.isArray(importedConv.messages) ? importedConv.messages : [])
+                .filter(m => m && m.role && typeof m.content === 'string');
+              importedConv.archived = typeof importedConv.archived === 'boolean' ? importedConv.archived : false;
+              importedConv.isNew = false;
+              
+              conversations.push(importedConv);
+              importedCount++;
+            }
+          } else {
+            console.warn('导入过程中跳过无效的对话对象:', importedConv);
+          }
+        });
+
+        if (importedCount > 0) {
+          saveConversations();
+          renderConversationList();
+          if (importedCount > 0 && currentConversationId == null && conversations.length > 0) {
+             loadConversation(conversations.filter(c=>!c.archived)[0]?.id || conversations[0].id);
+          }
+          alert(`成功导入 ${importedCount} 条新对话。`);
+        } else {
+          alert('没有导入新的对话（可能ID已存在或格式无效）。');
+        }
+      } catch (err) {
+        console.error('导入失败:', err);
+        alert('导入失败：' + err.message);
+      } finally {
+        importFileInput.value = '';
+      }
+    });
+  }
 });
+// --- END OF FILE script.js ---

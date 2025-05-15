@@ -1,3 +1,4 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="zh">
 
@@ -5,166 +6,134 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>LocalGPT with MathJax</title>
-
-  <!-- 页面样式 -->
   <link rel="stylesheet" href="style.css" />
 
-  <!-- MathJax 配置：支持 $$…$$ 和 \[…\] -->
-<script type="text/javascript">
-window.MathJax = {
-  tex: {
-    inlineMath: [['$', '$'], ['\\(', '\\)']],
-    displayMath: [['$$','$$'], ['\\[','\\]']]
-  }
-};
-</script>
-
-
-  <!-- 推荐：自动跟进最新 3.x 版本 -->
-  <script
-    id="MathJax-script"
-    defer
-    src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+  <!-- MathJax -->
+  <script>
+    window.MathJax = {
+      tex: {
+        inlineMath: [['$', '$'], ['\\(', '\\)']],
+        displayMath: [['$$','$$'], ['\\[','\\]']]
+      }
+    };
   </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-
 </head>
-
-
 
 <body>
   <div class="container">
     <aside class="sidebar">
-      <div class="logo">LocalGPT v2.5</div>
-      
+      <div class="logo">LocalGPT v2.7</div> <!-- 版本号更新 -->
       <button id="new-conv-btn" class="new-btn">+ 新对话</button>
-
-
       <nav class="conv-nav">
-        <ul id="conversation-list"></ul>
+        <ul id="conversation-list" class="conv-nav">
+          </ul>
       </nav>
       <div class="sidebar-footer">
-        <button class="settings-btn" onclick="showSettings()">
-         ⚙️ 设置
-        </button>
+        <button id="show-settings-btn" class="settings-btn">⚙️ 设置</button> <!-- 使用 ID 以便 JS 选取 -->
       </div>
     </aside>
-  <main class="main-area">
-   <section id="chat-area" class="chat-area">
-<header class="chat-header">
-  <!-- 原来的 -->
-  <h1 id="chat-title">对话</h1>
-  <button id="archive-current-btn" title="归档当前会话">归档</button>
-  <button id="delete-current-btn" title="删除当前会话">删除</button>
-</header>
-      <div class="messages" id="messages"></div>
-      <div class="input-area">
-         <select id="model">
-            <optgroup label="Reasoning models">
+
+    <main class="main-area">
+      <!-- Chat -->
+      <section id="chat-area" class="chat-area">
+        <header class="chat-header">
+          <h1 id="chat-title">对话</h1>
+          <button id="archive-current-btn" title="归档当前会话">归档</button>
+          <button id="delete-current-btn" title="删除当前会话">删除</button>
+        </header>
+        <div class="messages" id="messages"></div>
+        <div class="input-area">
+          <select id="model">
+              <optgroup label="Google Gemini"> 
+              <option value="gemini-2.5-pro-preview-05-06">Gemini 2.5 Pro</option>
+              <option value="gemini-2.5-flash-preview-04-17">Gemini 2.5 FLash</option>
+              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>              
+            </optgroup>
+            <optgroup label="Deepseek">
+              <option value="deepseek-chat">Deepseek-V3</option>
+              <option value="deepseek-reasoner">Deepseek-R1</option>
+            </optgroup>
+            <optgroup label="SiliconFlow">              
+              <option value="Qwen/Qwen3-235B-A22B">Qwen3-235B-A22B</option>
+              <option value="Qwen/Qwen3-30B-A3B">Qwen3-30B-A3B</option>
+              <option value="Qwen/Qwen3-8B">Qwen3-8B</option>
+            </optgroup>
+            <optgroup label="OpenAI">
               <option value="o4-mini">o4-mini</option>
-              <option value="o3">o3</option>
-              <option value="o3-mini">o3-mini</option>
-              <option value="o1">o1</option>
-              <option value="o1-mini">o1-mini</option>
-              <option value="o1-pro">o1-pro</option>
-            </optgroup>
-            <optgroup label="Flagship chat">
+              <option value="o3">o3</option>            
               <option value="gpt-4.1">gpt-4.1</option>
-              <option value="gpt-4o">gpt-4o</option>              
-              <option value="chatgpt-4o">chatgpt-4o</option>
-            </optgroup>
-            <optgroup label="Cost-optimized">
+              <option value="gpt-4o">gpt-4o</option>                   
               <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-              <option value="gpt-4o-mini">gpt-4o-mini</option>              
-              <option value="gpt-4.1-nano">gpt-4.1-nano</option>
-            </optgroup>
-            <optgroup label="Older GPT">
-              <option value="gpt-4-turbo">gpt-4-turbo</option>
-              <option value="gpt-4">gpt-4</option>
+              <option value="gpt-4o-mini">gpt-4o-mini</option>
+              <option value="gpt-4.1-nano">gpt-4.1-nano</option>   
+              <option value="gpt-4-turbo">gpt-4-turbo</option>              
               <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
             </optgroup>
           </select>
-          <textarea
-          id="prompt"
-          placeholder="输入你的问题，Enter 发送 / ShiftEnter 换行"
-        ></textarea>
-        <button id="send-btn">发送</button>
-      </div>
-    </section>
+          <textarea id="prompt" placeholder="输入你的问题，Enter 发送 / Shift+Enter 换行"></textarea>
+          <button id="send-btn" type="button">发送</button>
+        </div>
+      </section>
 
-<!-- 设置区域 -->
-<section id="settings-area" class="settings-area" style="display:none;">
-  <h2>设置</h2>
+      <!-- Settings -->
+      <section id="settings-area" class="settings-area" style="display:none;">
+        <h2>设置</h2>
+      
 
-  <!-- 清除历史 -->
-  <div class="setting-item">
-    <label>清除所有历史</label>
-    <button class="danger" onclick="clearAllHistory()">清除</button>
+
+        <div class="setting-item">
+          <label>清除所有历史</label>
+          <button id="clear-all-history-btn" class="danger">清除</button> <!-- 使用 ID -->
+        </div>
+        <div class="setting-item">
+          <label>导出所有聊天记录</label>
+          <button id="export-history-btn">导出</button>
+        </div>
+        <div class="setting-item" style="display:flex;align-items:center;justify-content:space-between;">
+          <span>导入聊天记录</span>
+          <button onclick="document.getElementById('import-file').click()">导入</button>
+          <input type="file" id="import-file" accept=".json" style="display:none;" />
+        </div>
+        <div class="setting-item">
+          <label>切换浅/深色主题</label>
+          <button id="toggle-theme-btn">切换主题</button>
+        </div>
+
+        <!-- API key groups -->
+        <div class="api-key-group">
+          <label for="api-provider">选择 API 提供商：</label>
+          <select id="api-provider">
+            <option value="openai">OpenAI</option>
+            <option value="deepseek">Deepseek</option>
+            <option value="siliconflow">SiliconFlow</option>
+            <option value="gemini">Google Gemini</option> <!-- 新增 Gemini 提供商 -->
+          </select>
+        </div>
+        <div class="api-key-group">
+          <label for="api-key-input">输入 API Key：</label>
+          <input id="api-key-input" type="password" placeholder="请输入 API Key">
+        </div>
+        <button id="save-api-btn">保存 API Key</button>
+        
+
+        <div class="setting-item">
+          <label>界面缩放</label>
+          <div class="scale-frame">
+            <div id="ui-scale-options" class="scale-options">
+              <button data-scale="0.9">小</button>
+              <button data-scale="1.0" class="active">中</button>
+              <button data-scale="1.1">大</button>
+              <button data-scale="1.2">超大</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
   </div>
-  <!-- 导出所有聊天记录 -->
-  <div class="setting-item">
-    <label>导出所有聊天记录</label>
-    <button id="export-history-btn">导出</button>
-  </div>
-   <!-- 导入聊天记录 -->
-<div class="setting-item" style="display: flex; align-items: center; justify-content: space-between;">
-  <!-- 左侧标题 -->
-  <span>导入聊天记录</span>
 
-  <!-- 右侧按钮 -->
-  <button 
-    id="import-btn" 
-    class="btn-white" 
-    style="margin-left: 8px;"
-    onclick="document.getElementById('import-file').click()">
-    导入
-  </button>
-  
-  <!-- 隐藏的文件输入 -->
-  <input
-    type="file"
-    id="import-file"
-    accept=".json"
-    style="display:none;"
-  />
-
-  </div>
-
-  <!-- 切换主题：务必包裹在自己的 setting-item -->
-  <div class="setting-item">
-    <label>切换浅色/深色主题</label>
-    <button id="toggle-theme-btn">切换主题</button>
-
-  </div>
-
-  <!-- API Key -->
-  <div class="setting-item">
-    <label>OpenAI API Key<br>(需设置后使用)</label>
-    <!-- 正确的 placeholder -->
-    <input id="api-key" type="password" placeholder="输入你的 API Key" />
-    <button onclick="saveApiKey()">保存</button>
-  </div>
-
-
-<div class="setting-item">
-  <label>界面缩放：</label>
-  <div class="scale-frame">
-    <div id="ui-scale-options" class="scale-options">
-      <button data-scale="0.9">小</button>
-      <button data-scale="1.0" class="active">中</button>
-      <button data-scale="1.1">大</button>
-      <button data-scale="1.2">超大</button>
-    </div>
-  </div>
-</div>
-
-</section>
-
-<!-- 引入 SortableJS -->
-<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-
-<script type="module" src="script.js"></script>
-
-
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <script defer src="script.js"></script>
 </body>
 </html>

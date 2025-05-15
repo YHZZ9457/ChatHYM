@@ -116,12 +116,18 @@ button{font-family:inherit;cursor:pointer;}
   border-bottom:1px solid var(--border-color);
   background:var(--bg-color);
   min-height:48px;
-  flex-shrink:0;
+  flex-shrink:0; /* 确保头部高度固定 */
 }
 .chat-header h1{margin:0;font-size:1.1rem;font-weight:500;}
 
-/* 5-2 聊天内容 */
-.chat-area{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0;position: relative;}
+/* 5-2 聊天内容 - 修改 */
+.chat-area{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden; /* 确保 .chat-area 本身不出现滚动条，而是让 .messages 滚动 */
+  min-height:0;   /* 允许内部的 .messages 正确滚动 */
+}
 
 
 /* —— 新增：归档按钮样式 —— */
@@ -152,15 +158,25 @@ button{font-family:inherit;cursor:pointer;}
 /* ===== 聊天消息相关 CSS - 统一的 messages 定义 ===== */
 
 .messages {
-  flex: 1;                     /* 占据父容器 .chat-area 的剩余空间 */
+  flex: 1;                     /* 占据父容器 .chat-area 中除去 .input-area 的剩余空间 */
   overflow-y: auto;            /* 当内容超出高度时显示垂直滚动条 */
-  padding: 24px 24px 75px;     /* 上下左右内边距，底部为输入框留出空间 */
+  /* padding: 24px 24px 75px; */ /* 旧的 padding，底部空间过大 */
+  padding: 24px;               /* 四周统一内边距，底部不再需要为绝对定位的输入框留白 */
   display: flex;
   flex-direction: column;
   gap: 14px;                   /* .message-wrapper 之间的间距 */
-  width: 100%;                 /* 宽度占满父容器 */
-  /* max-width: 100%; */      /* 通常不需要，width: 100% 即可 */
-  /* word-break: break-word; */ /* 这个更适合放在 .message 或 .message .text 上，以控制单个消息的断词 */
+  width: 100%;
+}
+
+.message {
+  max-width: 100%; 
+  margin: 0; /* 确保没有额外的外边距 */
+  padding: 8px 12px;
+  border-radius: 16px;
+  line-height: 1.5;
+  font-size: 0.95rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  word-break: break-word;
 }
 
 /* 单条消息的包裹层 */
@@ -271,50 +287,110 @@ body.light-theme .message.assistant{
 .message pre,.message code{font-family:monospace;}
 .message pre{background:rgba(0,0,0,0.15);padding:8px;border-radius:6px;overflow-x:auto;}
 
+/* style.css */
+
+/* --- 输入区域 .input-area 的样式优化 --- */
 .input-area {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 20px 20px 8px;   
+  flex-shrink: 0; 
+  padding: 10px 15px; 
   background: var(--bg-color);
   border-top: 1px solid var(--border-color);
   display: flex;
-  gap: 16px;
-  align-items: center;
-  z-index: 10;
+  flex-direction: row; 
+  align-items: center; 
+  gap: 10px; 
 }
+
+/* 模型选择下拉框的样式 */
+.input-area select#model {
+  /* appearance, padding, border, background-image 等保持你之前的设置 */
+  /* (你需要确保你用于美化原生select的 appearance: none; 和 background-image 规则仍然存在于你的CSS文件中其他地方，或者也合并到这里) */
+  appearance: none; /* 假设你需要这个来移除原生样式 */
+  -webkit-appearance: none; /* 针对 Webkit 浏览器 */
+  cursor: pointer; /* 确保有指针手势 */
+  font-family: inherit; /* 继承字体 */
+  font-size: 0.90rem;       /* 略微减小字体，例如从 0.9rem 改为 0.85rem */
+  padding-top: 0;         /* 减小上下内边距 */
+  padding-bottom: 0;      /* 减小上下内边距 */
+  padding-left: 10px;     /* 保持或调整左内边距 */
+  padding-right: 30px;    /* 保持或调整右内边距（为箭头图标留空间） */
+  height: auto; 
+  padding-top: 8px; 
+  padding-bottom: 8px; 
+  /* --- 结束修改 --- */
+
+  border-radius: 4px; /* 可以尝试比其他控件略小的圆角，显得更精致 */
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  flex-shrink: 0; 
+  align-self: flex-start; 
+  margin-top: 0; 
+   /* 确保箭头图标的样式也在这里，或者在另一个针对 select#model 的规则中 */
+  background-repeat: no-repeat;
+  background-position: right 8px center; /* 根据 padding-right 调整箭头位置 */
+  background-image: url("data:image/svg+xml;charset=UTF-8,<svg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'><path d='M0 0l5 6 5-6z' fill='%23999'/></svg>");
+  background-size: 10px 6px; /* 调整箭头图标大小 */
+  transition: border-color .2s, box-shadow .2s; /* 保留过渡效果 */
+}
+
+/* 确保你的主题特定箭头颜色仍然生效 */
+body.dark-theme .input-area select#model {
+  background-image: url("data:image/svg+xml;charset=UTF-8,<svg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'><path d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.5)'/></svg>"); /* 深色主题箭头 */
+  /* ... 其他深色主题 select 样式 ... */
+}
+
+
+/* style.css */
 
 .input-area textarea {
-  height: 50px;
-  padding: 6px;
-  min-height: 50px;
+  flex-grow: 1; 
+  padding: 8px 10px;
   font-size: 0.95rem;
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--bg-color);
   color: var(--text-color);
-  resize: vertical;
-  flex: 1;
-  /* 高度控制重点在这里 ↓↓↓ */
-  
-  max-height: 200px;        /* 防止撑太高 */
+  resize: none; /* 禁止用户手动拖拽调整大小，因为我们将用JS控制 */
+  width: 100%; 
+  box-sizing: border-box; 
+  max-height: 200px; /* 最大高度限制 */
+  min-height: 60px;
   line-height: 1.6;
-  resize: vertical;         /* 允许手动拉高 */
-  overflow-y: auto;         /* 内容多时出现滚动条 */
+  overflow-y: hidden; /* 默认隐藏滚动条，当内容超出max-height时，JS会改为auto */
+                      /* 或者直接设为 auto，但配合JS动态调整可能hidden更好初始状态 */
+  
+  height: auto; /* 让 JS 可以先重置它 */
 }
 
-.input-area button{
-  padding:10px 22px;
+.input-area textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
+}
+
+
+/* 发送按钮的样式 */
+.input-area button#send-btn {
+  padding: 0 20px; /* 左右内边距 */
+  height: 42px;    /* 固定高度 */
   background:var(--primary);
   color:#fff;
   border:none;
-  border-radius:8px;
+  border-radius:6px;
   font-size:0.95rem;
-  flex:0 0 auto;
+  flex-shrink: 0; /* 防止按钮被父级 flex 容器压缩 */
+  
+  /* --- 新增/确保以下属性 --- */
+  white-space: nowrap; /* 强制文本不换行 */
+  display: inline-flex; /* 或者 flex, 让内部文本能更好地对齐 */
+  align-items: center;  /* 垂直居中文本 */
+  justify-content: center; /* 水平居中文本 (如果按钮比文本宽) */
+  min-width: fit-content; /* 让按钮的最小宽度至少是其内容的宽度 */
+                          /* 或者设置一个具体的 min-width，例如：min-width: 70px; */
 }
 
-.input-area button:hover{
+.input-area button#send-btn:hover { 
   background:rgba(var(--primary-rgb),0.9);
 }
 
@@ -398,19 +474,6 @@ button.danger:hover,#delete-current-btn:hover{background:#c53030!important;}
 
 
 
-/* 通用：清除原生样式，统一排版 */
-.input-area select#model {
-  appearance: none;
-  -webkit-appearance: none;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 14px;
-  padding: 6px 32px 6px 12px;
-  border-radius: 4px;
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  transition: border-color .2s, box-shadow .2s;
-}
 
 /* 箭头图标（Data URI SVG）*/
 .input-area select#model {
@@ -506,11 +569,7 @@ body.dark-theme .input-area select#model option:hover {
 .input-area {
   padding: 8px 20px;           /* 减少上下内边距 */
 }
-.input-area button {
-  padding: 8px 24px;
-  font-size: 0.95rem;
-  border-radius: 6px;
-}
+
 
 /* —— 补丁结束 —— */
 
@@ -1100,3 +1159,166 @@ body.dark-theme .reasoning-content { scrollbar-color: #444 rgba(255, 255, 255, 0
 
 /* ===== 结束 思考过程块的样式 ===== */
 
+/* style.css */
+
+/* ... 其他样式 ... */
+
+.settings-area {
+  /* display: flex; (这个由 JS 控制，当显示时会设为 flex) */
+  flex-direction: column; /* 保持内容垂直排列 */
+  gap: 20px;             /* 设置项之间的间距，根据你的喜好调整 */
+  padding: 24px 32px;    /* 内边距 */
+
+  /* --- 核心修改，确保滚动 --- */
+  flex: 1;                /* 让 .settings-area 占据 .main-area 中的剩余垂直空间 */
+  overflow-y: auto;       /* 当内容高度超过 .settings-area 高度时，显示垂直滚动条 */
+  min-height: 0;          /* 在 flex 布局中，这有助于确保 overflow 生效 */
+  /* --- 结束核心修改 --- */
+}
+
+/* 你可以保留或调整 settings-area h2 和 setting-item 的样式 */
+.settings-area h2 {
+  font-size: 1.6rem;
+  margin-top: 0; /* 通常标题顶部不需要额外margin，由padding控制 */
+  margin-bottom: 16px;
+  font-weight: 600;
+}
+.setting-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap; /* 如果一行放不下，允许换行 */
+}
+.setting-item label {
+  flex: 0 0 200px; 
+  font-weight: 500;
+}
+.setting-item input[type="password"],
+.setting-item select,
+.setting-item input[type="text"] /* 如果有其他类型输入框 */ {
+  flex: 1;
+  min-width: 200px;
+}
+.setting-item button {
+  flex-shrink: 0; /* 防止按钮被压缩 */
+  /* padding: 8px 20px; (这些通常由通用按钮样式或特定按钮ID/类控制) */
+  /* font-size: 0.95rem; */
+  /* border-radius: 6px; */
+}
+
+#back-to-chat-btn {
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  color: var(--primary); /* 使用主题色作为文字/图标颜色 */
+  font-size: 1rem;     /* 或者根据你的图标大小调整 */
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex; /* 使图标和文字能良好对齐 */
+  align-items: center;
+  gap: 6px; /* 图标和文字之间的间距 */
+  border-radius: 4px;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+#back-to-chat-btn:hover {
+  background-color: rgba(var(--primary-rgb), 0.1); /* 悬停时轻微背景高亮 */
+  color: var(--primary-dark); /* 如果有定义深一点的主题色 */
+}
+
+/* 假设你用一个伪元素来做箭头图标 */
+#back-to-chat-btn::before {
+  content: '←'; /* 或者使用 SVG 图标作为 background-image */
+  font-weight: bold;
+  margin-right: 4px; /* 如果文字在右边 */
+}
+
+.setting-item input[type="range"] {
+  flex-grow: 1; /* 让滑块占据更多可用空间 */
+  margin-left: 10px;
+  /* 你可能需要一些特定于浏览器的前缀来美化滑块轨道和滑块本身 */
+}
+
+/* style.css */
+
+/* --- Temperature 滑块美化 --- */
+.setting-item input[type="range"]#temperature-slider {
+  /* 1. 重置外观，移除大部分原生样式 */
+  -webkit-appearance: none; /* Safari an Chrome */
+  -moz-appearance: none;    /* Firefox */
+  appearance: none;         /* 标准属性 */
+  
+  width: 100%; /* 让滑块轨道尽可能宽 */
+  height: 20px; /* 整个控件的高度，主要是为了给手柄留出垂直空间 */
+  background: transparent; /* 移除 input 元素本身的背景 */
+  cursor: pointer;
+  outline: none; /* 移除焦点时的默认轮廓 */
+  margin-left: 10px; /* 与标签的间距 */
+}
+
+/* --- WebKit/Blink 浏览器 (Chrome, Edge, Safari, Opera) --- */
+.setting-item input[type="range"]#temperature-slider::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 6px; /* 轨道的高度 */
+  cursor: pointer;
+  background: #555; /* 轨道背景色 (深灰色) */
+  border-radius: 3px; /* 轨道圆角 */
+  /* border: 1px solid #333; /* 可选：轨道边框 */
+}
+
+.setting-item input[type="range"]#temperature-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; /* 必须，移除原生手柄样式 */
+  appearance: none;
+  
+  border: 2px solid var(--primary-dark); /* 手柄边框颜色 (你的主题蓝色) */
+  height: 16px;       /* 手柄高度 */
+  width: 16px;        /* 手柄宽度 */
+  border-radius: 50%; /* 使手柄为圆形 */
+  background: #fff;   /* 手柄背景色 (白色，与蓝色边框形成对比) */
+  cursor: pointer;
+  margin-top: -5px;   /* 关键：调整手柄相对于轨道的垂直位置 */
+                      /* 计算方式: (轨道高度 - 手柄高度) / 2 
+                         例如: (6px - 16px) / 2 = -5px 
+                         如果手柄有边框，边框宽度也需要考虑进去
+                         (6px - (16px + 2*2px_border)) / 2 + 2px_border 类似这样，具体要微调
+                      */
+  box-shadow: 0 0 2px rgba(0,0,0,0.5); /* 可选：手柄阴影 */
+}
+
+/* --- Gecko 浏览器 (Firefox) --- */
+.setting-item input[type="range"]#temperature-slider::-moz-range-track {
+  width: 100%;
+  height: 6px;
+  cursor: pointer;
+  background: #555;
+  border-radius: 3px;
+  /* border: 1px solid #333; */
+}
+
+.setting-item input[type="range"]#temperature-slider::-moz-range-thumb {
+  border: 2px solid var(--primary-dark);
+  height: 12px; /* Firefox 下手柄的 border 会算在 height/width 之外，所以这里用 16px - 2*2px */
+  width: 12px;
+  border-radius: 50%;
+  background: #fff;
+  cursor: pointer;
+  box-shadow: 0 0 2px rgba(0,0,0,0.5);
+}
+
+/* 可选：Firefox 焦点样式 (移除默认虚线框) */
+.setting-item input[type="range"]#temperature-slider::-moz-focus-outer {
+  border: 0;
+}
+
+/* --- 与标签和数值显示的对齐 --- */
+.setting-item label[for="temperature-slider"] {
+  /* 你可能需要调整 label 的样式使其与其他设置项的 label 对齐 */
+  white-space: nowrap; /* 防止标签换行 */
+}
+#temperature-value {
+  display: inline-block;
+  min-width: 2.8em; /* 调整宽度以容纳 "0.0" 到 "2.0" */
+  text-align: left; /* 或者 right，根据你的偏好 */
+  font-weight: bold;
+  margin-left: 8px;
+}

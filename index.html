@@ -7,6 +7,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
   <title>LocalGPT with MathJax</title>
   <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="favicon.ico" type="image/x-icon">
+
 
   <!-- MathJax -->
   <script>
@@ -24,7 +26,7 @@
 <body>
   <div class="container">
     <aside class="sidebar">
-      <div class="logo">LocalGPT v2.7</div> <!-- 版本号更新 -->
+      <div class="logo">LocalGPT v2.8</div> <!-- 版本号更新 -->
       <button id="new-conv-btn" class="new-btn">+ 新对话</button>
       <nav class="conv-nav">
         <ul id="conversation-list" class="conv-nav">
@@ -44,12 +46,16 @@
           <button id="delete-current-btn" title="删除当前会话">删除</button>
         </header>
         <div class="messages" id="messages"></div>
+        
+        <!-- ========== 修改开始：调整 input-area 内部结构 ========== -->
         <div class="input-area">
-          <select id="model">
+          
+          <div class="input-top-controls">
+            <select id="model">
               <optgroup label="Google Gemini"> 
               <option value="gemini-2.5-pro-preview-05-06">Gemini 2.5 Pro</option>
               <option value="gemini-2.5-flash-preview-04-17">Gemini 2.5 FLash</option>
-              <option value="gemini-2.0-flash">Gemini 2.0 Flash</option>              
+              <option value="gemini-2.0-flash">Gemini 2.0 FLash</option>              
             </optgroup>
             <optgroup label="Deepseek">
               <option value="deepseek-chat">Deepseek-V3</option>
@@ -58,6 +64,7 @@
             <optgroup label="SiliconFlow">              
               <option value="Qwen/Qwen3-235B-A22B">Qwen3-235B-A22B</option>
               <option value="Qwen/Qwen3-30B-A3B">Qwen3-30B-A3B</option>
+              <option value="Qwen/Qwen3-32B">Qwen3-32B</option>
               <option value="Qwen/Qwen3-8B">Qwen3-8B</option>
             </optgroup>
             <optgroup label="OpenAI">
@@ -72,20 +79,29 @@
               <option value="gpt-3.5-turbo">gpt-3.5-turbo</option>
             </optgroup>
           </select>
+            <!-- 你可以在这里添加其他顶部按钮 -->
+          </div>
+
           <textarea id="prompt" placeholder="输入你的问题，Enter 发送 / Shift+Enter 换行"></textarea>
-          <button id="send-btn" type="button">发送</button>
+          
+            <div class="input-row prompt-and-send-row">
+           
+            <button id="send-btn" type="button">发送</button>
         </div>
+        </div>
+        <!-- ========== 修改结束：调整 input-area 内部结构 ========== -->
       </section>
 
       <!-- Settings -->
       <section id="settings-area" class="settings-area" style="display:none;">
         <h2>设置</h2>
-      
+        <!-- Back to chat button (确保它在 settings-area 内部，如果之前没有的话) -->
+        <button id="back-to-chat-btn" style="position: absolute; top: 24px; right: 32px; z-index: 10;">返回聊天</button>
 
 
         <div class="setting-item">
           <label>清除所有历史</label>
-          <button id="clear-all-history-btn" class="danger">清除</button> <!-- 使用 ID -->
+          <button id="clear-all-history-btn" class="danger">清除</button>
         </div>
         <div class="setting-item">
           <label>导出所有聊天记录</label>
@@ -100,6 +116,10 @@
           <label>切换浅/深色主题</label>
           <button id="toggle-theme-btn">切换主题</button>
         </div>
+        <div class="setting-item">
+          <label for="temperature-slider">模型 Temperature (<span id="temperature-value">0.7</span>):</label>
+          <input type="range" id="temperature-slider" name="temperature" min="0" max="2" step="0.1" value="0.7">
+        </div>
 
         <!-- API key groups -->
         <div class="api-key-group">
@@ -108,7 +128,7 @@
             <option value="openai">OpenAI</option>
             <option value="deepseek">Deepseek</option>
             <option value="siliconflow">SiliconFlow</option>
-            <option value="gemini">Google Gemini</option> <!-- 新增 Gemini 提供商 -->
+            <option value="gemini">Google Gemini</option>
           </select>
         </div>
         <div class="api-key-group">

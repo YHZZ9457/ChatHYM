@@ -382,12 +382,17 @@ function loadConversation(id) {
   const conv = conversations.find(c => c.id === id);
   if (!conv) {
     if (conversations.length > 0) {
-        // 尝试加载第一个未归档的，如果全归档了则加载第一个归档的
-        loadConversation(conversations.filter(c=>!c.archived)[0]?.id || conversations[0].id);
+        loadConversation(conversations.filter(c => !c.archived)[0]?.id || conversations[0].id);
     } else {
-        createNewConversation(); // 如果列表为空，则创建一个新对话
+        createNewConversation();
     }
     return;
+  }
+
+  // 清除 "new" 标记 (如果存在)
+  if (conv.isNew) {
+    conv.isNew = false;
+    // saveConversations(); // 可选：立即保存，或者依赖后续操作保存
   }
 
   currentConversationId = id;
@@ -404,37 +409,34 @@ function loadConversation(id) {
   document.getElementById('chat-area').style.display = 'flex';
 
   const messagesContainer = document.getElementById('messages');
-  messagesContainer.innerHTML = '';
-  messagesContainer.scrollTop = messagesContainer.scrollHeight;
-  renderConversationList();
-  enableInlineTitleEdit();
+  messagesContainer.innerHTML = ''; // 清空旧消息
 
   let messageIndex = 0;
   conv.messages
     .filter(m => {
-      // 同时确保消息有主要内容或者有思考过程才显示
-      // (或者如果角色是助手，即使都为空也显示一个空壳？目前逻辑是至少有其一)
       const hasContent = typeof m.content === 'string' && m.content.trim() !== '';
       const hasReasoning = typeof m.reasoning_content === 'string' && m.reasoning_content.trim() !== '';
-      return hasContent || hasReasoning || (m.role === 'user'); // 用户消息即使为空也显示(虽然不太可能)
+      return hasContent || hasReasoning || (m.role === 'user');
     })
     .forEach(m => {
       const messageElement = appendMessage(
         m.role,
-        m.content, // content 可能为空字符串，appendMessage 内部会处理
+        m.content,
         m.model || conv.model,
-        m.reasoning_content || null // 传递保存的思考过程
+        m.reasoning_content || null
       );
-      // 确保 messageElement 真的被创建了 (appendMessage 应该总是返回它)
-      if (messageElement) {
+      if (messageElement) { // appendMessage 现在返回的是 messageWrapperDiv
           messageElement.dataset.conversationId = conv.id;
-          messageElement.dataset.messageIndex = messageIndex;
-          messageIndex++;
+          messageElement.dataset.messageIndex = messageIndex; // 这是消息在 conv.messages 中的原始索引
+          messageIndex++; // 这个 messageIndex 只是用于遍历，删除时要用 dataset 里的
       }
     });
   
+  // 在所有消息都添加完毕后，再滚动到底部
+  messagesContainer.scrollTop = messagesContainer.scrollHeight;
 
-  
+  renderConversationList(); // 更新侧边栏状态（例如清除 new 标记的视觉效果）
+  enableInlineTitleEdit();
 }
 
 function deleteSingleMessage(messageElement, conversationId, messageIndex) {
@@ -442,30 +444,40 @@ function deleteSingleMessage(messageElement, conversationId, messageIndex) {
   if (!conv || messageIndex < 0 || messageIndex >= conv.messages.length) {
     console.error('无法删除消息：无效的对话或消息索引。');
     if (confirm('数据可能不一致。确实要从界面移除此条消息吗？')) {
-      messageElement.remove();
+      messageElement.remove(); // 即使数据有问题，也尝试从界面移除
     }
     return;
   }
 
   const messageToConfirm = conv.messages[messageIndex];
-  let confirmTextPreview = messageToConfirm.content.substring(0, 50);
-  if (messageToConfirm.content.length > 50) {
-    confirmTextPreview += "...";
+  let confirmTextPreview = "";
+  if (messageToConfirm && messageToConfirm.content) { // 确保 messageToConfirm 和 content 存在
+    confirmTextPreview = String(messageToConfirm.content).substring(0, 50);
+    if (String(messageToConfirm.content).length > 50) {
+      confirmTextPreview += "...";
+    }
+  } else {
+    confirmTextPreview = "(无法预览内容)";
   }
 
+
   if (confirm(`确实要删除这条消息吗？\n\n"${confirmTextPreview}"`)) {
-    conv.messages.splice(messageIndex, 1);
+    // 1. 从数据模型中删除
+    const deletedMessage = conv.messages.splice(messageIndex, 1); // splice 会返回被删除的元素数组
     saveConversations();
-    messageElement.remove();
 
-    // 更新后续消息的 messageIndex data-* 属性
-    const messagesContainer = document.getElementById('messages');
-    const remainingMessageElements = messagesContainer.querySelectorAll('.message-wrapper');
-    remainingMessageElements.forEach((el, newIndex) => {
-      el.dataset.messageIndex = newIndex;
-    });
+    console.log(`消息已从数据中删除 (对话ID: ${conversationId}, 原索引: ${messageIndex})`, deletedMessage);
 
-    console.log(`消息已删除 (对话ID: ${conversationId}, 原索引: ${messageIndex})`);
+    // 2. 如果删除的是当前对话的消息，则重新加载整个对话以更新 DOM 和索引
+    // 这样比手动更新所有后续 DOM 元素的 data-message-index 更可靠
+    if (conversationId === currentConversationId) {
+      loadConversation(currentConversationId);
+    } else {
+      // 如果删除的不是当前对话的消息（例如从一个全局列表或其他界面触发，目前你的设计不会）
+      // 那么只从 DOM 中移除该元素，并可能需要更新其他相关的列表视图
+      messageElement.remove();
+      renderConversationList(); // 例如，如果对话列表也显示消息摘要或计数
+    }
   }
 }
 
@@ -562,7 +574,6 @@ async function send() {
   const apiKey = localStorage.getItem(apiKeyStorageKey) || '';
 
   if (!apiKey) {
-    // ... (API Key 检查和提示，保持不变) ...
     const providerSelectElement = document.getElementById('api-provider');
     let providerDisplayName = providerToUse;
     for (let i = 0; i < providerSelectElement.options.length; i++) {
@@ -580,11 +591,27 @@ async function send() {
   const promptText = promptInput.value.replace(/\n$/, '');
   if (!promptText.trim()) return;
 
-  // 1. 显示并保存用户消息 (只执行一次)
   appendMessage('user', promptText, null, null);
   const userRoleForStorage = 'user';
   conv.messages.push({ role: userRoleForStorage, content: promptText, model: conv.model });
-  promptInput.value = '';
+  
+  promptInput.value = ''; // 清空输入框
+
+  // --- 新增/修改：发送后重置 textarea 高度 ---
+  if (promptInput) {
+    // 假设你的 CSS 中 textarea 有一个 min-height 或者初始的 height
+    // 我们需要知道这个初始高度。如果你的 CSS 里是 min-height: 42px;
+    const initialTextareaHeight = '42px'; // 或者你 textarea 初始的 CSS height 值
+    promptInput.style.height = initialTextareaHeight;
+    promptInput.style.overflowY = 'hidden'; // 确保滚动条隐藏 (如果之前有)
+    // 如果你的 autoResizeTextarea 逻辑在 DOMContentLoaded 中是针对 promptInput 的，
+    // 并且设置了 promptInput.style.height = 'auto'; 那么下面这行可能也有用
+    // promptInput.style.height = 'auto'; // 尝试让浏览器根据内容（现在是空的）重新计算
+    // promptInput.style.height = promptInput.scrollHeight + 'px'; // 然后再设回去（但通常对于空内容，scrollHeight会很小）
+    // 最简单可靠的是直接设回初始 CSS 定义的高度
+  }
+  // --- 结束重置 textarea 高度 ---
+
   saveConversations(); // 保存包含用户消息的对话
 
   const loadingDiv = appendLoading();
@@ -592,11 +619,10 @@ async function send() {
   let apiUrl;
   let headers = { 'Content-Type': 'application/json' };
   let bodyPayload;
-  let assistantReply = '（无回复）'; // 初始化，如果API调用失败或无内容，会用这个
+  let assistantReply = '（无回复）';
   let thinkingProcess = null;
 
   const mapMessagesForStandardProviders = (messages) => {
-    // ... (这个辅助函数保持不变) ...
     return messages
       .filter(m => typeof m.content === 'string' && m.content.trim() !== '')
       .map(m => {
@@ -616,14 +642,19 @@ async function send() {
   };
 
   try {
-    // ... (switch 语句构建 apiUrl, headers, bodyPayload，保持不变) ...
+    let currentTemperature = parseFloat(localStorage.getItem('model-temperature'));
+    if (isNaN(currentTemperature) || currentTemperature < 0 || currentTemperature > 2) {
+        currentTemperature = 0.7;
+    }
+
     switch (providerToUse) {
       case 'openai':
         apiUrl = 'https://api.openai.com/v1/chat/completions';
         headers['Authorization'] = `Bearer ${apiKey}`;
         bodyPayload = {
           model: conv.model,
-          messages: mapMessagesForStandardProviders(conv.messages)
+          messages: mapMessagesForStandardProviders(conv.messages),
+          temperature: currentTemperature
         };
         break;
       case 'deepseek':
@@ -631,7 +662,8 @@ async function send() {
         headers['Authorization'] = `Bearer ${apiKey}`;
         bodyPayload = {
           model: conv.model,
-          messages: mapMessagesForStandardProviders(conv.messages)
+          messages: mapMessagesForStandardProviders(conv.messages),
+          temperature: currentTemperature
         };
         break;
       case 'siliconflow':
@@ -639,11 +671,15 @@ async function send() {
         headers['Authorization'] = `Bearer ${apiKey}`;
         bodyPayload = {
           model: conv.model,
-          messages: mapMessagesForStandardProviders(conv.messages)
+          messages: mapMessagesForStandardProviders(conv.messages),
+          temperature: currentTemperature
         };
         break;
       case 'gemini':
         apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${conv.model}:generateContent?key=${apiKey}`;
+        let geminiTemperature = currentTemperature;
+        if (geminiTemperature > 1.0) geminiTemperature = 1.0;
+        if (geminiTemperature < 0.0) geminiTemperature = 0.0;
         bodyPayload = {
           contents: conv.messages
             .filter(m => typeof m.content === 'string' && m.content.trim() !== '')
@@ -661,13 +697,15 @@ async function send() {
                 role: roleForGemini,
                 parts: [{ text: m.content }]
               };
-            })
+            }),
+          generationConfig: {
+            temperature: geminiTemperature
+          }
         };
         break;
       default:
         throw new Error('未知的或无法推断的 API Provider: ' + providerToUse);
     }
-
 
     const body = JSON.stringify(bodyPayload);
     console.log(`[发送] 请求体发往 ${providerToUse} (${apiUrl}):`, body);
@@ -690,18 +728,18 @@ async function send() {
     console.log(JSON.stringify(data, null, 2));
     console.log("------------------------------------");
 
+
     if (providerToUse === 'gemini') {
-      // ... (Gemini 回复提取) ...
-        if (data.candidates && data.candidates.length > 0 &&
-            data.candidates[0].content && data.candidates[0].content.parts &&
-            data.candidates[0].content.parts.length > 0) {
-            assistantReply = data.candidates[0].content.parts[0].text;
-        } else if (data.promptFeedback && data.promptFeedback.blockReason) {
-            assistantReply = `请求被阻止：${data.promptFeedback.blockReason}`;
-            if (data.promptFeedback.safetyRatings) {
-            assistantReply += ` (Safety Ratings: ${JSON.stringify(data.promptFeedback.safetyRatings)})`;
-            }
+      if (data.candidates && data.candidates.length > 0 &&
+        data.candidates[0].content && data.candidates[0].content.parts &&
+        data.candidates[0].content.parts.length > 0) {
+        assistantReply = data.candidates[0].content.parts[0].text;
+      } else if (data.promptFeedback && data.promptFeedback.blockReason) {
+        assistantReply = `请求被阻止：${data.promptFeedback.blockReason}`;
+        if (data.promptFeedback.safetyRatings) {
+          assistantReply += ` (Safety Ratings: ${JSON.stringify(data.promptFeedback.safetyRatings)})`;
         }
+      }
     } else {
       if (data.choices && data.choices.length > 0 && data.choices[0].message) {
         assistantReply = data.choices[0].message.content || '（无回复）';
@@ -710,36 +748,38 @@ async function send() {
         }
       }
     }
-    // 在 try 块的末尾，如果成功，assistantReply 和 thinkingProcess 已经被赋值
-
   } catch (error) {
     console.error('发送错误:', error);
-    assistantReply = `错误：${error.message}`; // 将错误信息赋给 assistantReply
-    thinkingProcess = null; // 错误情况下，不显示思考过程
+    assistantReply = `错误：${error.message}`;
+    thinkingProcess = null;
   } finally {
     if (loadingDiv) {
         loadingDiv.remove();
     }
 
-    // --- 确保只在这里（finally块）执行一次助手消息的显示和保存 ---
     const assistantRoleToDisplay = (providerToUse === 'gemini') ? 'model' : 'assistant';
     appendMessage(assistantRoleToDisplay, assistantReply, conv.model, thinkingProcess);
 
-    const assistantRoleToStore = 'assistant'; // 内部存储统一用 'assistant'
-    // 只有当回复不是初始的“（无回复）”（意味着API调用至少返回了一些东西，或错误被捕获）
-    // 才将这条“助手回合”的消息保存到历史记录
-    if (assistantReply !== '（无回复）' || thinkingProcess) {
+    const assistantRoleForStorage = 'assistant';
+    if (!(assistantReply === '（无回复）' && !thinkingProcess) && !assistantReply.startsWith('错误：')) {
         conv.messages.push({
-            role: assistantRoleToStore,
+            role: assistantRoleForStorage,
             content: assistantReply,
             model: conv.model,
             reasoning_content: thinkingProcess
         });
-        saveConversations(); // 保存包含助手回复/错误或思考过程的对话
+        saveConversations();
+    } else if (assistantReply.startsWith('错误：')) {
+        conv.messages.push({
+            role: assistantRoleForStorage,
+            content: assistantReply,
+            model: conv.model
+        });
+        saveConversations();
     }
   }
-}
-window.send = send;
+} // <--- send 函数的结束括号
+window.send = send; // 确保这一行在你 script.js 的全局作用域
 
 // --- 设置与 UI 操作 ---
 
@@ -1030,6 +1070,77 @@ document.addEventListener('DOMContentLoaded', () => {
         importFileInput.value = '';
       }
     });
+
+    const promptTextarea = document.getElementById('prompt');
+  if (promptTextarea) {
+    const initialMinHeight = 60; // 和 CSS 中的 min-height 匹配或设一个初始值
+    const maxHeight = 200;      // 和 CSS 中的 max-height 匹配
+
+    // 设置一个初始高度，可以是 min-height 的值
+    promptTextarea.style.height = `${initialMinHeight}px`;
+
+    const autoResizeTextarea = () => {
+      // 1. 先将高度重置为最小值或 'auto'，以便获取准确的 scrollHeight
+      //    如果 textarea 内容为空，scrollHeight 可能是基于 padding 的一个很小的值。
+      //    如果直接设为 'auto'，并且内容为空，它可能会收缩到几乎看不见。
+      //    所以，先设为 minHeight，如果内容多，scrollHeight 会大于它。
+      promptTextarea.style.height = `${initialMinHeight}px`; 
+
+      let scrollHeight = promptTextarea.scrollHeight;
+      let newHeight = scrollHeight;
+
+      if (newHeight < initialMinHeight) {
+        newHeight = initialMinHeight; // 确保高度不小于初始最小高度
+      }
+
+      if (newHeight > maxHeight) {
+        newHeight = maxHeight;
+        promptTextarea.style.overflowY = 'auto'; // 内容超出最大高度，显示滚动条
+      } else {
+        promptTextarea.style.overflowY = 'hidden';// 内容未超出，隐藏滚动条
+      }
+      promptTextarea.style.height = `${newHeight}px`;
+    };
+
+    promptTextarea.addEventListener('input', autoResizeTextarea);
+
+    // (可选) 在粘贴时也触发调整
+    promptTextarea.addEventListener('paste', () => {
+        paste 
+        setTimeout(autoResizeTextarea, 0);
+    });
+    // --- Temperature 设置初始化和事件处理 ---
+  const temperatureSlider = document.getElementById('temperature-slider');
+  const temperatureValueDisplay = document.getElementById('temperature-value');
+  const defaultTemperature = 0.7; // 设置一个默认的 temperature 值
+
+  if (temperatureSlider && temperatureValueDisplay) {
+    // 加载已保存的 temperature 值，或使用默认值
+    let currentTemp = parseFloat(localStorage.getItem('model-temperature'));
+    if (isNaN(currentTemp) || currentTemp < 0 || currentTemp > 2) { // 基本的范围检查
+      currentTemp = defaultTemperature;
+    }
+    
+    temperatureSlider.value = currentTemp;
+    temperatureValueDisplay.textContent = currentTemp.toFixed(1); // 保留一位小数显示
+
+    // 当滑块值变化时，更新显示并保存到 localStorage
+    temperatureSlider.addEventListener('input', () => {
+      const newTemp = parseFloat(temperatureSlider.value);
+      temperatureValueDisplay.textContent = newTemp.toFixed(1);
+      localStorage.setItem('model-temperature', newTemp.toString());
+      console.log(`[Temperature] 设置已更新为: ${newTemp}`);
+    });
+  } else {
+    console.error("Temperature 控制元素未找到！");
+  }
+  // --- 结束 Temperature 设置 ---
+
+    
+    
+    autoResizeTextarea();
+  }
+    
   }
 });
 // --- END OF FILE script.js ---

@@ -744,7 +744,7 @@ async function send() {
         };
         break;
       case 'anthropic':
-        apiUrl = '/.netlify/functions/claude-proxy'; // 指向你的 Netlify Function 代理
+        apiUrl = '/.netlify/functions/proxy'; // 指向你的 Netlify Function 代理
         // 对于发送给代理的请求，前端 headers 不需要包含 x-api-key 和 anthropic-version
         // headers = { 'Content-Type': 'application/json' }; // 已在外部定义，这里不需要重新赋值
 

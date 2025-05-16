@@ -1,47 +1,49 @@
-// netlify/functions/proxy.js (适用于 Edge Functions)
+// netlify/functions/proxy.js (标准 Netlify Node.js Functions 兼容)
 
-// 全局 fetch 在 Edge Functions 环境中通常是可用的
-
-export default async function handler(request, context) { // Edge Functions 通常接收 Request 对象
+exports.handler = async function(event, context) {
   // 1. 从环境变量获取 Anthropic API Key
-  const API_KEY = Deno.env.get("ANTHROPIC_API_KEY_SECRET"); // Edge Functions (Deno) 中读取环境变量的方式
+  const API_KEY = process.env.ANTHROPIC_API_KEY || "你的APIKEY"; // 用 process.env
   const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
   const ANTHROPIC_API_VERSION = "2023-06-01";
 
   // 2. 校验请求方法和 API Key 是否配置
-  if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json' }
-    });
+  if (event.httpMethod !== 'POST') {
+    return {
+      statusCode: 405,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Method Not Allowed' })
+    };
   }
   if (!API_KEY) {
     console.error("Anthropic API Key 未在环境变量中配置!");
-    return new Response(JSON.stringify({ error: 'Server Configuration Error: API Key not set.' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Server Configuration Error: API Key not set.' })
+    };
   }
 
   // 3. 解析前端发送过来的请求体
   let requestBodyFromFrontend;
   try {
-    requestBodyFromFrontend = await request.json(); // Edge Functions 的 request 对象有 .json() 方法
+    requestBodyFromFrontend = JSON.parse(event.body); // Node.js 用 event.body
   } catch (error) {
     console.error("无法解析前端请求体:", error);
-    return new Response(JSON.stringify({ error: 'Bad Request: Invalid JSON body' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return {
+      statusCode: 400,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Bad Request: Invalid JSON body' })
+    };
   }
 
-  const { model, messages, temperature, max_tokens /*, system_prompt */ } = requestBodyFromFrontend;
+  const { model, messages, temperature, max_tokens } = requestBodyFromFrontend;
 
   if (!model || !messages) {
-    return new Response(JSON.stringify({ error: 'Bad Request: "model" and "messages" are required.' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return {
+      statusCode: 400,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Bad Request: \"model\" and \"messages\" are required.' })
+    };
   }
 
   // 4. 构建发送给 Anthropic API 的请求体
@@ -50,13 +52,13 @@ export default async function handler(request, context) { // Edge Functions 通�
     messages: messages,
     max_tokens: max_tokens || 1024,
     temperature: temperature !== undefined ? temperature : 0.7,
-    // system: system_prompt,
   };
 
   console.log("[Claude Proxy] 发送给 Anthropic 的请求体:", JSON.stringify(anthropicPayload, null, 2));
 
   // 5. 调用 Anthropic API
   try {
+    const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
     const anthropicResponse = await fetch(ANTHROPIC_API_URL, {
       method: 'POST',
       headers: {
@@ -70,31 +72,28 @@ export default async function handler(request, context) { // Edge Functions 通�
     const responseDataText = await anthropicResponse.text();
     console.log("[Claude Proxy] 从 Anthropic API 收到的状态码:", anthropicResponse.status);
 
-    let parsedData;
-    let contentType = anthropicResponse.headers.get('content-type') || 'text/plain'; // 获取原始 Content-Type
+    let contentType = anthropicResponse.headers.get('content-type') || 'text/plain';
     let finalBody = responseDataText;
 
     try {
-        parsedData = JSON.parse(responseDataText);
-        finalBody = JSON.stringify(parsedData); // 如果成功解析，确保返回的是字符串化的JSON
-        contentType = 'application/json'; // 确认 Content-Type 是 JSON
+      finalBody = JSON.stringify(JSON.parse(responseDataText));
+      contentType = 'application/json';
     } catch(e) {
-        console.error("[Claude Proxy] Anthropic API 响应不是有效的 JSON:", responseDataText);
-        // finalBody 已经是 responseDataText (原始文本)
-        // contentType 已经是原始的 contentType 或 text/plain
+      console.error("[Claude Proxy] Anthropic API 响应不是有效的 JSON:", responseDataText);
     }
     
-    // 将 Anthropic API 的响应返回给前端
-    return new Response(finalBody, {
-      status: anthropicResponse.status,
-      headers: { 'Content-Type': contentType }
-    });
+    return {
+      statusCode: anthropicResponse.status,
+      headers: { 'Content-Type': contentType },
+      body: finalBody
+    };
 
   } catch (error) {
     console.error('[Claude Proxy] 调用 Anthropic API 时出错:', error);
-    return new Response(JSON.stringify({ error: 'Proxy failed to fetch from Anthropic API', details: error.message }), {
-      status: 502, // Bad Gateway
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return {
+      statusCode: 502,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'Proxy failed to fetch from Anthropic API', details: error.message })
+    };
   }
-}
+};

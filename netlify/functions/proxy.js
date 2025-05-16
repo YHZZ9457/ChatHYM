@@ -1,12 +1,10 @@
-// netlify/functions/proxy.js (标准 Netlify Node.js Functions 兼容)
+// netlify/functions/proxy.js
 
 exports.handler = async function(event, context) {
-  // 1. 从环境变量获取 Anthropic API Key
-  const API_KEY = process.env.ANTHROPIC_API_KEY || "你的APIKEY"; // 用 process.env
+  const API_KEY = process.env.ANTHROPIC_API_KEY || "你的APIKEY";
   const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
   const ANTHROPIC_API_VERSION = "2023-06-01";
 
-  // 2. 校验请求方法和 API Key 是否配置
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -23,10 +21,9 @@ exports.handler = async function(event, context) {
     };
   }
 
-  // 3. 解析前端发送过来的请求体
   let requestBodyFromFrontend;
   try {
-    requestBodyFromFrontend = JSON.parse(event.body); // Node.js 用 event.body
+    requestBodyFromFrontend = JSON.parse(event.body);
   } catch (error) {
     console.error("无法解析前端请求体:", error);
     return {
@@ -46,7 +43,6 @@ exports.handler = async function(event, context) {
     };
   }
 
-  // 4. 构建发送给 Anthropic API 的请求体
   const anthropicPayload = {
     model: model,
     messages: messages,
@@ -56,9 +52,8 @@ exports.handler = async function(event, context) {
 
   console.log("[Claude Proxy] 发送给 Anthropic 的请求体:", JSON.stringify(anthropicPayload, null, 2));
 
-  // 5. 调用 Anthropic API
+  // **直接用原生 fetch，不要引入 node-fetch！**
   try {
-    const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
     const anthropicResponse = await fetch(ANTHROPIC_API_URL, {
       method: 'POST',
       headers: {

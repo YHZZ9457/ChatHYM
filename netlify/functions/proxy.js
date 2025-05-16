@@ -1,7 +1,5 @@
-// netlify/functions/proxy.js
-
 exports.handler = async function(event, context) {
-  const API_KEY = process.env.ANTHROPIC_API_KEY || "你的APIKEY";
+  const API_KEY = process.env.ANTHROPIC_API_KEY || "YOUR_API_KEY";
   const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
   const ANTHROPIC_API_VERSION = "2023-06-01";
 
@@ -13,7 +11,7 @@ exports.handler = async function(event, context) {
     };
   }
   if (!API_KEY) {
-    console.error("Anthropic API Key 未在环境变量中配置!");
+    console.error("Anthropic API Key not configured!");
     return {
       statusCode: 500,
       headers: { 'Content-Type': 'application/json' },
@@ -25,7 +23,7 @@ exports.handler = async function(event, context) {
   try {
     requestBodyFromFrontend = JSON.parse(event.body);
   } catch (error) {
-    console.error("无法解析前端请求体:", error);
+    console.error("Invalid frontend request body:", error);
     return {
       statusCode: 400,
       headers: { 'Content-Type': 'application/json' },
@@ -50,9 +48,8 @@ exports.handler = async function(event, context) {
     temperature: temperature !== undefined ? temperature : 0.7,
   };
 
-  console.log("[Claude Proxy] 发送给 Anthropic 的请求体:", JSON.stringify(anthropicPayload, null, 2));
+  console.log("[Claude Proxy] Request payload:", JSON.stringify(anthropicPayload, null, 2));
 
-  // **直接用原生 fetch，不要引入 node-fetch！**
   try {
     const anthropicResponse = await fetch(ANTHROPIC_API_URL, {
       method: 'POST',
@@ -65,7 +62,7 @@ exports.handler = async function(event, context) {
     });
 
     const responseDataText = await anthropicResponse.text();
-    console.log("[Claude Proxy] 从 Anthropic API 收到的状态码:", anthropicResponse.status);
+    console.log("[Claude Proxy] Anthropic API status:", anthropicResponse.status);
 
     let contentType = anthropicResponse.headers.get('content-type') || 'text/plain';
     let finalBody = responseDataText;
@@ -74,7 +71,7 @@ exports.handler = async function(event, context) {
       finalBody = JSON.stringify(JSON.parse(responseDataText));
       contentType = 'application/json';
     } catch(e) {
-      console.error("[Claude Proxy] Anthropic API 响应不是有效的 JSON:", responseDataText);
+      console.error("[Claude Proxy] Anthropic API response is not valid JSON:", responseDataText);
     }
     
     return {
@@ -84,7 +81,7 @@ exports.handler = async function(event, context) {
     };
 
   } catch (error) {
-    console.error('[Claude Proxy] 调用 Anthropic API 时出错:', error);
+    console.error('[Claude Proxy] Error calling Anthropic API:', error);
     return {
       statusCode: 502,
       headers: { 'Content-Type': 'application/json' },

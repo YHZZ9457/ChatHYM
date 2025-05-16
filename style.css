@@ -1322,3 +1322,34 @@ body.dark-theme .reasoning-content { scrollbar-color: #444 rgba(255, 255, 255, 0
   font-weight: bold;
   margin-left: 8px;
 }
+
+.messages {
+  /* ... 你现有的 .messages 样式 ... */
+  position: relative; /* 如果需要用绝对定位来居中提示，虽然 flex 更方便 */
+  display: flex;
+  flex-direction: column;
+  /* align-items: center; /* 如果希望提示块水平居中 */
+  /* justify-content: center; /* 如果希望提示块垂直居中 (当 messages 高度固定时) */
+}
+
+/* 新增：空聊天状态的占位提示样式 */
+.empty-chat-placeholder {
+  /* 使用 flex 在 .messages 容器中居中这个提示 */
+  display: flex; /* 设为 flex 以便内部的 p 元素可以更容易地对齐 */
+  flex-direction: column;
+  justify-content: center; /* 垂直居中 */
+  align-items: center;   /* 水平居中 */
+  text-align: center;
+  
+  /* 让它占据 .messages 的可用空间，这样才能有效居中 */
+  flex-grow: 1; 
+  
+  color: var(--text-secondary, #888); /* 使用次要文字颜色 */
+  font-size: 1rem;
+  padding: 20px;
+  user-select: none; /* 防止用户意外选中这段文字 */
+}
+
+.empty-chat-placeholder p {
+  margin: 0;
+}

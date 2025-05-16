@@ -18,6 +18,7 @@ function storageKeyFor(provider) {
     deepseek: 'deepseek-api-key',
     siliconflow: 'siliconflow-api-key',
     gemini: 'gemini-api-key',
+    anthropic: 'anthropic-api-key', 
   }[provider];
 }
 
@@ -84,6 +85,14 @@ function pruneEmptyNodes(container) {
 }
 
 function appendMessage(role, text, modelForNote, reasoningText) {
+  // --- 在函数的开头，隐藏空聊天提示 ---
+  const emptyChatPlaceholder = document.getElementById('empty-chat-placeholder');
+  if (emptyChatPlaceholder && emptyChatPlaceholder.style.display !== 'none') {
+    // emptyChatPlaceholder.parentNode?.removeChild(emptyChatPlaceholder); // 从 DOM 移除
+    emptyChatPlaceholder.style.display = 'none'; // 或者只是隐藏
+  }
+  // --- 结束隐藏提示 ---
+
   const container = document.getElementById('messages');
   const messageWrapperDiv = document.createElement('div');
   messageWrapperDiv.className = 'message-wrapper';
@@ -97,7 +106,7 @@ function appendMessage(role, text, modelForNote, reasoningText) {
   const messageDiv = document.createElement('div');
   messageDiv.className = 'message ' + (role === 'assistant' || role === 'model' ? 'assistant' : 'user');
 
-  let reasoningContentElementForMathJax = null; // 用于 MathJax 引用
+  let reasoningContentElementForMathJax = null;
 
   // --- 1. 处理并添加思考过程 (如果存在) ---
   if (reasoningText && (role === 'assistant' || role === 'model')) {
@@ -109,7 +118,7 @@ function appendMessage(role, text, modelForNote, reasoningText) {
     label.textContent = '思考过程:';
     reasoningBlockDiv.appendChild(label);
 
-    reasoningContentElementForMathJax = document.createElement('pre'); // 使用新变量名以区分
+    reasoningContentElementForMathJax = document.createElement('pre');
     reasoningContentElementForMathJax.className = 'reasoning-content';
     reasoningContentElementForMathJax.textContent = reasoningText;
     reasoningBlockDiv.appendChild(reasoningContentElementForMathJax);
@@ -120,8 +129,8 @@ function appendMessage(role, text, modelForNote, reasoningText) {
   // --- 2. 处理并添加主要回复内容 ---
   const safeText = typeof text === 'string' ? text : String(text || '');
   let contentHtml = '';
-  // 即使主要内容为空，但如果是助手消息且有思考过程，也应该创建空的 contentDiv 以保持结构
-  if (safeText.trim() !== '' || ( (role === 'assistant' || role === 'model') && reasoningText ) ) {
+  if (safeText.trim() !== '' || ((role === 'assistant' || role === 'model') && !reasoningText) ) { 
+    // 只有当文本不为空，或者角色是助手且没有思考过程时（避免只有思考过程时出现重复的空内容块）才处理 markdown
     contentHtml = (typeof marked !== 'undefined')
       ? marked.parse(safeText)
       : escapeHtml(safeText);
@@ -155,19 +164,46 @@ function appendMessage(role, text, modelForNote, reasoningText) {
   });
 
   pruneEmptyNodes(contentDiv);
-  // 只有当 contentDiv 确实有内容，或者它是助手消息（为了模型注释和思考过程的容器）时才添加
-  if (contentDiv.innerHTML.trim() !== '' || (role === 'assistant' || role === 'model')) {
+  // 只有当 contentDiv 确实有内容（即使是空的Markdown结果也可能有空的<p>），
+  // 或者它是助手消息且有模型注释时，才添加它。
+  // 避免在只有思考过程的情况下添加一个空的 .text div。
+  if (contentDiv.innerHTML.trim() !== '' || ((role === 'assistant' || role === 'model') && modelForNote && !reasoningText) ) {
       messageDiv.appendChild(contentDiv);
   }
 
 
-  // --- 3. 添加模型注释 (如果需要) ---
-  if ((role === 'assistant' || role === 'model') && modelForNote) {
-    const note = document.createElement('div');
-    note.className = 'model-note';
-    note.textContent = `模型：${modelForNote}`;
-    messageDiv.appendChild(note);
+// --- 3. 添加模型注释 (如果需要) ---
+if ((role === 'assistant' || role === 'model') && modelForNote) {
+  const note = document.createElement('div');
+  note.className = 'model-note';
+  
+  let displayModelName = modelForNote; // 默认使用传入的原始模型值
+  const modelSelectElement = document.getElementById('model'); // 获取 select 元素
+
+  if (modelSelectElement) {
+    // 尝试找到 value 属性与 modelForNote 完全匹配的 option
+    const selectedOption = modelSelectElement.querySelector(`option[value="${modelForNote}"]`);
+    if (selectedOption) {
+      displayModelName = selectedOption.textContent; // 如果找到，使用该 option 的显示文本
+    } else {
+      // 后备逻辑：如果找不到完全匹配的，尝试去掉前缀 (如 "sf::", "openai::" 等)
+      // 这假设你的 modelForNote 总是 "prefix::ActualModelID" 的格式
+      const parts = String(modelForNote).split('::'); // 确保 modelForNote 是字符串
+      if (parts.length === 2) {
+        displayModelName = parts[1]; // 使用 "::" 后面的部分
+        console.log(`[模型注释] 未在下拉列表中找到值 "${modelForNote}"，将显示解析后的名称: "${displayModelName}"`);
+      } else {
+        // 如果连 "::" 都没有，就直接显示原始的 modelForNote，但这种情况应该较少
+        console.warn(`[模型注释] 无法从 "${modelForNote}" 解析出更友好的名称，将显示原始值。`);
+      }
+    }
+  } else {
+    console.warn("[模型注释] 未找到 ID 为 'model' 的 select 元素。");
   }
+  
+  note.textContent = `模型：${displayModelName}`; // 使用获取到的或处理后的显示名称
+  messageDiv.appendChild(note);
+}
 
   // --- 4. 创建并配置删除单条消息的按钮 ---
   const deleteMsgBtn = document.createElement('button');
@@ -191,18 +227,24 @@ function appendMessage(role, text, modelForNote, reasoningText) {
   if (role === 'user') {
     messageWrapperDiv.appendChild(deleteMsgBtn);
     messageWrapperDiv.appendChild(messageDiv);
-  } else { // assistant or model
+  } else { 
     messageWrapperDiv.appendChild(messageDiv);
     messageWrapperDiv.appendChild(deleteMsgBtn);
   }
   
   // --- 6. 将整个消息包裹层添加到消息容器中 ---
-  container.appendChild(messageWrapperDiv);
+  // 只有当 messageDiv 内部确实有内容（主要内容、思考过程或模型注释）时才添加整个 wrapper
+  // 或者它是用户消息（用户消息即使为空也应该有个气泡和删除按钮）
+  if (messageDiv.hasChildNodes() || role === 'user') {
+    container.appendChild(messageWrapperDiv);
+  }
+  
   container.scrollTop = container.scrollHeight;
 
   // --- 7. MathJax 渲染逻辑 ---
   if (window.MathJax && MathJax.typesetPromise) {
     const elementsToTypeset = [];
+    // 确保只对实际添加到 DOM 并且有内容的元素进行 typeset
     if (messageDiv.contains(contentDiv) && contentDiv.innerHTML.trim() !== '') {
         elementsToTypeset.push(contentDiv);
     }
@@ -214,7 +256,11 @@ function appendMessage(role, text, modelForNote, reasoningText) {
     }
   }
 
-  return messageWrapperDiv;
+  // 只返回被实际添加到DOM的wrapper，否则可能返回一个未被添加的元素
+  if (messageDiv.hasChildNodes() || role === 'user') {
+    return messageWrapperDiv;
+  }
+  return null; // 如果因为是空助手消息且无思考过程而未添加，则返回null
 }
 
 function appendLoading() {
@@ -332,7 +378,6 @@ function renderConversationList() {
   enableConversationDrag(); 
 }
 
-
 function enableConversationDrag() {
   const list = document.getElementById('conversation-list');
   if (!list || typeof Sortable === 'undefined') return;
@@ -389,10 +434,8 @@ function loadConversation(id) {
     return;
   }
 
-  // 清除 "new" 标记 (如果存在)
   if (conv.isNew) {
     conv.isNew = false;
-    // saveConversations(); // 可选：立即保存，或者依赖后续操作保存
   }
 
   currentConversationId = id;
@@ -409,33 +452,62 @@ function loadConversation(id) {
   document.getElementById('chat-area').style.display = 'flex';
 
   const messagesContainer = document.getElementById('messages');
-  messagesContainer.innerHTML = ''; // 清空旧消息
+  const emptyChatPlaceholder = document.getElementById('empty-chat-placeholder');
 
-  let messageIndex = 0;
-  conv.messages
-    .filter(m => {
-      const hasContent = typeof m.content === 'string' && m.content.trim() !== '';
-      const hasReasoning = typeof m.reasoning_content === 'string' && m.reasoning_content.trim() !== '';
-      return hasContent || hasReasoning || (m.role === 'user');
-    })
-    .forEach(m => {
+  // 1. 清空 messagesContainer 中除了 placeholder 之外的所有内容
+  //    并且确保 placeholder 是 messagesContainer 的子元素（如果它还不是）
+  let placeholderInPlace = false;
+  const childrenToRemove = [];
+  for (let i = 0; i < messagesContainer.children.length; i++) {
+    const child = messagesContainer.children[i];
+    if (child === emptyChatPlaceholder) {
+      placeholderInPlace = true;
+    } else {
+      childrenToRemove.push(child);
+    }
+  }
+  childrenToRemove.forEach(child => messagesContainer.removeChild(child));
+  
+  if (!placeholderInPlace && emptyChatPlaceholder) { // 如果 placeholder 不在，加到最前面
+    messagesContainer.insertBefore(emptyChatPlaceholder, messagesContainer.firstChild);
+  }
+
+
+  // 2. 过滤有效消息
+  const messagesToRender = conv.messages.filter(m => {
+    const hasContent = typeof m.content === 'string' && m.content.trim() !== '';
+    const hasReasoning = typeof m.reasoning_content === 'string' && m.reasoning_content.trim() !== '';
+    return hasContent || hasReasoning || (m.role === 'user');
+  });
+
+  // 3. 根据是否有消息来显示/隐藏占位符或渲染消息
+  if (messagesToRender.length === 0) {
+    if (emptyChatPlaceholder) {
+      emptyChatPlaceholder.style.display = 'flex'; // 显示提示
+    }
+  } else {
+    if (emptyChatPlaceholder) {
+      emptyChatPlaceholder.style.display = 'none'; // 隐藏提示
+    }
+    
+    let messageIndex = 0;
+    messagesToRender.forEach(m => {
       const messageElement = appendMessage(
         m.role,
         m.content,
         m.model || conv.model,
         m.reasoning_content || null
       );
-      if (messageElement) { // appendMessage 现在返回的是 messageWrapperDiv
+      if (messageElement) {
           messageElement.dataset.conversationId = conv.id;
-          messageElement.dataset.messageIndex = messageIndex; // 这是消息在 conv.messages 中的原始索引
-          messageIndex++; // 这个 messageIndex 只是用于遍历，删除时要用 dataset 里的
+          messageElement.dataset.messageIndex = messageIndex;
+          messageIndex++;
       }
     });
+  }
   
-  // 在所有消息都添加完毕后，再滚动到底部
   messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
-  renderConversationList(); // 更新侧边栏状态（例如清除 new 标记的视觉效果）
+  renderConversationList();
   enableInlineTitleEdit();
 }
 
@@ -480,7 +552,6 @@ function deleteSingleMessage(messageElement, conversationId, messageIndex) {
     }
   }
 }
-
 
 function renameConversation(id) {
   const conv = conversations.find(c => c.id === id);
@@ -540,34 +611,43 @@ function toggleArchive(id) {
 
 
 async function send() {
-  const conv = getCurrentConversation();
-  if (!conv) {
+  // --- 步骤1: 捕获发起请求时的对话信息 ---
+  const conversationAtRequestTime = getCurrentConversation(); // 获取发起请求时的对话对象
+  if (!conversationAtRequestTime) {
     alert("请先选择或创建一个对话。");
     return;
   }
+  const conversationIdAtRequestTime = conversationAtRequestTime.id; // 捕获当时的对话ID
+  const modelValueFromOption = conversationAtRequestTime.model;       // 捕获当时对话选择的原始模型值(含前缀)
 
   let actualProvider;
-  const currentSelectedModel = conv.model;
+  let modelNameForAPI; // 这是真正发送给API的model ID，不含前缀
 
-  // 根据当前选择的模型推断 API 提供商
-  if (currentSelectedModel.toLowerCase().includes('deepseek')) {
-    actualProvider = 'deepseek';
-  } else if (currentSelectedModel.toLowerCase().includes('gemini')) {
-    actualProvider = 'gemini';
-  } else if (currentSelectedModel.toLowerCase().startsWith('qwen/')) {
-    actualProvider = 'siliconflow';
-  } else if (
-    currentSelectedModel.toLowerCase().includes('gpt') ||
-    currentSelectedModel.toLowerCase().includes('o3') ||
-    currentSelectedModel.toLowerCase().includes('o4-mini')
-  ) {
-    actualProvider = 'openai';
+  // --- 根据模型值的前缀推断 Provider 和提取真实模型名 ---
+  const parts = String(modelValueFromOption).split('::');
+  if (parts.length === 2) {
+    const prefix = parts[0].toLowerCase();
+    modelNameForAPI = parts[1]; 
+    
+    switch (prefix) {
+      case 'sf': actualProvider = 'siliconflow'; break;
+      case 'openai': actualProvider = 'openai'; break;
+      case 'deepseek': actualProvider = 'deepseek'; break;
+      case 'gemini': actualProvider = 'gemini'; break;
+      case 'anthropic': actualProvider = 'anthropic'; break;
+      default:
+        console.warn(`未知的模型前缀: "${prefix}"，将使用设置页面的 Provider。`);
+        const providerSelFallbackDefault = document.getElementById('api-provider');
+        actualProvider = providerSelFallbackDefault.value;
+        modelNameForAPI = modelValueFromOption; 
+    }
   } else {
-    const providerSel = document.getElementById('api-provider');
-    actualProvider = providerSel.value;
-    console.warn(`无法从模型 "${currentSelectedModel}" 自动推断提供商，将使用设置页面的选择: ${actualProvider}`);
+    modelNameForAPI = modelValueFromOption;
+    console.warn(`模型值 "${modelValueFromOption}" 不包含提供商前缀，将使用设置页面的 Provider。`);
+    const providerSelFallbackElse = document.getElementById('api-provider');
+    actualProvider = providerSelFallbackElse.value;
   }
-  console.log(`[发送] 模型: ${currentSelectedModel}, 推断的提供商: ${actualProvider}`);
+  console.log(`[发送] 原始选择: "${modelValueFromOption}", 提供商: ${actualProvider}, API模型ID: ${modelNameForAPI}`);
 
   const providerToUse = actualProvider;
   const apiKeyStorageKey = storageKeyFor(providerToUse);
@@ -591,28 +671,19 @@ async function send() {
   const promptText = promptInput.value.replace(/\n$/, '');
   if (!promptText.trim()) return;
 
-  appendMessage('user', promptText, null, null);
-  const userRoleForStorage = 'user';
-  conv.messages.push({ role: userRoleForStorage, content: promptText, model: conv.model });
-  
-  promptInput.value = ''; // 清空输入框
-
-  // --- 新增/修改：发送后重置 textarea 高度 ---
-  if (promptInput) {
-    // 假设你的 CSS 中 textarea 有一个 min-height 或者初始的 height
-    // 我们需要知道这个初始高度。如果你的 CSS 里是 min-height: 42px;
-    const initialTextareaHeight = '42px'; // 或者你 textarea 初始的 CSS height 值
-    promptInput.style.height = initialTextareaHeight;
-    promptInput.style.overflowY = 'hidden'; // 确保滚动条隐藏 (如果之前有)
-    // 如果你的 autoResizeTextarea 逻辑在 DOMContentLoaded 中是针对 promptInput 的，
-    // 并且设置了 promptInput.style.height = 'auto'; 那么下面这行可能也有用
-    // promptInput.style.height = 'auto'; // 尝试让浏览器根据内容（现在是空的）重新计算
-    // promptInput.style.height = promptInput.scrollHeight + 'px'; // 然后再设回去（但通常对于空内容，scrollHeight会很小）
-    // 最简单可靠的是直接设回初始 CSS 定义的高度
+  if (currentConversationId === conversationIdAtRequestTime) {
+      appendMessage('user', promptText, null, null);
   }
-  // --- 结束重置 textarea 高度 ---
-
-  saveConversations(); // 保存包含用户消息的对话
+  const userRoleForStorage = 'user';
+  conversationAtRequestTime.messages.push({ role: userRoleForStorage, content: promptText, model: modelValueFromOption });
+  
+  promptInput.value = '';
+  if (promptInput) {
+    const initialTextareaHeight = '42px'; 
+    promptInput.style.height = initialTextareaHeight;
+    promptInput.style.overflowY = 'hidden';
+  }
+  saveConversations();
 
   const loadingDiv = appendLoading();
 
@@ -622,6 +693,7 @@ async function send() {
   let assistantReply = '（无回复）';
   let thinkingProcess = null;
 
+  // --- 封装一个通用的消息映射函数 (除了 Gemini) ---
   const mapMessagesForStandardProviders = (messages) => {
     return messages
       .filter(m => typeof m.content === 'string' && m.content.trim() !== '')
@@ -630,7 +702,7 @@ async function send() {
         if (m.role === 'user') {
           finalRole = 'user';
         } else if (m.role === 'assistant' || m.role === 'bot' || m.role === 'model') {
-          finalRole = 'assistant';
+          finalRole = 'assistant'; // 标准 API 通常用 'assistant'
         } else if (m.role === 'system') {
           finalRole = 'system';
         } else {
@@ -640,48 +712,78 @@ async function send() {
         return { role: finalRole, content: m.content };
       });
   };
+  // --- 结束消息映射函数 ---
+  
+  const ANTHROPIC_API_VERSION = "2023-06-01"; // Anthropic API 版本
 
   try {
     let currentTemperature = parseFloat(localStorage.getItem('model-temperature'));
-    if (isNaN(currentTemperature) || currentTemperature < 0 || currentTemperature > 2) {
-        currentTemperature = 0.7;
+    if (isNaN(currentTemperature) || currentTemperature < 0 || currentTemperature > 2) { // 基本范围检查
+        currentTemperature = 0.7; // 默认值
     }
 
     switch (providerToUse) {
       case 'openai':
-        apiUrl = 'https://api.openai.com/v1/chat/completions';
-        headers['Authorization'] = `Bearer ${apiKey}`;
-        bodyPayload = {
-          model: conv.model,
-          messages: mapMessagesForStandardProviders(conv.messages),
-          temperature: currentTemperature
-        };
-        break;
       case 'deepseek':
-        apiUrl = 'https://api.deepseek.com/chat/completions';
+      case 'siliconflow':
+        apiUrl = providerToUse === 'openai' ? 'https://api.openai.com/v1/chat/completions' :
+                 providerToUse === 'deepseek' ? 'https://api.deepseek.com/chat/completions' :
+                 'https://api.siliconflow.cn/v1/chat/completions';
         headers['Authorization'] = `Bearer ${apiKey}`;
         bodyPayload = {
-          model: conv.model,
-          messages: mapMessagesForStandardProviders(conv.messages),
-          temperature: currentTemperature
+          model: modelNameForAPI,
+          messages: mapMessagesForStandardProviders(conversationAtRequestTime.messages),
+          temperature: currentTemperature,
+          // max_tokens: 1024, // 可选，如果API支持且你需要控制
         };
         break;
-      case 'siliconflow':
-        apiUrl = 'https://api.siliconflow.cn/v1/chat/completions';
-        headers['Authorization'] = `Bearer ${apiKey}`;
+      case 'anthropic':
+        apiUrl = 'https://api.anthropic.com/v1/messages';
+        headers['x-api-key'] = apiKey;
+        headers['anthropic-version'] = ANTHROPIC_API_VERSION;
+
+        const claudeMessages = [];
+        let lastClaudeRole = null;
+        conversationAtRequestTime.messages.forEach(msg => {
+            let roleForClaude = null;
+            if (msg.role === 'user') {
+                roleForClaude = 'user';
+            } else if (msg.role === 'assistant' || msg.role === 'bot' || msg.role === 'model') {
+                roleForClaude = 'assistant';
+            }
+
+            if (roleForClaude) {
+                if (claudeMessages.length === 0 && roleForClaude !== 'user') {
+                    console.warn("[Claude] 历史消息第一条不是 'user'，已跳过:", msg);
+                    return; 
+                }
+                if (roleForClaude === lastClaudeRole && claudeMessages.length > 0) {
+                    claudeMessages[claudeMessages.length - 1].content += "\n" + msg.content;
+                } else {
+                    claudeMessages.push({ role: roleForClaude, content: msg.content });
+                    lastClaudeRole = roleForClaude;
+                }
+            }
+        });
+        if (claudeMessages.length > 0 && claudeMessages[claudeMessages.length -1].role === 'assistant') {
+            console.warn("[Claude] 准备发送的消息历史最后一条是 assistant，API 可能会报错。");
+        }
+
         bodyPayload = {
-          model: conv.model,
-          messages: mapMessagesForStandardProviders(conv.messages),
+          model: modelNameForAPI,
+          messages: claudeMessages,
+          max_tokens: 1024, 
           temperature: currentTemperature
+          // "system": "Your system prompt here...", // 如果需要系统提示
         };
         break;
       case 'gemini':
-        apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${conv.model}:generateContent?key=${apiKey}`;
+        apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelNameForAPI}:generateContent?key=${apiKey}`;
         let geminiTemperature = currentTemperature;
         if (geminiTemperature > 1.0) geminiTemperature = 1.0;
         if (geminiTemperature < 0.0) geminiTemperature = 0.0;
         bodyPayload = {
-          contents: conv.messages
+          contents: conversationAtRequestTime.messages
             .filter(m => typeof m.content === 'string' && m.content.trim() !== '')
             .map(m => {
               let roleForGemini;
@@ -693,14 +795,9 @@ async function send() {
                 console.warn(`[Gemini映射] 发现无效角色: '${m.role}'，默认为 'user'`);
                 roleForGemini = 'user';
               }
-              return {
-                role: roleForGemini,
-                parts: [{ text: m.content }]
-              };
+              return { role: roleForGemini, parts: [{ text: m.content }] };
             }),
-          generationConfig: {
-            temperature: geminiTemperature
-          }
+          generationConfig: { temperature: geminiTemperature }
         };
         break;
       default:
@@ -728,58 +825,81 @@ async function send() {
     console.log(JSON.stringify(data, null, 2));
     console.log("------------------------------------");
 
-
     if (providerToUse === 'gemini') {
-      if (data.candidates && data.candidates.length > 0 &&
-        data.candidates[0].content && data.candidates[0].content.parts &&
-        data.candidates[0].content.parts.length > 0) {
-        assistantReply = data.candidates[0].content.parts[0].text;
-      } else if (data.promptFeedback && data.promptFeedback.blockReason) {
-        assistantReply = `请求被阻止：${data.promptFeedback.blockReason}`;
-        if (data.promptFeedback.safetyRatings) {
-          assistantReply += ` (Safety Ratings: ${JSON.stringify(data.promptFeedback.safetyRatings)})`;
+        if (data.candidates && data.candidates.length > 0 &&
+            data.candidates[0].content && data.candidates[0].content.parts &&
+            data.candidates[0].content.parts.length > 0) {
+            assistantReply = data.candidates[0].content.parts[0].text;
+        } else if (data.promptFeedback && data.promptFeedback.blockReason) {
+            assistantReply = `请求被阻止：${data.promptFeedback.blockReason}`;
+            if (data.promptFeedback.safetyRatings) {
+            assistantReply += ` (Safety Ratings: ${JSON.stringify(data.promptFeedback.safetyRatings)})`;
+            }
+        }
+    } else if (providerToUse === 'anthropic') {
+      if (data.content && Array.isArray(data.content) && data.content.length > 0) {
+        const textBlock = data.content.find(block => block.type === 'text');
+        if (textBlock && typeof textBlock.text === 'string') {
+          assistantReply = textBlock.text;
+        }
+        const toolUseBlock = data.content.find(block => block.type === 'tool_use');
+        if (toolUseBlock && toolUseBlock.name) {
+          thinkingProcess = `模型请求使用工具: ${toolUseBlock.name}\nID: ${toolUseBlock.id}\n输入: ${JSON.stringify(toolUseBlock.input, null, 2)}`;
         }
       }
-    } else {
+      if (data.stop_reason && !['end_turn', 'max_tokens', 'tool_use'].includes(data.stop_reason) && !thinkingProcess && assistantReply !== '（无回复）') {
+          assistantReply += ` (停止原因: ${data.stop_reason})`;
+      }
+    } else { 
       if (data.choices && data.choices.length > 0 && data.choices[0].message) {
         assistantReply = data.choices[0].message.content || '（无回复）';
-        if (data.choices[0].message.reasoning_content) {
+        if (data.choices[0].message.reasoning_content) { 
           thinkingProcess = data.choices[0].message.reasoning_content;
         }
       }
     }
   } catch (error) {
-    console.error('发送错误:', error);
+    console.error(`[发送错误] 对话ID ${conversationIdAtRequestTime}:`, error);
     assistantReply = `错误：${error.message}`;
     thinkingProcess = null;
   } finally {
-    if (loadingDiv) {
+    if (loadingDiv && document.getElementById('messages').contains(loadingDiv)) {
         loadingDiv.remove();
     }
 
     const assistantRoleToDisplay = (providerToUse === 'gemini') ? 'model' : 'assistant';
-    appendMessage(assistantRoleToDisplay, assistantReply, conv.model, thinkingProcess);
 
-    const assistantRoleForStorage = 'assistant';
-    if (!(assistantReply === '（无回复）' && !thinkingProcess) && !assistantReply.startsWith('错误：')) {
-        conv.messages.push({
-            role: assistantRoleForStorage,
-            content: assistantReply,
-            model: conv.model,
-            reasoning_content: thinkingProcess
-        });
-        saveConversations();
-    } else if (assistantReply.startsWith('错误：')) {
-        conv.messages.push({
-            role: assistantRoleForStorage,
-            content: assistantReply,
-            model: conv.model
-        });
-        saveConversations();
+    if (currentConversationId === conversationIdAtRequestTime) {
+      appendMessage(assistantRoleToDisplay, assistantReply, modelValueFromOption, thinkingProcess);
+    } else {
+      console.log(`[发送完成] 用户已切换对话。回复将保存到对话 ${conversationIdAtRequestTime}，但不会显示。`);
+      const originalConvLi = document.querySelector(`.conversation-item[data-id="${conversationIdAtRequestTime}"]`);
+      if (originalConvLi && !assistantReply.startsWith('错误：')) {
+         // originalConvLi.classList.add('has-unread-response'); 
+      }
+    }
+
+    const targetConversationForStorage = conversations.find(c => c.id === conversationIdAtRequestTime);
+    if (targetConversationForStorage) {
+        const assistantRoleForStorage = 'assistant';
+        if (assistantReply !== '（无回复）' || thinkingProcess) { 
+            targetConversationForStorage.messages.push({
+                role: assistantRoleForStorage,
+                content: assistantReply,
+                model: modelValueFromOption,
+                reasoning_content: thinkingProcess
+            });
+            saveConversations();
+            if (currentConversationId !== conversationIdAtRequestTime && !assistantReply.startsWith('错误：')) {
+                renderConversationList();
+            }
+        }
+    } else {
+        console.error(`[保存错误] 无法找到原始对话 ${conversationIdAtRequestTime} 来保存回复。`);
     }
   }
-} // <--- send 函数的结束括号
-window.send = send; // 确保这一行在你 script.js 的全局作用域
+}
+window.send = send;
 
 // --- 设置与 UI 操作 ---
 

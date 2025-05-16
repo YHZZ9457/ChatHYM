@@ -621,7 +621,7 @@ async function send() {
   const modelValueFromOption = conversationAtRequestTime.model;       // 捕获当时对话选择的原始模型值(含前缀)
 
   let actualProvider;
-  let modelNameForAPI; // 这是真正发送给API的model ID，不含前缀
+  let modelNameForAPI; // 用于发送给特定API的、不含前缀的模型名称
 
   // --- 根据模型值的前缀推断 Provider 和提取真实模型名 ---
   const parts = String(modelValueFromOption).split('::');
@@ -636,24 +636,25 @@ async function send() {
       case 'gemini': actualProvider = 'gemini'; break;
       case 'anthropic': actualProvider = 'anthropic'; break;
       default:
-        console.warn(`未知的模型前缀: "${prefix}"，将使用设置页面的 Provider。`);
         const providerSelFallbackDefault = document.getElementById('api-provider');
         actualProvider = providerSelFallbackDefault.value;
-        modelNameForAPI = modelValueFromOption; 
+        modelNameForAPI = modelValueFromOption; // 如果前缀未知，假设整个值是模型名
+        console.warn(`未知的模型前缀: "${prefix}"，将使用设置页面选择的 Provider: ${actualProvider}`);
     }
   } else {
-    modelNameForAPI = modelValueFromOption;
-    console.warn(`模型值 "${modelValueFromOption}" 不包含提供商前缀，将使用设置页面的 Provider。`);
+    modelNameForAPI = modelValueFromOption; // 没有 "::"，则整个值作为模型名
     const providerSelFallbackElse = document.getElementById('api-provider');
-    actualProvider = providerSelFallbackElse.value;
+    actualProvider = providerSelFallbackElse.value; // 依赖设置页面的 Provider
+    console.warn(`模型值 "${modelValueFromOption}" 不包含提供商前缀，将使用设置页面选择的 Provider: ${actualProvider}`);
   }
-  console.log(`[发送] 原始选择: "${modelValueFromOption}", 提供商: ${actualProvider}, API模型ID: ${modelNameForAPI}`);
+  console.log(`[发送] 原始选择: "${modelValueFromOption}", 推断的提供商: ${actualProvider}, API模型ID: ${modelNameForAPI}`);
 
   const providerToUse = actualProvider;
   const apiKeyStorageKey = storageKeyFor(providerToUse);
-  const apiKey = localStorage.getItem(apiKeyStorageKey) || '';
+  const apiKey = localStorage.getItem(apiKeyStorageKey) || ''; 
 
-  if (!apiKey) {
+  // 对于非代理的 provider，仍然需要 API Key 检查
+  if (providerToUse !== 'anthropic' && !apiKey) { // Anthropic 的 key 在后端代理
     const providerSelectElement = document.getElementById('api-provider');
     let providerDisplayName = providerToUse;
     for (let i = 0; i < providerSelectElement.options.length; i++) {
@@ -666,6 +667,13 @@ async function send() {
     showSettings();
     return;
   }
+  // （可选）如果希望用户知道他们需要为 Anthropic 在前端“保存”一个占位 Key（即使实际 Key 在后端）
+  if (providerToUse === 'anthropic' && !apiKey) {
+      alert(`提示：请在“设置”中为 Anthropic (Claude) 保存一个 API Key (即使只是占位符，实际 Key 由服务器代理使用)。`);
+      showSettings();
+      // return; // 可以选择是否在这里 return，或者允许继续发送给代理，由代理处理 Key 缺失
+  }
+
 
   const promptInput = document.getElementById('prompt');
   const promptText = promptInput.value.replace(/\n$/, '');
@@ -688,12 +696,12 @@ async function send() {
   const loadingDiv = appendLoading();
 
   let apiUrl;
-  let headers = { 'Content-Type': 'application/json' };
+  // headers 在 switch 外部初始化，Content-Type 是通用的
+  let headers = { 'Content-Type': 'application/json' }; 
   let bodyPayload;
   let assistantReply = '（无回复）';
   let thinkingProcess = null;
 
-  // --- 封装一个通用的消息映射函数 (除了 Gemini) ---
   const mapMessagesForStandardProviders = (messages) => {
     return messages
       .filter(m => typeof m.content === 'string' && m.content.trim() !== '')
@@ -702,7 +710,7 @@ async function send() {
         if (m.role === 'user') {
           finalRole = 'user';
         } else if (m.role === 'assistant' || m.role === 'bot' || m.role === 'model') {
-          finalRole = 'assistant'; // 标准 API 通常用 'assistant'
+          finalRole = 'assistant';
         } else if (m.role === 'system') {
           finalRole = 'system';
         } else {
@@ -712,14 +720,13 @@ async function send() {
         return { role: finalRole, content: m.content };
       });
   };
-  // --- 结束消息映射函数 ---
   
   const ANTHROPIC_API_VERSION = "2023-06-01"; // Anthropic API 版本
 
   try {
     let currentTemperature = parseFloat(localStorage.getItem('model-temperature'));
-    if (isNaN(currentTemperature) || currentTemperature < 0 || currentTemperature > 2) { // 基本范围检查
-        currentTemperature = 0.7; // 默认值
+    if (isNaN(currentTemperature) || currentTemperature < 0 || currentTemperature > 2) {
+        currentTemperature = 0.7;
     }
 
     switch (providerToUse) {
@@ -729,29 +736,25 @@ async function send() {
         apiUrl = providerToUse === 'openai' ? 'https://api.openai.com/v1/chat/completions' :
                  providerToUse === 'deepseek' ? 'https://api.deepseek.com/chat/completions' :
                  'https://api.siliconflow.cn/v1/chat/completions';
-        headers['Authorization'] = `Bearer ${apiKey}`;
+        headers['Authorization'] = `Bearer ${apiKey}`; // 这些 provider 直接使用前端的 apiKey
         bodyPayload = {
           model: modelNameForAPI,
           messages: mapMessagesForStandardProviders(conversationAtRequestTime.messages),
           temperature: currentTemperature,
-          // max_tokens: 1024, // 可选，如果API支持且你需要控制
         };
         break;
       case 'anthropic':
-        apiUrl = 'https://api.anthropic.com/v1/messages';
-        headers['x-api-key'] = apiKey;
-        headers['anthropic-version'] = ANTHROPIC_API_VERSION;
+        apiUrl = '/.netlify/functions/claude-proxy'; // 指向你的 Netlify Function 代理
+        // 对于发送给代理的请求，前端 headers 不需要包含 x-api-key 和 anthropic-version
+        // headers = { 'Content-Type': 'application/json' }; // 已在外部定义，这里不需要重新赋值
 
         const claudeMessages = [];
         let lastClaudeRole = null;
         conversationAtRequestTime.messages.forEach(msg => {
             let roleForClaude = null;
-            if (msg.role === 'user') {
-                roleForClaude = 'user';
-            } else if (msg.role === 'assistant' || msg.role === 'bot' || msg.role === 'model') {
-                roleForClaude = 'assistant';
-            }
-
+            if (msg.role === 'user') roleForClaude = 'user';
+            else if (msg.role === 'assistant' || msg.role === 'bot' || msg.role === 'model') roleForClaude = 'assistant';
+            
             if (roleForClaude) {
                 if (claudeMessages.length === 0 && roleForClaude !== 'user') {
                     console.warn("[Claude] 历史消息第一条不是 'user'，已跳过:", msg);
@@ -766,19 +769,20 @@ async function send() {
             }
         });
         if (claudeMessages.length > 0 && claudeMessages[claudeMessages.length -1].role === 'assistant') {
-            console.warn("[Claude] 准备发送的消息历史最后一条是 assistant，API 可能会报错。");
+            console.warn("[Claude] 准备发送的消息历史最后一条是 assistant，API 可能会报错（除非这是多轮工具使用的中间步骤）。");
         }
 
-        bodyPayload = {
+        bodyPayload = { // 这个 body 会发送给你的代理函数
           model: modelNameForAPI,
           messages: claudeMessages,
           max_tokens: 1024, 
-          temperature: currentTemperature
-          // "system": "Your system prompt here...", // 如果需要系统提示
+          temperature: currentTemperature,
+          // 如果你的代理函数支持传递 system prompt，可以在这里添加
+          // system: "你的系统提示..." 
         };
         break;
       case 'gemini':
-        apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelNameForAPI}:generateContent?key=${apiKey}`;
+        apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelNameForAPI}:generateContent?key=${apiKey}`; // Gemini 仍然直接调用
         let geminiTemperature = currentTemperature;
         if (geminiTemperature > 1.0) geminiTemperature = 1.0;
         if (geminiTemperature < 0.0) geminiTemperature = 0.0;
@@ -805,26 +809,29 @@ async function send() {
     }
 
     const body = JSON.stringify(bodyPayload);
-    console.log(`[发送] 请求体发往 ${providerToUse} (${apiUrl}):`, body);
+    console.log(`[发送] 请求体发往 ${providerToUse === 'anthropic' ? '代理' : providerToUse} (${apiUrl}):`, body);
 
     const response = await fetch(apiUrl, { method: 'POST', headers, body });
+    
     if (!response.ok) {
       const errorText = await response.text();
-      let detail = "";
+      let detail = errorText; 
       try {
         const errJson = JSON.parse(errorText);
-        detail = errJson.error?.message || JSON.stringify(errJson);
-      } catch (e) {
-        detail = errorText;
+        detail = errJson.error?.message || errJson.error || JSON.stringify(errJson);
+      } catch (e) { /* 如果不是JSON，就用原始文本 */ }
+      if (providerToUse === 'anthropic' && (response.status === 500 || response.status === 502 || response.status === 405 || response.status === 404 )) { // 404 也可能是代理路径错误
+          detail = `代理函数调用失败 (${response.status}) 或未找到: ${detail}`;
       }
       throw new Error(`接口返回 ${response.status}：${detail}`);
     }
-    const data = await response.json();
 
+    const data = await response.json(); 
     console.log("----------- API 响应数据 -----------");
     console.log(JSON.stringify(data, null, 2));
     console.log("------------------------------------");
 
+    // 提取回复和思考过程
     if (providerToUse === 'gemini') {
         if (data.candidates && data.candidates.length > 0 &&
             data.candidates[0].content && data.candidates[0].content.parts &&
@@ -837,11 +844,13 @@ async function send() {
             }
         }
     } else if (providerToUse === 'anthropic') {
+      // 代理函数应该原样返回 Claude API 的 JSON 响应
       if (data.content && Array.isArray(data.content) && data.content.length > 0) {
         const textBlock = data.content.find(block => block.type === 'text');
         if (textBlock && typeof textBlock.text === 'string') {
           assistantReply = textBlock.text;
         }
+        // 检查 Claude 的工具使用作为思考过程 (如果你的代理也透传了这部分)
         const toolUseBlock = data.content.find(block => block.type === 'tool_use');
         if (toolUseBlock && toolUseBlock.name) {
           thinkingProcess = `模型请求使用工具: ${toolUseBlock.name}\nID: ${toolUseBlock.id}\n输入: ${JSON.stringify(toolUseBlock.input, null, 2)}`;
@@ -850,7 +859,7 @@ async function send() {
       if (data.stop_reason && !['end_turn', 'max_tokens', 'tool_use'].includes(data.stop_reason) && !thinkingProcess && assistantReply !== '（无回复）') {
           assistantReply += ` (停止原因: ${data.stop_reason})`;
       }
-    } else { 
+    } else { // Deepseek, SiliconFlow, OpenAI 等
       if (data.choices && data.choices.length > 0 && data.choices[0].message) {
         assistantReply = data.choices[0].message.content || '（无回复）';
         if (data.choices[0].message.reasoning_content) { 

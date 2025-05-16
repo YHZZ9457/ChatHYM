@@ -1,4 +1,4 @@
-
 @echo off
-start "" "%cd%\index.html"
+echo Starting Netlify development server...
+netlify dev
 pause

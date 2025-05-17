@@ -5,7 +5,9 @@ LocalGPT v2.8
 
 也可以运行Deepseek等多种API。
 
-使用前需要在设置里面自己填入对应版本的API-Keys，然后保存一下。
+使用前需要在设置里面自己填入对应版本的API-Keys，然后保存。
+
+如果是Claude的服务的话需要先查看env.example.txt，修改api keys并保存为.env。
 
 注：本项目全部是用AI写的，除了这个README之外没有一点人工的成分
 

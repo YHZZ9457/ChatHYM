@@ -1,5 +1,5 @@
 
-LocalGPT v2.8
+LocalGPT v3.0
 
 一个可以运行OpenAI的API的小程序，有简单的界面。支持选择多种GPT模型。
 

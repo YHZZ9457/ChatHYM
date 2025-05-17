@@ -85,11 +85,10 @@ function pruneEmptyNodes(container) {
 }
 
 function appendMessage(role, text, modelForNote, reasoningText) {
-  // --- 在函数的开头，隐藏空聊天提示 ---
   const emptyChatPlaceholder = document.getElementById('empty-chat-placeholder');
   if (emptyChatPlaceholder && emptyChatPlaceholder.style.display !== 'none') {
-    // emptyChatPlaceholder.parentNode?.removeChild(emptyChatPlaceholder); // 从 DOM 移除
-    emptyChatPlaceholder.style.display = 'none'; // 或者只是隐藏
+    emptyChatPlaceholder.style.display = 'none'; 
+    console.log("[AppendMessage] 添加消息，隐藏占位符。");
   }
   // --- 结束隐藏提示 ---
 
@@ -436,6 +435,7 @@ function loadConversation(id) {
 
   if (conv.isNew) {
     conv.isNew = false;
+    // saveConversations(); // 可选：立即保存，如果需要的话
   }
 
   currentConversationId = id;
@@ -454,22 +454,23 @@ function loadConversation(id) {
   const messagesContainer = document.getElementById('messages');
   const emptyChatPlaceholder = document.getElementById('empty-chat-placeholder');
 
-  // 1. 清空 messagesContainer 中除了 placeholder 之外的所有内容
-  //    并且确保 placeholder 是 messagesContainer 的子元素（如果它还不是）
-  let placeholderInPlace = false;
-  const childrenToRemove = [];
-  for (let i = 0; i < messagesContainer.children.length; i++) {
-    const child = messagesContainer.children[i];
-    if (child === emptyChatPlaceholder) {
-      placeholderInPlace = true;
-    } else {
-      childrenToRemove.push(child);
-    }
-  }
-  childrenToRemove.forEach(child => messagesContainer.removeChild(child));
+  // 1. 清空所有旧消息 (这会移除所有动态添加的 .message-wrapper)
+  //    但不会移除在 HTML 中预先定义的 emptyChatPlaceholder (如果它是 messagesContainer 的直接子元素)
+  //    或者，如果 emptyChatPlaceholder 不是 messagesContainer 的直接子元素，
+  //    或者你希望更彻底的清空，可以先移除所有非 placeholder 的子元素。
   
-  if (!placeholderInPlace && emptyChatPlaceholder) { // 如果 placeholder 不在，加到最前面
-    messagesContainer.insertBefore(emptyChatPlaceholder, messagesContainer.firstChild);
+  // 先移除所有非 placeholder 的消息元素
+  Array.from(messagesContainer.children).forEach(child => {
+    if (child !== emptyChatPlaceholder) {
+      messagesContainer.removeChild(child);
+    }
+  });
+  // 如果 placeholder 不在 messagesContainer 中，或者你想确保它总是在正确的位置：
+  if (emptyChatPlaceholder && emptyChatPlaceholder.parentNode !== messagesContainer) {
+      messagesContainer.innerHTML = ''; // 清空一切，然后重新添加 placeholder
+      messagesContainer.appendChild(emptyChatPlaceholder);
+  } else if (!emptyChatPlaceholder) {
+      console.error("ID为 'empty-chat-placeholder' 的元素未在HTML中找到！");
   }
 
 
@@ -484,10 +485,12 @@ function loadConversation(id) {
   if (messagesToRender.length === 0) {
     if (emptyChatPlaceholder) {
       emptyChatPlaceholder.style.display = 'flex'; // 显示提示
+      console.log("[LoadConv] 对话为空，显示占位符。");
     }
   } else {
     if (emptyChatPlaceholder) {
       emptyChatPlaceholder.style.display = 'none'; // 隐藏提示
+      console.log("[LoadConv] 对话有消息，隐藏占位符。");
     }
     
     let messageIndex = 0;
@@ -609,19 +612,18 @@ function toggleArchive(id) {
   }
 }
 
-
 async function send() {
   // --- 步骤1: 捕获发起请求时的对话信息 ---
-  const conversationAtRequestTime = getCurrentConversation(); // 获取发起请求时的对话对象
+  const conversationAtRequestTime = getCurrentConversation();
   if (!conversationAtRequestTime) {
     alert("请先选择或创建一个对话。");
     return;
   }
-  const conversationIdAtRequestTime = conversationAtRequestTime.id; // 捕获当时的对话ID
-  const modelValueFromOption = conversationAtRequestTime.model;       // 捕获当时对话选择的原始模型值(含前缀)
+  const conversationIdAtRequestTime = conversationAtRequestTime.id;
+  const modelValueFromOption = conversationAtRequestTime.model; // 例如 "anthropic::claude-3-opus-20240229"
 
   let actualProvider;
-  let modelNameForAPI; // 用于发送给特定API的、不含前缀的模型名称
+  let modelNameForAPI; // 这是真正发送给API的model ID，不含前缀
 
   // --- 根据模型值的前缀推断 Provider 和提取真实模型名 ---
   const parts = String(modelValueFromOption).split('::');
@@ -636,51 +638,26 @@ async function send() {
       case 'gemini': actualProvider = 'gemini'; break;
       case 'anthropic': actualProvider = 'anthropic'; break;
       default:
-        const providerSelFallbackDefault = document.getElementById('api-provider');
-        actualProvider = providerSelFallbackDefault.value;
-        modelNameForAPI = modelValueFromOption; // 如果前缀未知，假设整个值是模型名
-        console.warn(`未知的模型前缀: "${prefix}"，将使用设置页面选择的 Provider: ${actualProvider}`);
+        console.error(`[发送] 未知的模型前缀: "${prefix}" 在模型值 "${modelValueFromOption}" 中。无法确定代理函数。`);
+        alert(`模型 "${modelValueFromOption}" 配置错误：无法识别的提供商前缀 "${prefix}"。请检查 HTML 中的 <option> value 是否正确使用了 'provider::model_id' 格式。`);
+        return; 
     }
   } else {
-    modelNameForAPI = modelValueFromOption; // 没有 "::"，则整个值作为模型名
-    const providerSelFallbackElse = document.getElementById('api-provider');
-    actualProvider = providerSelFallbackElse.value; // 依赖设置页面的 Provider
-    console.warn(`模型值 "${modelValueFromOption}" 不包含提供商前缀，将使用设置页面选择的 Provider: ${actualProvider}`);
+    console.error(`[发送] 模型值 "${modelValueFromOption}" 格式不正确，缺少提供商前缀 (例如 'openai::gpt-4o')。`);
+    alert(`模型 "${modelValueFromOption}" 配置错误：缺少提供商前缀。请检查 HTML 中的 <option> value。`);
+    return; 
   }
   console.log(`[发送] 原始选择: "${modelValueFromOption}", 推断的提供商: ${actualProvider}, API模型ID: ${modelNameForAPI}`);
 
   const providerToUse = actualProvider;
-  const apiKeyStorageKey = storageKeyFor(providerToUse);
-  const apiKey = localStorage.getItem(apiKeyStorageKey) || ''; 
-
-  // 对于非代理的 provider，仍然需要 API Key 检查
-  if (providerToUse !== 'anthropic' && !apiKey) { // Anthropic 的 key 在后端代理
-    const providerSelectElement = document.getElementById('api-provider');
-    let providerDisplayName = providerToUse;
-    for (let i = 0; i < providerSelectElement.options.length; i++) {
-      if (providerSelectElement.options[i].value === providerToUse) {
-        providerDisplayName = providerSelectElement.options[i].text;
-        break;
-      }
-    }
-    alert(`请先在“设置”中为 ${providerDisplayName} 保存 API Key`);
-    showSettings();
-    return;
-  }
-  // （可选）如果希望用户知道他们需要为 Anthropic 在前端“保存”一个占位 Key（即使实际 Key 在后端）
-  if (providerToUse === 'anthropic' && !apiKey) {
-      alert(`提示：请在“设置”中为 Anthropic (Claude) 保存一个 API Key (即使只是占位符，实际 Key 由服务器代理使用)。`);
-      showSettings();
-      // return; // 可以选择是否在这里 return，或者允许继续发送给代理，由代理处理 Key 缺失
-  }
-
 
   const promptInput = document.getElementById('prompt');
   const promptText = promptInput.value.replace(/\n$/, '');
   if (!promptText.trim()) return;
 
+  // 用户消息的UI更新和数据保存
   if (currentConversationId === conversationIdAtRequestTime) {
-      appendMessage('user', promptText, null, null);
+      appendMessage('user', promptText, null, null); // 用户消息不显示模型注释或思考过程
   }
   const userRoleForStorage = 'user';
   conversationAtRequestTime.messages.push({ role: userRoleForStorage, content: promptText, model: modelValueFromOption });
@@ -695,211 +672,339 @@ async function send() {
 
   const loadingDiv = appendLoading();
 
-  let apiUrl;
-  // headers 在 switch 外部初始化，Content-Type 是通用的
-  let headers = { 'Content-Type': 'application/json' }; 
+  let apiUrl = `/.netlify/functions/${providerToUse}-proxy`; // 统一的代理 URL 格式
+  const headers = { 'Content-Type': 'application/json' }; // 发送给所有代理的统一 Header
   let bodyPayload;
-  let assistantReply = '（无回复）';
-  let thinkingProcess = null;
+  let finalAssistantReply = '（无回复）'; // 用于最终显示和保存的回复或错误
+  let finalThinkingProcess = null;   // 用于最终显示和保存的思考过程
+  let requestWasSuccessful = false;   // 标记API调用或流式处理是否最终成功
+  let responseContentType = null;     // 存储实际的响应 Content-Type (主要用于区分流和非流)
+  let isStreamingResponse = false;    // 标记响应是否是预期的流式类型
 
-  const mapMessagesForStandardProviders = (messages) => {
+  // --- 消息映射函数 ---
+  const mapMessagesForStandardOrClaude = (messagesHistory, currentProviderInternal) => {
+    const cleanedMessages = messagesHistory
+      .map(m => {
+        let role = m.role;
+        let content = String(m.content || '').trim();
+        if (role === 'bot' || (role === 'model' && currentProviderInternal !== 'gemini')) {
+          role = 'assistant';
+        } else if (role !== 'user' && role !== 'assistant' && role !== 'system') {
+          console.warn(`[消息映射-${currentProviderInternal}] 无效角色: '${m.role}' -> 'user'`);
+          role = 'user';
+        }
+        return { role, content };
+      })
+      .filter(m => m.content !== '');
+
+    if (cleanedMessages.length === 0) return [];
+
+    const processedMessages = [];
+    let lastRoleAppended = null;
+    cleanedMessages.forEach(msg => {
+      if (msg.role === 'system') {
+        if (currentProviderInternal !== 'anthropic') processedMessages.push(msg);
+        lastRoleAppended = msg.role; // system 不参与 user/assistant 交替的严格检查
+        return;
+      }
+      if (msg.role === lastRoleAppended && (msg.role === 'user' || msg.role === 'assistant') && processedMessages.length > 0) {
+        processedMessages[processedMessages.length - 1].content += "\n" + msg.content;
+      } else if ( (msg.role === 'assistant' && lastRoleAppended !== 'user' && processedMessages.length > 0 && processedMessages[processedMessages.length-1].role !== 'system') || // assistant 前必须是 user 或 system
+                  (msg.role === 'user' && lastRoleAppended === 'user' && processedMessages.length > 0) // 不允许连续 user (除非是合并)
+      ) {
+        console.warn(`[消息映射-${currentProviderInternal}] 跳过不符合交替规则的消息: ${msg.role} after ${lastRoleAppended}`);
+      }
+      else {
+        processedMessages.push(msg);
+        if (msg.role === 'user' || msg.role === 'assistant') lastRoleAppended = msg.role;
+      }
+    });
+
+    if (currentProviderInternal === 'anthropic') {
+      if (processedMessages.length > 0 && processedMessages[0].role !== 'user') {
+        while(processedMessages.length > 0 && processedMessages[0].role !== 'user') processedMessages.shift();
+        if (processedMessages.length > 0 && processedMessages[0].role !== 'user') return [];
+      }
+    }
+    // 确保消息列表不为空（至少包含用户的当前输入，如果它有效）
+    if (processedMessages.length === 0 && messagesHistory.length > 0) {
+      const latestUserMessageFromHistory = messagesHistory.filter(m => m.role === 'user').pop();
+      if (latestUserMessageFromHistory && String(latestUserMessageFromHistory.content || '').trim()) {
+          return [{ role: 'user', content: String(latestUserMessageFromHistory.content).trim() }];
+      }
+    }
+    return processedMessages;
+  };
+
+  const mapMessagesForGemini = (messages) => {
     return messages
       .filter(m => typeof m.content === 'string' && m.content.trim() !== '')
       .map(m => {
-        let finalRole;
-        if (m.role === 'user') {
-          finalRole = 'user';
-        } else if (m.role === 'assistant' || m.role === 'bot' || m.role === 'model') {
-          finalRole = 'assistant';
-        } else if (m.role === 'system') {
-          finalRole = 'system';
-        } else {
-          console.warn(`[发送消息映射] 发现无效角色: '${m.role}'，内容: "${String(m.content || '').substring(0,30)}..."。将默认为 'user'。`);
-          finalRole = 'user';
-        }
-        return { role: finalRole, content: m.content };
+        let roleForGemini;
+        if (m.role === 'user') roleForGemini = 'user';
+        else if (m.role === 'assistant' || m.role === 'bot' || m.role === 'model') roleForGemini = 'model';
+        else { console.warn(`[Gemini映射] 无效角色: '${m.role}' -> 'user'`); roleForGemini = 'user';}
+        return { role: roleForGemini, parts: [{ text: m.content }] };
       });
   };
+  // --- 结束消息映射函数 ---
   
-  const ANTHROPIC_API_VERSION = "2023-06-01"; // Anthropic API 版本
-
   try {
     let currentTemperature = parseFloat(localStorage.getItem('model-temperature'));
     if (isNaN(currentTemperature) || currentTemperature < 0 || currentTemperature > 2) {
         currentTemperature = 0.7;
     }
 
-    switch (providerToUse) {
-      case 'openai':
-      case 'deepseek':
-      case 'siliconflow':
-        apiUrl = providerToUse === 'openai' ? 'https://api.openai.com/v1/chat/completions' :
-                 providerToUse === 'deepseek' ? 'https://api.deepseek.com/chat/completions' :
-                 'https://api.siliconflow.cn/v1/chat/completions';
-        headers['Authorization'] = `Bearer ${apiKey}`; // 这些 provider 直接使用前端的 apiKey
-        bodyPayload = {
-          model: modelNameForAPI,
-          messages: mapMessagesForStandardProviders(conversationAtRequestTime.messages),
-          temperature: currentTemperature,
-        };
-        break;
-      case 'anthropic':
-        apiUrl = '/.netlify/functions/proxy'; // 指向你的 Netlify Function 代理
-        // 对于发送给代理的请求，前端 headers 不需要包含 x-api-key 和 anthropic-version
-        // headers = { 'Content-Type': 'application/json' }; // 已在外部定义，这里不需要重新赋值
+    const shouldUseStreaming = ['openai', 'anthropic', 'deepseek', 'siliconflow'].includes(providerToUse);
 
-        const claudeMessages = [];
-        let lastClaudeRole = null;
-        conversationAtRequestTime.messages.forEach(msg => {
-            let roleForClaude = null;
-            if (msg.role === 'user') roleForClaude = 'user';
-            else if (msg.role === 'assistant' || msg.role === 'bot' || msg.role === 'model') roleForClaude = 'assistant';
-            
-            if (roleForClaude) {
-                if (claudeMessages.length === 0 && roleForClaude !== 'user') {
-                    console.warn("[Claude] 历史消息第一条不是 'user'，已跳过:", msg);
-                    return; 
-                }
-                if (roleForClaude === lastClaudeRole && claudeMessages.length > 0) {
-                    claudeMessages[claudeMessages.length - 1].content += "\n" + msg.content;
-                } else {
-                    claudeMessages.push({ role: roleForClaude, content: msg.content });
-                    lastClaudeRole = roleForClaude;
-                }
-            }
-        });
-        if (claudeMessages.length > 0 && claudeMessages[claudeMessages.length -1].role === 'assistant') {
-            console.warn("[Claude] 准备发送的消息历史最后一条是 assistant，API 可能会报错（除非这是多轮工具使用的中间步骤）。");
-        }
+       bodyPayload = {
+      model: modelNameForAPI,
+      temperature: currentTemperature,
+      // stream 参数：如果不是Gemini且shouldUseStreaming为true，则设为true，否则为false
+      stream: (providerToUse !== 'gemini' && shouldUseStreaming), 
+    };
 
-        bodyPayload = { // 这个 body 会发送给你的代理函数
-          model: modelNameForAPI,
-          messages: claudeMessages,
-          max_tokens: 1024, 
-          temperature: currentTemperature,
-          // 如果你的代理函数支持传递 system prompt，可以在这里添加
-          // system: "你的系统提示..." 
-        };
-        break;
-      case 'gemini':
-        apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelNameForAPI}:generateContent?key=${apiKey}`; // Gemini 仍然直接调用
-        let geminiTemperature = currentTemperature;
-        if (geminiTemperature > 1.0) geminiTemperature = 1.0;
-        if (geminiTemperature < 0.0) geminiTemperature = 0.0;
-        bodyPayload = {
-          contents: conversationAtRequestTime.messages
-            .filter(m => typeof m.content === 'string' && m.content.trim() !== '')
-            .map(m => {
-              let roleForGemini;
-              if (m.role === 'user') {
-                roleForGemini = 'user';
-              } else if (m.role === 'assistant' || m.role === 'bot' || m.role === 'model') {
-                roleForGemini = 'model';
-              } else {
-                console.warn(`[Gemini映射] 发现无效角色: '${m.role}'，默认为 'user'`);
-                roleForGemini = 'user';
-              }
-              return { role: roleForGemini, parts: [{ text: m.content }] };
-            }),
-          generationConfig: { temperature: geminiTemperature }
-        };
-        break;
-      default:
-        throw new Error('未知的或无法推断的 API Provider: ' + providerToUse);
+     if (providerToUse === 'gemini') {
+      let geminiTemperature = currentTemperature;
+      // ... (Gemini temperature 范围限制) ...
+      
+      bodyPayload.contents = mapMessagesForGemini(conversationAtRequestTime.messages);
+      bodyPayload.generationConfig = { temperature: geminiTemperature };
+      // 明确删除或不设置 stream 字段给 Gemini 代理，或者代理内部会忽略它
+      delete bodyPayload.stream; // 或者在初始化 bodyPayload 时就基于 provider 条件设置
+      console.log("[发送] Gemini 请求将作为非流式处理。");
+    } else {
+      bodyPayload.messages = mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, providerToUse);
+      if (providerToUse === 'anthropic') { bodyPayload.max_tokens = 1024; }
+    }
+
+    // 再次检查，如果最终要发送的 messages 或 contents (对于Gemini) 为空，则不发送
+    if ((providerToUse === 'gemini' && (!bodyPayload.contents || bodyPayload.contents.length === 0)) ||
+        (providerToUse !== 'gemini' && (!bodyPayload.messages || bodyPayload.messages.length === 0))) {
+        if (loadingDiv) loadingDiv.remove();
+        alert("没有有效的历史消息或当前输入来构建请求。");
+        return; // 提前退出
     }
 
     const body = JSON.stringify(bodyPayload);
-    console.log(`[发送] 请求体发往 ${providerToUse === 'anthropic' ? '代理' : providerToUse} (${apiUrl}):`, body);
+    console.log(`[发送] 请求体发往代理 ${apiUrl}:`, body);
 
     const response = await fetch(apiUrl, { method: 'POST', headers, body });
-    
+    responseContentType = response.headers.get('content-type'); 
+    isStreamingResponse = shouldUseStreaming && response.body && responseContentType?.includes('text/event-stream');
+
     if (!response.ok) {
       const errorText = await response.text();
       let detail = errorText; 
       try {
         const errJson = JSON.parse(errorText);
         detail = errJson.error?.message || errJson.error || JSON.stringify(errJson);
-      } catch (e) { /* 如果不是JSON，就用原始文本 */ }
-      if (providerToUse === 'anthropic' && (response.status === 500 || response.status === 502 || response.status === 405 || response.status === 404 )) { // 404 也可能是代理路径错误
-          detail = `代理函数调用失败 (${response.status}) 或未找到: ${detail}`;
+      } catch (e) { /* */ }
+      let rawError = `接口返回 ${response.status}：${detail}`;
+      if (response.status >= 400 && apiUrl.includes('/.netlify/functions/')) { 
+          rawError = `代理函数 (${decodeURIComponent(apiUrl.split('/').pop())}) 调用失败 (${response.status})：${detail}。`;
       }
-      throw new Error(`接口返回 ${response.status}：${detail}`);
+      throw new Error(rawError);
     }
 
-    const data = await response.json(); 
-    console.log("----------- API 响应数据 -----------");
-    console.log(JSON.stringify(data, null, 2));
-    console.log("------------------------------------");
+    // --- 响应处理 ---
+     let isActuallyStreaming = shouldUseStreaming && providerToUse !== 'gemini' && response.body && responseContentType?.includes('text/event-stream');
 
-    // 提取回复和思考过程
-    if (providerToUse === 'gemini') {
-        if (data.candidates && data.candidates.length > 0 &&
-            data.candidates[0].content && data.candidates[0].content.parts &&
-            data.candidates[0].content.parts.length > 0) {
-            assistantReply = data.candidates[0].content.parts[0].text;
-        } else if (data.promptFeedback && data.promptFeedback.blockReason) {
-            assistantReply = `请求被阻止：${data.promptFeedback.blockReason}`;
-            if (data.promptFeedback.safetyRatings) {
-            assistantReply += ` (Safety Ratings: ${JSON.stringify(data.promptFeedback.safetyRatings)})`;
+    if (isActuallyStreaming) {
+      console.log(`[接收流] 开始处理来自 ${providerToUse} 的流式响应...`);
+
+      let accumulatedAssistantReply = "";
+      let accumulatedThinkingProcess = "";
+      const assistantRoleForDisplay = (providerToUse === 'gemini') ? 'model' : 'assistant';
+      
+      let tempMsgElementWrapper = null;
+      let messageDiv = null;
+      let assistantTextElement = null;
+      let reasoningBlockDiv = null;
+      let reasoningContentElement = null;
+
+      if (currentConversationId === conversationIdAtRequestTime) {
+        tempMsgElementWrapper = appendMessage(assistantRoleForDisplay, "", modelValueFromOption, null); 
+        if (tempMsgElementWrapper) {
+            messageDiv = tempMsgElementWrapper.querySelector('.message.assistant');
+            assistantTextElement = messageDiv ? messageDiv.querySelector('.text') : null;
+        }
+      }
+
+      if (currentConversationId === conversationIdAtRequestTime && (!messageDiv || !assistantTextElement)) {
+          console.error("无法创建或找到用于流式输出的助手消息文本元素！");
+          throw new Error("流式输出错误：无法更新UI。");
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) { console.log("[接收流] 流结束。"); break; }
+            buffer += decoder.decode(value, { stream: true });
+            let lines = buffer.split('\n\n');
+            buffer = lines.pop(); 
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                const jsonData = line.substring(6);
+                if (jsonData.trim() === '[DONE]') continue;
+                try {
+                  const chunk = JSON.parse(jsonData);
+                  let chunkText = '';
+                  let chunkReasoning = '';
+
+                  if (providerToUse === 'openai' || providerToUse === 'siliconflow') {
+                    chunkText = chunk.choices?.[0]?.delta?.content || '';
+                  } else if (providerToUse === 'deepseek') {
+                    if (chunk.choices?.[0]?.delta?.reasoning_content) chunkReasoning = chunk.choices[0].delta.reasoning_content;
+                    if (chunk.choices?.[0]?.delta?.content) chunkText = chunk.choices[0].delta.content;
+                  } else if (providerToUse === 'anthropic') {
+                    if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') chunkText = chunk.delta.text || '';
+                    else if (chunk.type === 'message_delta' && chunk.delta?.stop_reason) console.log("[接收流][Claude] Stop Reason:", chunk.delta.stop_reason);
+                  } else if (providerToUse === 'gemini') {
+                    // 假设 gemini-proxy.mjs 将 Gemini 的流转换为 SSE data: {"text": "..."} 或类似
+                    // 或者直接是 Gemini 的流式块 { candidates: [{ content: { parts: [{text: "..."}]}}]}
+                    chunkText = chunk.candidates?.[0]?.content?.parts?.[0]?.text || chunk.text || chunk.delta?.content || ''; 
+                  }
+
+                  if (currentConversationId === conversationIdAtRequestTime) { // 只在当前对话更新UI
+                    if (chunkReasoning && messageDiv) {
+                      accumulatedThinkingProcess += chunkReasoning;
+                      if (!reasoningBlockDiv) {
+                          reasoningBlockDiv = document.createElement('div');
+                          reasoningBlockDiv.className = 'reasoning-block';
+                          const label = document.createElement('div');
+                          label.className = 'reasoning-label';
+                          label.textContent = '思考过程:';
+                          reasoningBlockDiv.appendChild(label);
+                          reasoningContentElement = document.createElement('pre');
+                          reasoningContentElement.className = 'reasoning-content';
+                          reasoningBlockDiv.appendChild(reasoningContentElement);
+                          messageDiv.insertBefore(reasoningBlockDiv, assistantTextElement || messageDiv.firstChild);
+                      }
+                      if (reasoningContentElement) reasoningContentElement.textContent = accumulatedThinkingProcess;
+                    }
+                    if (chunkText && assistantTextElement) {
+                      accumulatedAssistantReply += chunkText;
+                      assistantTextElement.innerHTML = marked.parse(accumulatedAssistantReply);
+                    }
+                    if (chunkText || chunkReasoning) document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+                  } else { 
+                      if (chunkReasoning) accumulatedThinkingProcess += chunkReasoning;
+                      if (chunkText) accumulatedAssistantReply += chunkText;
+                  }
+                } catch (e) { console.warn('[接收流] 解析数据块失败:', jsonData, e); }
+              }
             }
+          }
+          finalAssistantReply = accumulatedAssistantReply;
+          finalThinkingProcess = accumulatedThinkingProcess || null;
+          requestWasSuccessful = true;
+      } catch (streamError) {
+          console.error("[接收流] 处理流数据时发生错误:", streamError);
+          finalAssistantReply = accumulatedAssistantReply + `\n[流处理中断：${streamError.message}]`;
+          finalThinkingProcess = accumulatedThinkingProcess || null;
+          requestWasSuccessful = false; 
+          throw streamError; // 重新抛出，让外层catch处理
+      }
+    } else { // 非流式处理路径 (Gemini 会进入这里)
+      const data = await response.json(); 
+      console.log(`----------- API 响应数据 (${providerToUse} - 非流式) -----------`, data);
+      
+      if (providerToUse === 'gemini') {
+        if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
+          finalAssistantReply = data.candidates[0].content.parts[0].text;
+        } else if (data.promptFeedback?.blockReason) {
+          finalAssistantReply = `请求被阻止：${data.promptFeedback.blockReason}`;
+          if (data.promptFeedback.safetyRatings) finalAssistantReply += ` (Safety Ratings: ${JSON.stringify(data.promptFeedback.safetyRatings)})`;
         }
-    } else if (providerToUse === 'anthropic') {
-      // 代理函数应该原样返回 Claude API 的 JSON 响应
-      if (data.content && Array.isArray(data.content) && data.content.length > 0) {
-        const textBlock = data.content.find(block => block.type === 'text');
-        if (textBlock && typeof textBlock.text === 'string') {
-          assistantReply = textBlock.text;
-        }
-        // 检查 Claude 的工具使用作为思考过程 (如果你的代理也透传了这部分)
-        const toolUseBlock = data.content.find(block => block.type === 'tool_use');
-        if (toolUseBlock && toolUseBlock.name) {
-          thinkingProcess = `模型请求使用工具: ${toolUseBlock.name}\nID: ${toolUseBlock.id}\n输入: ${JSON.stringify(toolUseBlock.input, null, 2)}`;
+        finalThinkingProcess = null; 
+      } else if (providerToUse === 'anthropic' && !isActuallyStreaming) { // Anthropic 非流式 (如果代理返回了非流式)
+        if (data.content?.[0]?.text) finalAssistantReply = data.content[0].text;
+        // ... (Anthropic 非流式 thinkingProcess 提取) ...
+      } else if (!isActuallyStreaming) { // OpenAI, Deepseek, SiliconFlow 非流式
+        if (data.choices?.[0]?.message) {
+            finalAssistantReply = data.choices[0].message.content || '（无回复）';
+            if (data.choices[0].message.reasoning_content) finalThinkingProcess = data.choices[0].message.reasoning_content;
         }
       }
-      if (data.stop_reason && !['end_turn', 'max_tokens', 'tool_use'].includes(data.stop_reason) && !thinkingProcess && assistantReply !== '（无回复）') {
-          assistantReply += ` (停止原因: ${data.stop_reason})`;
-      }
-    } else { // Deepseek, SiliconFlow, OpenAI 等
-      if (data.choices && data.choices.length > 0 && data.choices[0].message) {
-        assistantReply = data.choices[0].message.content || '（无回复）';
-        if (data.choices[0].message.reasoning_content) { 
-          thinkingProcess = data.choices[0].message.reasoning_content;
-        }
-      }
+      requestWasSuccessful = true;
     }
+
   } catch (error) {
-    console.error(`[发送错误] 对话ID ${conversationIdAtRequestTime}:`, error);
-    assistantReply = `错误：${error.message}`;
-    thinkingProcess = null;
+    console.error(`[发送错误 Catch] 对话ID ${conversationIdAtRequestTime}:`, error);
+    finalAssistantReply = error.message.startsWith('错误：') ? error.message : `错误：${error.message}`;
+    finalThinkingProcess = null;
+    requestWasSuccessful = false;
   } finally {
-    if (loadingDiv && document.getElementById('messages').contains(loadingDiv)) {
+    if (loadingDiv && loadingDiv.parentNode === document.getElementById('messages')) { // 更安全的移除检查
         loadingDiv.remove();
     }
 
     const assistantRoleToDisplay = (providerToUse === 'gemini') ? 'model' : 'assistant';
 
-    if (currentConversationId === conversationIdAtRequestTime) {
-      appendMessage(assistantRoleToDisplay, assistantReply, modelValueFromOption, thinkingProcess);
-    } else {
-      console.log(`[发送完成] 用户已切换对话。回复将保存到对话 ${conversationIdAtRequestTime}，但不会显示。`);
-      const originalConvLi = document.querySelector(`.conversation-item[data-id="${conversationIdAtRequestTime}"]`);
-      if (originalConvLi && !assistantReply.startsWith('错误：')) {
-         // originalConvLi.classList.add('has-unread-response'); 
+    // 如果不是成功的流式响应，或者发生了错误，则调用 appendMessage 来显示最终结果或错误
+    if (!requestWasSuccessful || !isStreamingResponse) {
+      if (currentConversationId === conversationIdAtRequestTime) {
+        console.log(`[Finally] 调用 appendMessage (原因: ${!requestWasSuccessful ? '错误' : '非流式或流式类型不符'})`);
+        // 清理之前可能创建的空流式气泡 (如果存在且是最后的孩子)
+        const messagesNode = document.getElementById('messages');
+        const lastMessageWrapper = messagesNode.lastElementChild;
+        if (requestWasSuccessful && isStreamingResponse && lastMessageWrapper && lastMessageWrapper.querySelector('.message .text')?.innerHTML === "") {
+            console.log("[Finally] 移除非流式错误路径下，之前流式append的空消息体。");
+             // 这个逻辑可能需要调整，目标是避免重复的空消息或不完整的流消息
+        }
+        appendMessage(assistantRoleToDisplay, finalAssistantReply, modelValueFromOption, finalThinkingProcess);
       }
+    } else if (requestWasSuccessful && isStreamingResponse) {
+      // 成功的流式输出，主要内容已更新。这里补充模型注释。
+      console.log("[Finally] 流式处理成功。补充模型注释。");
+      if (currentConversationId === conversationIdAtRequestTime) {
+        const messagesContainer = document.getElementById('messages');
+        const allAssistantWrappers = messagesContainer.querySelectorAll('.assistant-message-wrapper');
+        const existingMsgWrapper = allAssistantWrappers.length > 0 ? allAssistantWrappers[allAssistantWrappers.length - 1] : null;
+        
+        if (existingMsgWrapper) {
+            const msgDiv = existingMsgWrapper.querySelector('.message.assistant');
+            if (msgDiv && modelValueFromOption && !msgDiv.querySelector('.model-note')) {
+                const note = document.createElement('div');
+                note.className = 'model-note';
+                let displayModelName = modelValueFromOption;
+                const modelSelect = document.getElementById('model');
+                if(modelSelect) {
+                    const opt = modelSelect.querySelector(`option[value="${modelValueFromOption}"]`);
+                    if(opt) displayModelName = opt.textContent;
+                    else { // 尝试去掉前缀
+                        const parts = String(modelValueFromOption).split('::');
+                        if (parts.length === 2) displayModelName = parts[1];
+                    }
+                }
+                note.textContent = `模型：${displayModelName}`;
+                msgDiv.appendChild(note);
+            }
+        }
+      }
+    }
+    
+    if (currentConversationId !== conversationIdAtRequestTime && (finalAssistantReply !== '（无回复）' || finalThinkingProcess)) {
+      console.log(`[发送完成] 用户已切换。回复/错误将保存到对话 ${conversationIdAtRequestTime}。`);
     }
 
     const targetConversationForStorage = conversations.find(c => c.id === conversationIdAtRequestTime);
     if (targetConversationForStorage) {
         const assistantRoleForStorage = 'assistant';
-        if (assistantReply !== '（无回复）' || thinkingProcess) { 
+        if (finalAssistantReply !== '（无回复）' || finalThinkingProcess || finalAssistantReply.startsWith('错误：')) { 
             targetConversationForStorage.messages.push({
                 role: assistantRoleForStorage,
-                content: assistantReply,
+                content: finalAssistantReply,
                 model: modelValueFromOption,
-                reasoning_content: thinkingProcess
+                reasoning_content: finalThinkingProcess
             });
             saveConversations();
-            if (currentConversationId !== conversationIdAtRequestTime && !assistantReply.startsWith('错误：')) {
+            if (currentConversationId !== conversationIdAtRequestTime && requestWasSuccessful && !finalAssistantReply.startsWith('错误：') ) {
                 renderConversationList();
             }
         }
@@ -909,8 +1014,6 @@ async function send() {
   }
 }
 window.send = send;
-
-// --- 设置与 UI 操作 ---
 
 function showSettings() {
   document.getElementById('settings-area').style.display = 'flex';
@@ -1042,119 +1145,219 @@ function handleTitleClick() {
 }
 
 
+
 // --- DOMContentLoaded: 主要设置 ---
 document.addEventListener('DOMContentLoaded', () => {
-  const storedTheme = localStorage.getItem('theme') || 'dark';
+  // 1. 主题初始化
+  const storedTheme = localStorage.getItem('theme') || 'dark'; // 默认暗色主题
   applyTheme(storedTheme);
-  document.getElementById('toggle-theme-btn')?.addEventListener('click', toggleTheme);
+  const toggleThemeBtn = document.getElementById('toggle-theme-btn');
+  if (toggleThemeBtn) {
+    toggleThemeBtn.addEventListener('click', toggleTheme);
+  } else {
+    console.warn("切换主题按钮 'toggle-theme-btn' 未找到。");
+  }
 
+  // 2. UI 缩放初始化
   const uiScaleOptions = document.getElementById('ui-scale-options');
   if (uiScaleOptions) {
-    const savedScale = parseFloat(localStorage.getItem('ui-scale')) || 1.0;
-    applyUiScale(savedScale, uiScaleOptions);
+    const savedScale = parseFloat(localStorage.getItem('ui-scale')) || 1.0; // 默认缩放 1.0
+    applyUiScale(savedScale, uiScaleOptions); // 应用保存的或默认的缩放
     uiScaleOptions.addEventListener('click', e => {
       const btn = e.target.closest('button[data-scale]');
       if (btn) {
         applyUiScale(parseFloat(btn.dataset.scale), uiScaleOptions);
       }
     });
+  } else {
+    console.warn("UI 缩放选项容器 'ui-scale-options' 未找到。");
   }
 
+  // --- 3. API Key 管理 (已移除，因为Key由后端代理管理) ---
+  // 前端不再需要管理和显示各个 Provider 的 API Key 输入。
+  // 如果 HTML 中还保留了 api-provider, api-key-input, save-api-btn 等元素，
+  // 它们的功能将不再由这里的 JavaScript 控制。
+  // 你可以考虑从 HTML 中也移除它们，或者保留它们仅作显示（如果需要的话）。
+  console.info("前端 API Key 管理逻辑已移除。API Keys 应通过后端代理和环境变量进行管理。");
+  // 如果 HTML 中还有这些元素，可以确保它们不会引起错误
   const providerSelect = document.getElementById('api-provider');
-  const apiKeyInput = document.getElementById('api-key-input');
-  const saveApiKeyBtn = document.getElementById('save-api-btn');
+  if(providerSelect){
+      // 可以选择禁用它或只是不再为其绑定功能性事件
+      // providerSelect.disabled = true; // 例如
+  }
 
-  if (providerSelect && apiKeyInput && saveApiKeyBtn) {
-    const loadAndDisplayApiKey = () => {
-      const selectedProvider = providerSelect.value;
-      const sk = storageKeyFor(selectedProvider);
-      const storedKey = localStorage.getItem(sk) || '';
-      console.log(`[API Key Load] Provider: ${selectedProvider}, StorageKey: ${sk}, Key from localStorage: '${storedKey}'`);
-      apiKeyInput.value = storedKey;
-      apiKeyInput.placeholder = `输入 ${providerSelect.options[providerSelect.selectedIndex].text} API Key`;
+
+  // --- 4. Temperature 设置初始化和事件处理 ---
+  const temperatureSlider = document.getElementById('temperature-slider');
+  const temperatureValueDisplay = document.getElementById('temperature-value');
+  const defaultTemperature = 0.7; 
+
+  if (temperatureSlider && temperatureValueDisplay) {
+    let currentTemp = parseFloat(localStorage.getItem('model-temperature'));
+    if (isNaN(currentTemp) || currentTemp < 0 || currentTemp > 2) { 
+      currentTemp = defaultTemperature;
+    }
+    temperatureSlider.value = currentTemp;
+    temperatureValueDisplay.textContent = currentTemp.toFixed(1);
+
+    temperatureSlider.addEventListener('input', () => {
+      const newTemp = parseFloat(temperatureSlider.value);
+      temperatureValueDisplay.textContent = newTemp.toFixed(1);
+      localStorage.setItem('model-temperature', newTemp.toString());
+      console.log(`[Temperature] 设置已更新为: ${newTemp}`);
+    });
+  } else {
+    console.warn("Temperature 控制元素 ('temperature-slider' 或 'temperature-value') 未找到。");
+  }
+
+  // --- 5. Textarea 自动调整高度 ---
+  const promptTextarea = document.getElementById('prompt');
+  if (promptTextarea) {
+    const initialMinHeight = parseInt(window.getComputedStyle(promptTextarea).minHeight, 10) || 42; // 从CSS获取或默认42
+    const maxHeight = parseInt(window.getComputedStyle(promptTextarea).maxHeight, 10) || 200;
+    
+    // 设置一个初始高度，基于 min-height
+    promptTextarea.style.height = `${initialMinHeight}px`;
+    promptTextarea.style.overflowY = 'hidden'; // 初始隐藏滚动条
+
+    const autoResizeTextarea = () => {
+      promptTextarea.style.height = `${initialMinHeight}px`; // 先收缩以获取准确的 scrollHeight
+      let scrollHeight = promptTextarea.scrollHeight;
+      let newHeight = scrollHeight;
+
+      if (newHeight < initialMinHeight) {
+        newHeight = initialMinHeight;
+      }
+
+      if (newHeight > maxHeight) {
+        newHeight = maxHeight;
+        promptTextarea.style.overflowY = 'auto';
+      } else {
+        promptTextarea.style.overflowY = 'hidden';
+      }
+      promptTextarea.style.height = `${newHeight}px`;
     };
 
-    providerSelect.addEventListener('change', loadAndDisplayApiKey);
-
-    saveApiKeyBtn.addEventListener('click', () => {
-      const selectedProvider = providerSelect.value;
-      const sk = storageKeyFor(selectedProvider);
-      const keyValue = apiKeyInput.value.trim();
-
-      if (!keyValue) {
-        alert('请输入有效的 API Key。');
-        return;
-      }
-      localStorage.setItem(sk, keyValue);
-      console.log(`[API Key Save] Provider: ${selectedProvider}, StorageKey: ${sk}, Saved Key: '${keyValue}'`);
-      alert(`${providerSelect.options[providerSelect.selectedIndex].text} API Key 已保存！`);
+    promptTextarea.addEventListener('input', autoResizeTextarea);
+    promptTextarea.addEventListener('paste', () => { 
+        // 使用 setTimeout 确保粘贴操作完成后再调整大小
+        setTimeout(autoResizeTextarea, 0); 
     });
-
-    console.log("[API Key Load] Dispatching initial load for api-provider");
-    loadAndDisplayApiKey();
-
+    // autoResizeTextarea(); // 页面加载时调用一次，如果 textarea 可能有默认值
   } else {
-    console.error("API Key management elements not found in the DOM.");
+    console.warn("输入框 'prompt' 未找到。");
   }
 
-  loadConversations();
-  renderConversationList();
+  // --- 6. 对话和聊天区域初始化 ---
+  loadConversations();    // 加载历史对话
+  renderConversationList(); // 渲染对话列表 (renderConversationList 内部应调用 enableConversationDrag)
   
-  if (conversations.filter(c=>!c.archived).length > 0) {
-    loadConversation(conversations.filter(c=>!c.archived)[0].id);
-  } else if (conversations.length > 0) {
+  // 加载第一个对话或创建新对话
+  if (conversations.filter(c => !c.archived).length > 0) {
+    loadConversation(conversations.filter(c => !c.archived)[0].id);
+  } else if (conversations.length > 0) { // 只有归档的对话
     loadConversation(conversations[0].id);
-  }
-  else {
+  } else { // 没有任何对话
     createNewConversation();
   }
-  enableInlineTitleEdit();
+  enableInlineTitleEdit(); // 为初始加载的对话标题启用编辑
 
+  // --- 7. 主要按钮和控件的事件监听器 ---
+  const sendBtn = document.getElementById('send-btn');
+  if (sendBtn) {
+    sendBtn.addEventListener('click', e => {
+      e.preventDefault();
+      send();
+    });
+  } else {
+    console.warn("发送按钮 'send-btn' 未找到。");
+  }
 
-  document.getElementById('send-btn')?.addEventListener('click', e => {
-    e.preventDefault();
-    send();
-  });
-
-  const promptInput = document.getElementById('prompt');
-  if (promptInput) {
-    promptInput.addEventListener('keydown', e => {
+  // promptInput 的 keydown 监听器在上面 textarea 初始化时已处理 (如果 promptTextarea 存在)
+  // 如果上面没有找到 promptTextarea，这里再尝试绑定一次 (虽然通常应该在同一个地方)
+  if (promptTextarea && !promptTextarea.dataset.keydownBound) { // 防止重复绑定
+    promptTextarea.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         send();
       }
     });
+    promptTextarea.dataset.keydownBound = 'true';
   }
 
-  document.getElementById('new-conv-btn')?.addEventListener('click', createNewConversation);
 
-  document.getElementById('archive-current-btn')?.addEventListener('click', () => {
-    if (currentConversationId) toggleArchive(currentConversationId);
-  });
+  const newConvBtn = document.getElementById('new-conv-btn');
+  if (newConvBtn) {
+    newConvBtn.addEventListener('click', createNewConversation);
+  } else {
+    console.warn("新建对话按钮 'new-conv-btn' 未找到。");
+  }
 
-  document.getElementById('delete-current-btn')?.addEventListener('click', () => {
-    if (!currentConversationId) return;
-    const conv = getCurrentConversation();
-    if (conv && confirm(`确定要删除当前会话「${conv.title}」吗？此操作无法恢复。`)) {
-      deleteConversation(currentConversationId);
-    }
-  });
+  const archiveCurrentBtn = document.getElementById('archive-current-btn');
+  if (archiveCurrentBtn) {
+    archiveCurrentBtn.addEventListener('click', () => {
+      if (currentConversationId) toggleArchive(currentConversationId);
+    });
+  } else {
+    console.warn("归档当前对话按钮 'archive-current-btn' 未找到。");
+  }
 
-  document.getElementById('model')?.addEventListener('change', (e) => {
-    const conv = getCurrentConversation();
-    if (conv) {
-      conv.model = e.target.value;
-      activeModel = conv.model;
-      saveConversations();
-    }
-  });
+  const deleteCurrentBtn = document.getElementById('delete-current-btn');
+  if (deleteCurrentBtn) {
+    deleteCurrentBtn.addEventListener('click', () => {
+      if (!currentConversationId) return;
+      const conv = getCurrentConversation();
+      if (conv && confirm(`确定要删除当前会话「${conv.title}」吗？此操作无法恢复。`)) {
+        deleteConversation(currentConversationId);
+      }
+    });
+  } else {
+    console.warn("删除当前对话按钮 'delete-current-btn' 未找到。");
+  }
 
-  document.getElementById('show-settings-btn')?.addEventListener('click', showSettings);
-  document.getElementById('back-to-chat-btn')?.addEventListener('click', showChatArea);
+  const modelSelect = document.getElementById('model');
+  if (modelSelect) {
+    modelSelect.addEventListener('change', (e) => {
+      const conv = getCurrentConversation();
+      if (conv) {
+        conv.model = e.target.value;
+        // activeModel = conv.model; // activeModel 似乎没有在其他地方被大量使用，可以考虑是否必要
+        saveConversations();
+      }
+    });
+  } else {
+    console.warn("模型选择下拉框 'model' 未找到。");
+  }
 
-  document.getElementById('export-history-btn')?.addEventListener('click', exportAllHistory);
-  document.getElementById('clear-all-history-btn')?.addEventListener('click', clearAllHistory);
+  const showSettingsBtn = document.getElementById('show-settings-btn');
+  if (showSettingsBtn) {
+    showSettingsBtn.addEventListener('click', showSettings);
+  } else {
+    console.warn("显示设置按钮 'show-settings-btn' 未找到。");
+  }
   
+  const backToChatBtn = document.getElementById('back-to-chat-btn');
+  if (backToChatBtn) {
+    backToChatBtn.addEventListener('click', showChatArea);
+  } else {
+    console.warn("返回聊天按钮 'back-to-chat-btn' 未找到。");
+  }
+
+  const exportHistoryBtn = document.getElementById('export-history-btn');
+  if (exportHistoryBtn) {
+    exportHistoryBtn.addEventListener('click', exportAllHistory);
+  } else {
+    console.warn("导出历史按钮 'export-history-btn' 未找到。");
+  }
+
+  const clearAllHistoryBtn = document.getElementById('clear-all-history-btn');
+  if (clearAllHistoryBtn) {
+    clearAllHistoryBtn.addEventListener('click', clearAllHistory);
+  } else {
+    console.warn("清除所有历史按钮 'clear-all-history-btn' 未找到。");
+  }
+  
+  // --- 文件导入 (保持不变) ---
   const importFileInput = document.getElementById('import-file');
   if (importFileInput) {
     importFileInput.addEventListener('change', async e => {
@@ -1167,12 +1370,15 @@ document.addEventListener('DOMContentLoaded', () => {
         
         let importedCount = 0;
         importedConvs.forEach(importedConv => {
+          // ... (你的导入和去重逻辑) ...
           if (importedConv && typeof importedConv === 'object' && 'id' in importedConv && 'title' in importedConv && 'messages' in importedConv) {
             if (!conversations.find(c => c.id === importedConv.id)) {
               importedConv.messages = (Array.isArray(importedConv.messages) ? importedConv.messages : [])
                 .filter(m => m && m.role && typeof m.content === 'string');
               importedConv.archived = typeof importedConv.archived === 'boolean' ? importedConv.archived : false;
-              importedConv.isNew = false;
+              importedConv.isNew = false; // 导入的对话不标记为新
+              // 确保导入的对话也有 reasoning_content 字段（如果适用），或者设为 null
+              importedConv.reasoning_content = importedConv.reasoning_content || null; 
               
               conversations.push(importedConv);
               importedCount++;
@@ -1185,7 +1391,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (importedCount > 0) {
           saveConversations();
           renderConversationList();
-          if (importedCount > 0 && currentConversationId == null && conversations.length > 0) {
+          if (currentConversationId == null && conversations.length > 0) { // 修正：双等号改为三等号
              loadConversation(conversations.filter(c=>!c.archived)[0]?.id || conversations[0].id);
           }
           alert(`成功导入 ${importedCount} 条新对话。`);
@@ -1199,77 +1405,9 @@ document.addEventListener('DOMContentLoaded', () => {
         importFileInput.value = '';
       }
     });
-
-    const promptTextarea = document.getElementById('prompt');
-  if (promptTextarea) {
-    const initialMinHeight = 60; // 和 CSS 中的 min-height 匹配或设一个初始值
-    const maxHeight = 200;      // 和 CSS 中的 max-height 匹配
-
-    // 设置一个初始高度，可以是 min-height 的值
-    promptTextarea.style.height = `${initialMinHeight}px`;
-
-    const autoResizeTextarea = () => {
-      // 1. 先将高度重置为最小值或 'auto'，以便获取准确的 scrollHeight
-      //    如果 textarea 内容为空，scrollHeight 可能是基于 padding 的一个很小的值。
-      //    如果直接设为 'auto'，并且内容为空，它可能会收缩到几乎看不见。
-      //    所以，先设为 minHeight，如果内容多，scrollHeight 会大于它。
-      promptTextarea.style.height = `${initialMinHeight}px`; 
-
-      let scrollHeight = promptTextarea.scrollHeight;
-      let newHeight = scrollHeight;
-
-      if (newHeight < initialMinHeight) {
-        newHeight = initialMinHeight; // 确保高度不小于初始最小高度
-      }
-
-      if (newHeight > maxHeight) {
-        newHeight = maxHeight;
-        promptTextarea.style.overflowY = 'auto'; // 内容超出最大高度，显示滚动条
-      } else {
-        promptTextarea.style.overflowY = 'hidden';// 内容未超出，隐藏滚动条
-      }
-      promptTextarea.style.height = `${newHeight}px`;
-    };
-
-    promptTextarea.addEventListener('input', autoResizeTextarea);
-
-    // (可选) 在粘贴时也触发调整
-    promptTextarea.addEventListener('paste', () => {
-        paste 
-        setTimeout(autoResizeTextarea, 0);
-    });
-    // --- Temperature 设置初始化和事件处理 ---
-  const temperatureSlider = document.getElementById('temperature-slider');
-  const temperatureValueDisplay = document.getElementById('temperature-value');
-  const defaultTemperature = 0.7; // 设置一个默认的 temperature 值
-
-  if (temperatureSlider && temperatureValueDisplay) {
-    // 加载已保存的 temperature 值，或使用默认值
-    let currentTemp = parseFloat(localStorage.getItem('model-temperature'));
-    if (isNaN(currentTemp) || currentTemp < 0 || currentTemp > 2) { // 基本的范围检查
-      currentTemp = defaultTemperature;
-    }
-    
-    temperatureSlider.value = currentTemp;
-    temperatureValueDisplay.textContent = currentTemp.toFixed(1); // 保留一位小数显示
-
-    // 当滑块值变化时，更新显示并保存到 localStorage
-    temperatureSlider.addEventListener('input', () => {
-      const newTemp = parseFloat(temperatureSlider.value);
-      temperatureValueDisplay.textContent = newTemp.toFixed(1);
-      localStorage.setItem('model-temperature', newTemp.toString());
-      console.log(`[Temperature] 设置已更新为: ${newTemp}`);
-    });
   } else {
-    console.error("Temperature 控制元素未找到！");
+    console.warn("文件导入输入框 'import-file' 未找到。");
   }
-  // --- 结束 Temperature 设置 ---
+}); // DOMContentLoaded 结束
 
-    
-    
-    autoResizeTextarea();
-  }
-    
-  }
-});
 // --- END OF FILE script.js ---

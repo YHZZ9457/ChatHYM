@@ -1,13 +1,11 @@
 
-LocalGPT v3.0
+LocalGPT v3.2
 
-一个可以运行OpenAI的API的小程序，有简单的界面。支持选择多种GPT模型。
+一个可以运行多种生成式AI的API的小程序，有简单的界面。支持选择多种模型。
 
-也可以运行Deepseek等多种API。
+使用前需要在env.exmaple.txt里面自己填入对应版本的API-Keys，然后保存为.env。
 
-使用前需要在设置里面自己填入对应版本的API-Keys，然后保存。
-
-如果是Claude的服务的话需要先查看env.example.txt，修改api keys并保存为.env。
+需要先下载Node.js并且点start安装服务才可以使用。
 
 注：本项目全部是用AI写的，除了这个README之外没有一点人工的成分
 
@@ -15,6 +13,8 @@ LocalGPT v3.0
 
 更新说明：
 
+v3.2：支持一部分流式传输，避免看着对方正在输入发呆（注：API已全部转为后端调用）
+v3.0：增加了Claude的支持。
 v2.8：增加了多种API支持，支持思考内容，增加了温度选项
 v2.6：增加了Deepseek的支持。
 v2.5：优化了UI，增加了归档、导入导出聊天记录功能，改善了大小调节功能。

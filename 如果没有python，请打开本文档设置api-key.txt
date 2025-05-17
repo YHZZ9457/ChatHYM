@@ -1,0 +1,11 @@
+# .env.example
+# 请在等于号后面写入你自己的 API Key
+# 将此文件保存为.env 并在其中填入你的密钥
+# 如果有Python，你也可以使用API-Keys进行设置
+
+
+ANTHROPIC_API_KEY_SECRET=sk-ant-xxx
+OPENAI_API_KEY_SECRET=sk-xxx
+DEEPSEEK_API_KEY_SECRET=sk-xxx
+GEMINI_API_KEY_SECRET=xxx
+SILICONFLOW_API_KEY_SECRET=sk-xxx

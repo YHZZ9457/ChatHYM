@@ -26,14 +26,14 @@
 <body>
   <div class="container">
     <aside class="sidebar">
-      <div class="logo">LocalGPT v2.8</div> <!-- 版本号更新 -->
+      <div class="logo">LocalGPT v3.2</div> <!-- 版本号更新 -->
       <button id="new-conv-btn" class="new-btn">+ 新对话</button>
       <nav class="conv-nav">
         <ul id="conversation-list" class="conv-nav">
           </ul>
       </nav>
       <div class="sidebar-footer">
-        <button id="show-settings-btn" class="settings-btn">⚙️ 设置</button> <!-- 使用 ID 以便 JS 选取 -->
+        <button id="show-settings-btn" class="settings-btn">⚙️ 设置</button> 
       </div>
     </aside>
 
@@ -56,37 +56,37 @@
           <div class="input-top-controls">
             <select id="model">
               <optgroup label="Google Gemini"> 
-              <option value="gemini-2.5-pro-preview-05-06">Gemini 2.5 Pro</option>
-              <option value="gemini-2.5-flash-preview-04-17">Gemini 2.5 FLash</option>
-              <option value="gemini-2.0-flash">Gemini 2.0 FLash</option>              
-            </optgroup>
-            <optgroup label="Deepseek">
-              <option value="deepseek-chat">Deepseek-V3</option>
-              <option value="deepseek-reasoner">Deepseek-R1</option>
-            </optgroup>
-            <optgroup label="SiliconFlow">              
-              <option value="sf::Qwen/Qwen3-235B-A22B">Qwen3-235B-A22B</option>
-              <option value="sf::Qwen/Qwen3-30B-A3B">Qwen3-30B-A3B</option>
-              <option value="sf::Qwen/Qwen3-32B">Qwen3-32B</option>
-              <option value="sf::Qwen/Qwen3-8B">Qwen3-8B</option>
-              <option value="sf::THUDM/GLM-Z1-32B-0414">GLM-Z1-32B</option>
-              <option value="sf::THUDM/GLM-4-32B-0414">GLM-4-32B</option>
-            </optgroup>
-            <optgroup label="OpenAI">
-              <option value="o4-mini">o4-mini</option>
-              <option value="o3">o3</option>            
-              <option value="gpt-4.1">GPT-4.1</option>
-              <option value="gpt-4o">GPT-4o</option>                   
-              <option value="gpt-4.1-mini">GPT-4.1-mini</option>
-              <option value="gpt-4o-mini">GPT-4o-mini</option>
-              <option value="gpt-4.1-nano">GPT-4.1-nano</option>   
-              <option value="gpt-4-turbo">GPT-4-turbo</option>              
-              <option value="gpt-3.5-turbo">GPT-3.5-turbo</option>
-            </optgroup>
-             <optgroup label="Anthropic Claude">
-    <option value="anthropic::claude-3-7-sonnet-latest">Claude 3.7 Sonnet</option>
-    <option value="anthropic::claude-3-5-haiku-latest">Claude 3.5 Haiku</option>
-    </optgroup>
+                <option value="gemini::gemini-2.5-pro-preview-05-06">Gemini 2.5 Pro</option>
+                <option value="gemini::gemini-2.5-flash-preview-04-17">Gemini 2.5 FLash</option>
+                <option value="gemini::gemini-2.0-flash">Gemini 2.0 FLash</option>              
+              </optgroup>
+              <optgroup label="Deepseek">
+                <option value="deepseek::deepseek-chat">Deepseek-V3</option>
+                <option value="deepseek::deepseek-reasoner">Deepseek-R1</option>
+              </optgroup>
+              <optgroup label="SiliconFlow">              
+                <option value="sf::Qwen/Qwen3-235B-A22B">Qwen3-235B-A22B</option>
+                <option value="sf::Qwen/Qwen3-30B-A3B">Qwen3-30B-A3B</option>
+                <option value="sf::Qwen/Qwen3-32B">Qwen3-32B</option>
+                <option value="sf::Qwen/Qwen3-8B">Qwen3-8B</option>
+                <option value="sf::THUDM/GLM-Z1-32B-0414">GLM-Z1-32B</option>
+                <option value="sf::THUDM/GLM-4-32B-0414">GLM-4-32B</option>
+              </optgroup>
+              <optgroup label="OpenAI">
+                <option value="openai::o4-mini">o4-mini</option>
+                <option value="openai::o3">o3</option>            
+                <option value="openai::gpt-4.1">GPT-4.1</option>
+                <option value="openai::gpt-4o">GPT-4o</option>                   
+                <option value="openai::gpt-4.1-mini">GPT-4.1-mini</option>
+                <option value="openai::gpt-4o-mini">GPT-4o-mini</option>
+                <option value="openai::gpt-4.1-nano">GPT-4.1-nano</option>   
+                <option value="openai::gpt-4-turbo">GPT-4-turbo</option>              
+                <option value="openai::gpt-3.5-turbo">GPT-3.5-turbo</option>
+              </optgroup>
+              <optgroup label="Anthropic Claude">
+                <option value="anthropic::claude-3-7-sonnet-latest">Claude 3.7 Sonnet</option> 
+                <option value="anthropic::claude-3-5-haiku-latest">Claude 3.5 Haiku</option>  
+              </optgroup>
           </select>
             <!-- 你可以在这里添加其他顶部按钮 -->
           </div>
@@ -129,24 +129,6 @@
           <label for="temperature-slider">模型 Temperature (<span id="temperature-value">0.7</span>):</label>
           <input type="range" id="temperature-slider" name="temperature" min="0" max="2" step="0.1" value="0.7">
         </div>
-
-        <!-- API key groups -->
-        <div class="api-key-group">
-          <label for="api-provider">选择 API 提供商：</label>
-          <select id="api-provider">
-            <option value="openai">OpenAI</option>
-            <option value="deepseek">Deepseek</option>
-            <option value="siliconflow">SiliconFlow</option>
-            <option value="gemini">Google Gemini</option>
-             <option value="anthropic">Anthropic(claude)需要修改.env文件</option>
-          </select>
-        </div>
-        <div class="api-key-group">
-          <label for="api-key-input">输入 API Key：</label>
-          <input id="api-key-input" type="password" placeholder="请输入 API Key">
-        </div>
-        <button id="save-api-btn">保存 API Key</button>
-        
 
         <div class="setting-item">
           <label>界面缩放</label>

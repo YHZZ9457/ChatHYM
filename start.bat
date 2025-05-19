@@ -1,5 +1,24 @@
 @echo off
 chcp 65001
+REM 检查 Ollama 是否可用
+where ollama >nul 2>nul
+if %errorlevel% neq 0 (
+    echo [错误] 未找到 Ollama，请先安装。
+    pause
+    exit /b
+)
+
+REM 检查 Ollama 服务是否已运行（找 11434 端口的进程）
+netstat -ano | findstr 11434 >nul
+if %errorlevel% neq 0 (
+    echo [Ollama] 未检测到服务，正在启动...
+    start /b ollama serve
+    timeout /t 3 >nul
+) else (
+    echo [Ollama] 服务已在运行。
+)
+
+
 
 REM === 检查 Node.js ===
 where node >nul 2>nul

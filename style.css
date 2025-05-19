@@ -701,10 +701,11 @@ body.dark-theme {
   border-radius: 4px;                      /* 圆角 */
   padding: 4px 8px;                        /* 内边距 */
   color: #fff;                             /* 白色字体 */
-  font-weight: 550;                        /* 稍粗 */
+  font-weight: 500;                        /* 稍粗 */
   font-family: inherit;                    /* 继承节奏 */
   outline: none;                           /* 去掉默认 outline */
   min-width: 120px;                        /* 最小宽度 */
+  font-size: 1.00rem; /* 例如，设置为 1.1rem，比聊天头部的 h1 (1.1rem) 略大或一致 */
 }
 
 /* 焦点时高亮边框 */

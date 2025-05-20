@@ -1354,3 +1354,423 @@ body.dark-theme .reasoning-content { scrollbar-color: #444 rgba(255, 255, 255, 0
 .empty-chat-placeholder p {
   margin: 0;
 }
+
+
+/* --- 模型管理区域 --- */
+.model-management-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 20px;
+  overflow-y: auto; /* 如果内容过多，允许滚动 */
+}
+
+.model-management-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.model-management-header h2 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.model-management-controls button {
+  margin-left: 10px;
+}
+
+.model-list-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 20px; /* 模型组之间的间距 */
+}
+
+.model-group-editor {
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 15px;
+  background-color: rgba(var(--primary-rgb), 0.03); /* 轻微背景色区分 */
+}
+body.dark-theme .model-group-editor {
+  background-color: rgba(255,255,255, 0.03);
+}
+
+
+.model-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.model-group-header h4 {
+  margin: 0;
+  font-size: 1.1rem;
+  cursor: grab; /* 提示可以拖拽组 */
+}
+.model-group-header input.group-label-editor {
+  font-size: 1.1rem;
+  font-weight: bold;
+  padding: 4px 8px;
+  border: 1px dashed var(--border-color);
+  background: transparent;
+  color: var(--text-color);
+}
+
+
+.model-group-options {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px; /* 模型项之间的间距 */
+}
+
+.model-option-editor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid rgba(var(--border-color), 0.5);
+  border-radius: 6px;
+  background-color: var(--bg-color);
+  cursor: grab; /* 提示可以拖拽项 */
+}
+
+.model-option-editor .details {
+  flex-grow: 1;
+  font-size: 0.9rem;
+}
+.model-option-editor .details strong {
+  display: block;
+  margin-bottom: 3px;
+}
+.model-option-editor .details span {
+  color: #888;
+  font-size: 0.85rem;
+}
+body.dark-theme .model-option-editor .details span {
+  color: #aaa;
+}
+
+
+.model-option-editor .actions button {
+  padding: 5px 8px;
+  font-size: 0.8rem;
+  margin-left: 5px;
+  background-color: var(--sidebar-bg); /* 使用侧边栏背景色作为按钮底色 */
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+}
+.model-option-editor .actions button.danger-text {
+  color: #e53e3e;
+}
+.model-option-editor .actions button:hover {
+  filter: brightness(0.9);
+}
+body.dark-theme .model-option-editor .actions button:hover {
+  filter: brightness(1.2);
+}
+
+
+/* --- 模态对话框样式 --- */
+.modal {
+  position: fixed;
+  z-index: 1001; /* 比其他内容高 */
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  background-color: rgba(0,0,0,0.6); /* 半透明背景 */
+  display: flex; /* 用于垂直居中 */
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-content {
+  background-color: var(--bg-color);
+  margin: auto;
+  padding: 25px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  width: 80%;
+  max-width: 500px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  position: relative;
+}
+
+.close-modal-btn {
+  color: #aaa;
+  position: absolute;
+  top: 10px;
+  right: 15px;
+  font-size: 28px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.close-modal-btn:hover,
+.close-modal-btn:focus {
+  color: var(--text-color);
+  text-decoration: none;
+}
+
+#model-form .form-group {
+  margin-bottom: 15px;
+}
+#model-form label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: 500;
+}
+#model-form input[type="text"] {
+  width: calc(100% - 20px); /* 减去 padding */
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-size: 0.95rem;
+}
+#model-form input[type="text"]:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
+}
+#model-form small {
+  display: block;
+  font-size: 0.8rem;
+  color: #777;
+  margin-top: 3px;
+}
+body.dark-theme #model-form small {
+  color: #aaa;
+}
+
+#model-form .form-actions {
+  margin-top: 20px;
+  text-align: right;
+}
+#model-form .form-actions button {
+  margin-left: 10px;
+}
+button.primary-action {
+    background-color: var(--primary) !important;
+    color: white !important;
+}
+button.primary-action:hover {
+    filter: brightness(0.9);
+}
+button.secondary {
+  background-color: #6c757d;
+  color: white;
+}
+button.secondary:hover {
+  background-color: #5a6268;
+}
+
+/* style.css */
+
+/* --- 模型管理界面头部控制按钮 --- */
+.model-management-controls button {
+  padding: 8px 16px; /* 增加内边距 */
+  font-size: 0.9rem;
+  border-radius: 5px; /* 圆角 */
+  border: 1px solid var(--border-color); /* 统一边框 */
+  background-color: var(--sidebar-bg); /* 使用侧边栏背景色，与深色主题协调 */
+  color: var(--text-color);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease; /* 过渡效果 */
+  margin-left: 10px; /* 保持按钮间距 */
+}
+
+/* 鼠标悬停效果 */
+.model-management-controls button:hover {
+  border-color: var(--primary); /* 悬停时边框变主题色 */
+  background-color: rgba(var(--primary-rgb), 0.1); /* 轻微主题色背景 */
+}
+
+/* 主要操作按钮 (例如 "保存更改") */
+.model-management-controls button.primary-action {
+  background-color: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+
+.model-management-controls button.primary-action:hover {
+  background-color: rgba(var(--primary-rgb), 0.85); /* 主题色变深一点 */
+  border-color: rgba(var(--primary-rgb), 0.85);
+}
+
+/* style.css */
+
+/* --- 模型组头部按钮 (例如 "删除组") --- */
+.model-group-header button {
+  padding: 5px 10px;
+  font-size: 0.85rem;
+  border-radius: 4px;
+  border: 1px solid transparent; /* 默认透明边框 */
+  background-color: transparent; /* 默认透明背景 */
+  color: #adb5bd; /* 默认浅灰色文字，不那么突出 */
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+body.light-theme .model-group-header button { /* 浅色主题下的颜色 */
+    color: #6c757d;
+}
+
+
+.model-group-header button:hover {
+  background-color: rgba(255, 255, 255, 0.05); /* 悬停时轻微背景 */
+  color: var(--text-color); /* 悬停时文字变亮 */
+}
+body.light-theme .model-group-header button:hover {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+
+/* 如果有明确的 "删除组" 按钮，可以给它特定的危险色 */
+.model-group-header button.danger-text { /* 您之前已有这个类 */
+  color: #e53e3e; /* 危险红色 */
+}
+
+.model-group-header button.danger-text:hover {
+  background-color: rgba(229, 62, 62, 0.1); /* 红色背景的浅色版 */
+  color: #c53030; /* 悬停时红色加深 */
+}
+
+/* style.css */
+
+/* --- 模型选项内的操作按钮 (编辑, 删除) --- */
+.model-option-editor .actions button {
+  padding: 6px 12px; /* 调整内边距 */
+  font-size: 0.85rem; /* 字体大小 */
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background-color: rgba(var(--primary-rgb), 0.08); /* 非常浅的主题色背景 */
+  color: var(--text-color);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+  margin-left: 8px; /* 按钮间距 */
+}
+body.light-theme .model-option-editor .actions button {
+  background-color: #f0f2f5; /* 浅色主题下的背景 */
+  border: 1px solid #d9d9d9;
+}
+
+.model-option-editor .actions button:hover {
+  border-color: var(--primary);
+  background-color: rgba(var(--primary-rgb), 0.15); /* 悬停时背景加深 */
+}
+body.light-theme .model-option-editor .actions button:hover {
+  border-color: var(--primary);
+  background-color: #e6f7ff; /* 浅色主题悬停背景 */
+}
+
+
+/* 删除按钮的特定样式 */
+.model-option-editor .actions button.danger-text { /* 您之前已有这个类 */
+  background-color: rgba(229, 62, 62, 0.1); /* 默认就给一点红色背景 */
+  border-color: rgba(229, 62, 62, 0.3);
+  color: #e53e3e;
+}
+body.light-theme .model-option-editor .actions button.danger-text {
+  background-color: #fff1f0;
+  border-color: #ffccc7;
+}
+
+
+.model-option-editor .actions button.danger-text:hover {
+  background-color: rgba(229, 62, 62, 0.2);
+  border-color: rgba(229, 62, 62, 0.5);
+  color: #c53030; /* 悬停时红色加深 */
+}
+body.light-theme .model-option-editor .actions button.danger-text:hover {
+  background-color: #ffccc7;
+  border-color: #ffa39e;
+}
+
+/* style.css */
+
+/* --- 模型表单模态对话框 - 动作按钮 --- */
+#model-form .form-actions {
+  margin-top: 25px; /* 增加与上方表单项的间距 */
+  text-align: right; /* 按钮默认靠右对齐 */
+  display: flex; /* 使用 flex 布局以便更好地控制按钮间距和对齐 */
+  justify-content: flex-end; /* 确保按钮靠右 */
+  gap: 10px; /* 按钮之间的间距 */
+}
+
+#model-form .form-actions button {
+  padding: 10px 20px; /* 统一的、更舒适的内边距 */
+  font-size: 0.95rem; /* 字体大小 */
+  border-radius: 5px; /* 圆角 */
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  font-weight: 500; /* 字体稍粗一些 */
+}
+
+/* "保存模型" 按钮 (主要操作按钮) */
+#model-form .form-actions button#save-model-detail-btn {
+  background-color: var(--primary); /* 主题色背景 */
+  color: white; /* 白色文字 */
+  border-color: var(--primary); /* 主题色边框 */
+}
+
+#model-form .form-actions button#save-model-detail-btn:hover {
+  background-color: rgba(var(--primary-rgb), 0.85); /* 悬停时主题色变深 */
+  border-color: rgba(var(--primary-rgb), 0.85);
+  box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.3); /* 悬停时轻微阴影 */
+}
+
+/* "取消" 按钮 (次要/中性操作按钮) */
+#model-form .form-actions button#cancel-model-detail-btn {
+  background-color: var(--sidebar-bg); /* 使用与侧边栏或次要元素一致的背景色 */
+  color: var(--text-color); /* 文本颜色 */
+  border-color: var(--border-color); /* 边框颜色 */
+}
+/* 针对浅色主题的取消按钮优化 */
+body.light-theme #model-form .form-actions button#cancel-model-detail-btn {
+    background-color: #f0f2f5; /* 浅灰色背景 */
+    border-color: #d9d9d9;
+    color: #555; /* 深灰色文字 */
+}
+
+
+#model-form .form-actions button#cancel-model-detail-btn:hover {
+  background-color: rgba(var(--primary-rgb), 0.1); /* 悬停时轻微主题色背景 */
+  border-color: var(--primary); /* 悬停时边框变主题色 */
+  color: var(--primary); /* 悬停时文字变主题色 */
+}
+/* 针对浅色主题的取消按钮悬停优化 */
+body.light-theme #model-form .form-actions button#cancel-model-detail-btn:hover {
+    background-color: #e6f7ff; /* 浅蓝色背景 */
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+/* style.css - 检查 .container 和 .main-area 的样式 */
+.container {
+  display: flex; /* 确保是 flex 布局 */
+  height: 100%;
+  width: 100%;
+}
+
+.sidebar {
+  width: 240px; /* 或者你设置的宽度 */
+  /* display: flex; */ /* 它的 display 由 JS 控制 */
+  /* ... 其他样式 ... */
+}
+
+.main-area {
+  flex: 1; /* 当侧边栏隐藏时，它会占据所有剩余空间 */
+  display: flex;
+  flex-direction: column;
+  /* ... 其他样式 ... */
+}

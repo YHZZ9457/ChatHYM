@@ -11,6 +11,10 @@
 let activeModel = ''; // 存储当前加载对话时，该对话所使用的模型ID
 let conversations = []; // 存储所有对话对象的数组
 let currentConversationId = null; // 当前正在查看或操作的对话的ID
+let modelConfigData = null; // 用于存储从 models.json 加载的原始模型配置
+let editableModelConfig = null; // 用于在管理界面编辑的模型配置的深拷贝
+let isModelManagementActive = false
+
 
 // --- 辅助函数 ---
 
@@ -370,6 +374,8 @@ function renderConversationList() {
 
       // 点击加载对话
       li.addEventListener('click', () => {
+
+        
         if (c.isNew) { // 如果点击的是新对话，清除 'isNew' 标记
             c.isNew = false;
             // saveConversations(); // 可选：立即保存状态，或在其他操作后统一保存
@@ -1446,25 +1452,51 @@ function showSettings() {
 }
 window.showSettings = showSettings; // 暴露到全局
 
-/**
- * 显示聊天区域，隐藏设置区域。
- * 如果当前没有活动对话，则加载一个或创建一个新对话。
- */
 function showChatArea() {
-    document.getElementById('settings-area').style.display = 'none';
-    document.getElementById('chat-area').style.display = 'flex';
-    // 如果没有当前对话ID
-    if (!currentConversationId) {
+    const settingsArea = document.getElementById('settings-area');
+    const chatArea = document.getElementById('chat-area');
+    const modelMgmtArea = document.getElementById('model-management-area'); // 获取模型管理区域元素
+    const sidebar = document.querySelector('.sidebar'); // 获取侧边栏元素
+
+    // 1. 控制主内容区域的显示
+    if (settingsArea) settingsArea.style.display = 'none';
+    if (modelMgmtArea) modelMgmtArea.style.display = 'none'; // 确保模型管理区域被隐藏
+    if (chatArea) chatArea.style.display = 'flex'; // 显示聊天区域
+
+    // 2. 控制侧边栏的显示
+    if (sidebar) {
+        // 恢复侧边栏的显示。您需要根据侧边栏原始的 display 类型来设置。
+        // 如果侧边栏在CSS中是 display: flex; 来布局其内部元素，则用 'flex'
+        // 如果是 display: block; 则用 'block'
+        // 假设您的侧边栏是 flex 布局
+        sidebar.style.display = 'flex';
+    }
+
+    // 3. 更新状态变量
+    isModelManagementActive = false; // 明确表示已不在模型管理激活状态
+
+    // 4. 处理聊天内容的加载或创建
+    if (!currentConversationId || !conversations.find(c => c.id === currentConversationId)) {
+        // 如果没有当前对话ID，或者当前对话ID无效（例如从模型管理返回且该对话被删了）
         if (conversations.length > 0) {
             // 加载第一个未归档对话，或第一个对话（如果都是归档的）
             const firstNonArchived = conversations.filter(c => !c.archived)[0];
-            loadConversation(firstNonArchived ? firstNonArchived.id : conversations[0].id);
+            const targetIdToLoad = firstNonArchived ? firstNonArchived.id : conversations[0].id;
+            loadConversation(targetIdToLoad); // loadConversation 应处理模型列表变化
         } else {
             // 没有对话存在，创建一个新的
             createNewConversation();
         }
+    } else {
+        // 如果有有效的当前对话ID，重新加载它以确保UI同步
+        // (特别是从模型管理界面返回，模型列表或当前对话的模型可能已更改)
+        loadConversation(currentConversationId);
     }
-    // 如果有当前对话ID，则聊天区域已正确显示，无需额外操作
+
+    // 5. （可选但推荐）重新渲染对话列表
+    // 因为切换回聊天视图时，可能需要更新列表项的 'active' 状态，
+    // 或者如果之前因为 isModelManagementActive 而未正确渲染 active 状态。
+    renderConversationList();
 }
 
 
@@ -1677,12 +1709,385 @@ function extractThinkingAndReply(textChunk, startTag, endTag, currentlyInThinkin
     }
     return { replyTextPortion, thinkingTextPortion, newThinkingBlockState };
 }
+// --- NEW FUNCTION: Load models from models.json ---
+
+async function loadModelsFromConfig() {
+  const modelSelect = document.getElementById('model');
+  if (!modelSelect) {
+    console.error("模型选择下拉框 'model' 在HTML中未找到。");
+    modelConfigData = { models: [{ groupLabel: "Error", options: [{value: "error::error", text: "Config Error"}] }] }; // 提供最小回退
+    editableModelConfig = JSON.parse(JSON.stringify(modelConfigData)); // 深拷贝
+    return false;
+  }
+  modelSelect.innerHTML = '';
+
+  try {
+    const response = await fetch('models.json' + '?t=' + new Date().getTime()); // 添加时间戳防止缓存
+    if (!response.ok) {
+      throw new Error(`加载 models.json 失败: ${response.status} ${response.statusText}`);
+    }
+    const config = await response.json();
+
+    if (config && config.models && Array.isArray(config.models)) {
+      modelConfigData = config; // 存储原始加载的数据
+      editableModelConfig = JSON.parse(JSON.stringify(modelConfigData)); // 创建可编辑的深拷贝
+      populateModelDropdown(editableModelConfig.models); // 使用可编辑的配置填充主下拉列表
+      console.log("模型列表已成功从 models.json 加载并初始化编辑副本。");
+      return true;
+    } else {
+      throw new Error("models.json 文件格式无效。期望格式为 { \"models\": [ ... ] }");
+    }
+  } catch (error) {
+    console.error("加载或解析 models.json 时发生错误:", error);
+    modelConfigData = { models: [{ groupLabel: "Fallback", options: [{value: "openai::gpt-3.5-turbo", text: "GPT-3.5 Turbo (配置加载失败)"}] }] };
+    editableModelConfig = JSON.parse(JSON.stringify(modelConfigData));
+    populateModelDropdown(editableModelConfig.models);
+    alert("无法从 models.json 加载模型列表，已使用回退模型。请检查控制台获取详细错误信息。");
+    return false;
+  }
+}
+
+/**
+ * 根据提供的模型数组填充主聊天界面的模型下拉列表。
+ * @param {Array} modelsArray - 模型配置数组，格式同 models.json 中的 models 数组。
+ */
+function populateModelDropdown(modelsArray) {
+  const modelSelect = document.getElementById('model');
+  if (!modelSelect) return;
+  modelSelect.innerHTML = ''; // 清空
+
+  if (!modelsArray || modelsArray.length === 0) {
+      const fallbackOption = document.createElement('option');
+      fallbackOption.value = "openai::gpt-3.5-turbo";
+      fallbackOption.textContent = "GPT-3.5 Turbo (无配置)";
+      modelSelect.appendChild(fallbackOption);
+      console.warn("populateModelDropdown 收到空或无效的模型数组，已使用回退选项。");
+      return;
+  }
+
+  modelsArray.forEach(group => {
+    if (group.groupLabel && group.options && Array.isArray(group.options)) {
+      const optgroup = document.createElement('optgroup');
+      optgroup.label = group.groupLabel;
+      group.options.forEach(opt => {
+        if (opt.value && opt.text) {
+          const option = document.createElement('option');
+          option.value = opt.value;
+          option.textContent = opt.text;
+          optgroup.appendChild(option);
+        }
+      });
+      modelSelect.appendChild(optgroup);
+    }
+  });
+  // 确保在填充后，如果当前对话存在，其模型被选中
+  if (currentConversationId) {
+    const conv = getCurrentConversation();
+    if (conv && conv.model && modelSelect.querySelector(`option[value="${conv.model}"]`)) {
+        modelSelect.value = conv.model;
+    } else if (modelSelect.options.length > 0) {
+        // 如果当前对话的模型不在新列表或无当前对话，默认选第一个
+        // 这也可能在createNewConversation之前被调用
+        if (conv) conv.model = modelSelect.options[0].value; // 更新对话数据
+        // modelSelect.value = modelSelect.options[0].value; // UI 会自动选第一个
+    }
+  } else if (modelSelect.options.length > 0) {
+      // modelSelect.value = modelSelect.options[0].value; // UI 会自动选第一个
+  }
+}
+
+// --- 新增：模型管理界面逻辑 ---
+const modelManagementArea = document.getElementById('model-management-area');
+const modelListEditor = document.getElementById('model-list-editor');
+const modelFormModal = document.getElementById('model-form-modal');
+const modelForm = document.getElementById('model-form');
+const modelFormTitle = document.getElementById('model-form-title');
+
+// 用于跟踪 SortableJS 实例，以便销毁和重建
+let groupSortableInstance = null;
+const optionSortableInstances = [];
+
+/**
+ * 渲染模型管理界面列表
+ */
+function renderModelManagementUI() {
+  if (!editableModelConfig || !modelListEditor) return;
+  modelListEditor.innerHTML = '';
+  optionSortableInstances.forEach(instance => instance.destroy()); // 销毁旧的选项排序实例
+  optionSortableInstances.length = 0;
+
+  editableModelConfig.models.forEach((group, groupIndex) => {
+    const groupDiv = document.createElement('div');
+    groupDiv.className = 'model-group-editor';
+    groupDiv.dataset.groupIndex = groupIndex;
+
+    const groupHeader = document.createElement('div');
+    groupHeader.className = 'model-group-header';
+    // 改为 input 以便编辑组名
+    const groupLabelInput = document.createElement('input');
+    groupLabelInput.type = 'text';
+    groupLabelInput.className = 'group-label-editor';
+    groupLabelInput.value = group.groupLabel;
+    groupLabelInput.dataset.groupIndex = groupIndex;
+    groupLabelInput.addEventListener('change', (e) => {
+        editableModelConfig.models[groupIndex].groupLabel = e.target.value;
+        // 不需要立即重新渲染整个UI，除非影响排序或显示
+    });
+    groupLabelInput.addEventListener('keydown', (e) => { // 允许回车确认
+        if (e.key === 'Enter') e.target.blur();
+    });
+
+    groupHeader.appendChild(groupLabelInput);
+    // 添加删除组按钮 (可选)
+    const deleteGroupBtn = document.createElement('button');
+    deleteGroupBtn.textContent = '删除组';
+    deleteGroupBtn.className = 'danger-text';
+    deleteGroupBtn.onclick = () => deleteModelGroup(groupIndex);
+    groupHeader.appendChild(deleteGroupBtn);
+
+    groupDiv.appendChild(groupHeader);
+
+    const optionsUl = document.createElement('ul');
+    optionsUl.className = 'model-group-options';
+    optionsUl.dataset.groupIndex = groupIndex; // 用于选项排序
+
+    group.options.forEach((option, optionIndex) => {
+      const optionLi = document.createElement('li');
+      optionLi.className = 'model-option-editor';
+      optionLi.dataset.groupIndex = groupIndex;
+      optionLi.dataset.optionIndex = optionIndex;
+
+      optionLi.innerHTML = `
+        <div class="details">
+          <strong>${escapeHtml(option.text)}</strong>
+          <span>Value: ${escapeHtml(option.value)}</span>
+        </div>
+        <div class="actions">
+          <button onclick="openModelFormForEdit(${groupIndex}, ${optionIndex})">编辑</button>
+          <button class="danger-text" onclick="deleteModelOption(${groupIndex}, ${optionIndex})">删除</button>
+        </div>
+      `;
+      optionsUl.appendChild(optionLi);
+    });
+    groupDiv.appendChild(optionsUl);
+    modelListEditor.appendChild(groupDiv);
+
+    // 为每个组的选项列表启用排序
+    if (typeof Sortable !== 'undefined') {
+        const osInstance = Sortable.create(optionsUl, {
+            animation: 150,
+            group: `options-${groupIndex}`, //确保组内唯一
+            handle: '.model-option-editor',
+            onEnd: (evt) => {
+                const grpIdx = parseInt(evt.from.dataset.groupIndex);
+                const movedOption = editableModelConfig.models[grpIdx].options.splice(evt.oldDraggableIndex, 1)[0];
+                editableModelConfig.models[grpIdx].options.splice(evt.newDraggableIndex, 0, movedOption);
+                renderModelManagementUI(); // 重新渲染以更新索引
+            }
+        });
+        optionSortableInstances.push(osInstance);
+    }
+  });
+
+  // 启用模型组排序
+  if (typeof Sortable !== 'undefined') {
+    if (groupSortableInstance) groupSortableInstance.destroy();
+    groupSortableInstance = Sortable.create(modelListEditor, {
+        animation: 150,
+        handle: '.model-group-header input.group-label-editor', // 使用 input 作为拖拽句柄
+        onEnd: (evt) => {
+            const movedGroup = editableModelConfig.models.splice(evt.oldDraggableIndex, 1)[0];
+            editableModelConfig.models.splice(evt.newDraggableIndex, 0, movedGroup);
+            renderModelManagementUI(); // 重新渲染以更新索引
+        }
+    });
+  }
+}
+
+/**
+ * 打开模型表单进行添加或编辑
+ * @param {number} [groupIndex] - 编辑时提供，组索引
+ * @param {number} [optionIndex] - 编辑时提供，选项索引
+ */
+window.openModelFormForEdit = function(groupIndex, optionIndex) { // 暴露到全局以便 HTML onclick 调用
+  modelForm.reset();
+  document.getElementById('edit-group-index').value = '';
+  document.getElementById('edit-option-index').value = '';
+
+  if (typeof groupIndex !== 'undefined' && typeof optionIndex !== 'undefined') {
+    // 编辑模式
+    const group = editableModelConfig.models[groupIndex];
+    const option = group.options[optionIndex];
+    modelFormTitle.textContent = '编辑模型';
+    document.getElementById('model-group-label').value = group.groupLabel;
+    document.getElementById('model-text').value = option.text;
+    document.getElementById('model-value').value = option.value;
+    document.getElementById('edit-group-index').value = groupIndex;
+    document.getElementById('edit-option-index').value = optionIndex;
+  } else {
+    // 添加模式
+    modelFormTitle.textContent = '添加新模型';
+  }
+  modelFormModal.style.display = 'flex';
+}
+
+/**
+ * 关闭模型表单模态框
+ */
+function closeModelForm() {
+  modelFormModal.style.display = 'none';
+}
+
+/**
+ * 处理模型表单提交
+ */
+modelForm.addEventListener('submit', function(event) {
+  event.preventDefault();
+  const groupLabel = document.getElementById('model-group-label').value.trim();
+  const modelText = document.getElementById('model-text').value.trim();
+  const modelValue = document.getElementById('model-value').value.trim();
+
+  const editGroupIndex = document.getElementById('edit-group-index').value;
+  const editOptionIndex = document.getElementById('edit-option-index').value;
+
+  if (!groupLabel || !modelText || !modelValue) {
+    alert('所有字段均为必填项！');
+    return;
+  }
+
+  const newOptionData = { text: modelText, value: modelValue };
+
+  if (editGroupIndex !== '' && editOptionIndex !== '') {
+    // 编辑现有模型
+    const groupIndex = parseInt(editGroupIndex);
+    const optionIndex = parseInt(editOptionIndex);
+    const targetGroupLabel = editableModelConfig.models[groupIndex].groupLabel;
+
+    if (targetGroupLabel !== groupLabel) {
+        // 用户更改了组标签，需要移动模型到新组或现有同名组
+        // 1. 从原组删除
+        editableModelConfig.models[groupIndex].options.splice(optionIndex, 1);
+        if (editableModelConfig.models[groupIndex].options.length === 0) { // 如果原组空了，删除原组
+            editableModelConfig.models.splice(groupIndex, 1);
+        }
+        // 2. 添加到新组或现有组
+        let existingGroup = editableModelConfig.models.find(g => g.groupLabel === groupLabel);
+        if (existingGroup) {
+            existingGroup.options.push(newOptionData);
+        } else {
+            editableModelConfig.models.push({ groupLabel: groupLabel, options: [newOptionData] });
+        }
+    } else {
+        // 仍在原组内编辑
+        editableModelConfig.models[groupIndex].options[optionIndex] = newOptionData;
+    }
+
+  } else {
+    // 添加新模型
+    let group = editableModelConfig.models.find(g => g.groupLabel === groupLabel);
+    if (group) {
+      group.options.push(newOptionData);
+    } else {
+      editableModelConfig.models.push({ groupLabel: groupLabel, options: [newOptionData] });
+    }
+  }
+
+  renderModelManagementUI();
+  closeModelForm();
+});
+
+/**
+ * 删除指定索引的模型组
+ * @param {number} groupIndex 组索引
+ */
+window.deleteModelGroup = function(groupIndex) {
+    if (confirm(`确定要删除模型组 "${editableModelConfig.models[groupIndex].groupLabel}" 及其所有模型吗？`)) {
+        editableModelConfig.models.splice(groupIndex, 1);
+        renderModelManagementUI();
+    }
+}
+
+
+/**
+ * 删除指定模型选项
+ * @param {number} groupIndex 组索引
+ * @param {number} optionIndex 选项索引
+ */
+window.deleteModelOption = function(groupIndex, optionIndex) { // 暴露到全局
+  if (confirm(`确定要删除模型 "${editableModelConfig.models[groupIndex].options[optionIndex].text}" 吗？`)) {
+    editableModelConfig.models[groupIndex].options.splice(optionIndex, 1);
+    // 如果组变空了，可以选择删除该组
+    if (editableModelConfig.models[groupIndex].options.length === 0) {
+      if (confirm(`模型组 "${editableModelConfig.models[groupIndex].groupLabel}" 已空，是否删除该组？`)) {
+        editableModelConfig.models.splice(groupIndex, 1);
+      }
+    }
+    renderModelManagementUI();
+  }
+}
+
+/**
+ * 保存当前编辑的模型配置到下载文件，并更新主聊天界面的下拉列表
+ */
+function saveModelsToFile() {
+  if (!editableModelConfig) {
+    alert('没有模型配置可供保存。');
+    return;
+  }
+  // 确保所有组至少有一个选项，或者移除空组（可选，当前逻辑是允许空组存在，但保存时可能需要清理）
+  const cleanedModelConfig = {
+      models: editableModelConfig.models.filter(group => group.options.length > 0 || group.groupLabel.trim() !== "") // 保留有选项或有标签的组
+          .map(group => ({
+              ...group,
+              options: group.options.filter(opt => opt.text.trim() !== "" && opt.value.trim() !== "") // 过滤空选项
+          }))
+          .filter(group => group.options.length > 0 || group.groupLabel.trim() !== "") // 再次过滤，确保清理后仍有内容
+  };
+
+
+  const dataStr = JSON.stringify(cleanedModelConfig, null, 2); // 美化JSON输出
+  const blob = new Blob([dataStr], {type: "application/json"});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'models.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+
+  alert("新的 models.json 文件已准备下载。\n请手动用此文件替换您项目中的旧 models.json 文件。\n替换后，主界面的模型列表也会同步更新。");
+
+  // 更新主聊天界面的模型下拉列表以立即反映更改
+  modelConfigData = JSON.parse(JSON.stringify(editableModelConfig)); // 更新原始数据副本
+  populateModelDropdown(editableModelConfig.models);
+  // 确保当前对话的模型在新列表中仍然有效
+    if (currentConversationId) {
+        const conv = getCurrentConversation();
+        if (conv && conv.model) {
+            const modelSelect = document.getElementById('model');
+            if (modelSelect.querySelector(`option[value="${conv.model}"]`)) {
+                modelSelect.value = conv.model;
+            } else if (modelSelect.options.length > 0) {
+                // 如果旧模型不在新列表，将对话模型更新为列表中的第一个
+                conv.model = modelSelect.options[0].value;
+                saveConversations(); // 保存对话的更改
+                modelSelect.value = conv.model; // UI同步
+                alert(`当前对话使用的模型 "${conv.model}" 在新配置中不存在，已自动切换到 "${modelSelect.options[0].text}"。`);
+            }
+        }
+    }
+}
 
 
 // --- DOMContentLoaded: 页面加载完成后的主要设置和初始化 ---
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => { // 将回调设为 async 以便使用 await
+  // 0. 首先从配置文件加载模型列表
+  // 这个操作是异步的，需要等待它完成后再执行依赖模型列表的后续操作
+  const modelsLoadedSuccessfully = await loadModelsFromConfig(); // loadModelsFromConfig 已包含日志
+  // console.log(`模型列表加载状态: ${modelsLoadedSuccessfully ? '成功' : '失败'}`); // 这行可以移除，因为函数内部有日志
+
   // 1. 主题初始化
-  // 从 Local Storage 读取保存的主题偏好，默认为 'dark'
   const storedTheme = localStorage.getItem('theme') || 'dark';
   applyTheme(storedTheme);
   const toggleThemeBtn = document.getElementById('toggle-theme-btn');
@@ -1695,12 +2100,10 @@ document.addEventListener('DOMContentLoaded', () => {
   // 2. UI 缩放初始化
   const uiScaleOptions = document.getElementById('ui-scale-options');
   if (uiScaleOptions) {
-    // 从 Local Storage 读取保存的缩放偏好，默认为 1.0
     const savedScale = parseFloat(localStorage.getItem('ui-scale')) || 1.0;
-    applyUiScale(savedScale, uiScaleOptions); // 应用保存的或默认的缩放，并更新按钮状态
-    // 为缩放选项按钮容器添加事件委托
+    applyUiScale(savedScale, uiScaleOptions);
     uiScaleOptions.addEventListener('click', e => {
-      const btn = e.target.closest('button[data-scale]'); // 查找被点击的缩放按钮
+      const btn = e.target.closest('button[data-scale]');
       if (btn) {
         applyUiScale(parseFloat(btn.dataset.scale), uiScaleOptions);
       }
@@ -1710,39 +2113,30 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // --- 3. API Key 管理 ---
-  // 此部分前端逻辑已移除。API Keys 现在应通过后端代理（如Netlify Functions）和环境变量进行管理。
-  // HTML中相关的输入框和按钮（如 'api-provider', 'api-key-input', 'save-api-key-btn'）
-  // 如果仍然存在，其功能不再由此脚本控制。
   console.info("前端 API Key 管理逻辑已移除。API Keys 应通过后端代理和环境变量进行管理。");
-  const providerSelect = document.getElementById('api-provider');
+  const providerSelect = document.getElementById('api-provider'); // 即使移除了功能，也保留引用检查
   if(providerSelect){
-      // 可以选择禁用此下拉列表，或仅移除其功能性事件监听器
-      // providerSelect.disabled = true; // 例如，如果不再需要用户选择
-      // (当前代码没有主动绑定事件到 providerSelect 来加载 key，所以仅作记录)
+      // (如果之前有相关逻辑，现在为空或仅作记录)
   }
-
 
   // --- 4. Temperature (模型温度) 设置初始化和事件处理 ---
   const temperatureSlider = document.getElementById('temperature-slider');
   const temperatureValueDisplay = document.getElementById('temperature-value');
-  const defaultTemperature = 0.7; // 默认温度值
+  const defaultTemperature = 0.7;
 
   if (temperatureSlider && temperatureValueDisplay) {
-    // 从 Local Storage 读取保存的温度值
     let currentTemp = parseFloat(localStorage.getItem('model-temperature'));
-    // 校验读取的值，如果无效或超出范围，则使用默认值
-    if (isNaN(currentTemp) || currentTemp < 0 || currentTemp > 2) { // 假设温度范围是 0 到 2
+    if (isNaN(currentTemp) || currentTemp < 0 || currentTemp > 2) {
       currentTemp = defaultTemperature;
     }
-    temperatureSlider.value = currentTemp; // 设置滑块的初始位置
-    temperatureValueDisplay.textContent = currentTemp.toFixed(1); // 显示初始温度值 (保留一位小数)
+    temperatureSlider.value = currentTemp;
+    temperatureValueDisplay.textContent = currentTemp.toFixed(1);
 
-    // 当滑块值改变时，更新显示和 Local Storage
     temperatureSlider.addEventListener('input', () => {
       const newTemp = parseFloat(temperatureSlider.value);
       temperatureValueDisplay.textContent = newTemp.toFixed(1);
       localStorage.setItem('model-temperature', newTemp.toString());
-      console.log(`[Temperature] 模型温度设置已更新为: ${newTemp}`);
+      // console.log(`[Temperature] 模型温度设置已更新为: ${newTemp}`); // 日志可以按需开启
     });
   } else {
     console.warn("Temperature 控制元素 ('temperature-slider' 或 'temperature-value') 未在HTML中找到。");
@@ -1751,90 +2145,82 @@ document.addEventListener('DOMContentLoaded', () => {
   // --- 5. Textarea (用户输入框) 自动调整高度 ---
   const promptTextarea = document.getElementById('prompt');
   if (promptTextarea) {
-    // 获取CSS中定义的min-height和max-height，或使用默认值
-    const initialMinHeight = parseInt(window.getComputedStyle(promptTextarea).minHeight, 10) || 42; // 默认42px
-    const maxHeight = parseInt(window.getComputedStyle(promptTextarea).maxHeight, 10) || 200; // 默认200px
+    const initialMinHeight = parseInt(window.getComputedStyle(promptTextarea).minHeight, 10) || 42;
+    const maxHeight = parseInt(window.getComputedStyle(promptTextarea).maxHeight, 10) || 200;
 
-    // 设置初始高度为min-height，并隐藏滚动条（除非内容超出max-height）
     promptTextarea.style.height = `${initialMinHeight}px`;
     promptTextarea.style.overflowY = 'hidden';
 
-    // 定义自动调整高度的函数
     const autoResizeTextarea = () => {
-      // 先将高度重置为最小高度，这样 scrollHeight 才能正确计算实际内容所需高度
       promptTextarea.style.height = `${initialMinHeight}px`;
-      let scrollHeight = promptTextarea.scrollHeight; // 获取内容所需的完整高度
+      let scrollHeight = promptTextarea.scrollHeight;
       let newHeight = scrollHeight;
 
-      // 确保新高度不小于最小高度
-      if (newHeight < initialMinHeight) {
-        newHeight = initialMinHeight;
-      }
-
-      // 如果新高度超过最大高度，则限制为最大高度并显示滚动条
+      if (newHeight < initialMinHeight) newHeight = initialMinHeight;
       if (newHeight > maxHeight) {
         newHeight = maxHeight;
-        promptTextarea.style.overflowY = 'auto'; // 显示垂直滚动条
+        promptTextarea.style.overflowY = 'auto';
       } else {
-        promptTextarea.style.overflowY = 'hidden'; // 隐藏滚动条
+        promptTextarea.style.overflowY = 'hidden';
       }
-      promptTextarea.style.height = `${newHeight}px`; // 应用计算出的新高度
+      promptTextarea.style.height = `${newHeight}px`;
     };
 
-    promptTextarea.addEventListener('input', autoResizeTextarea); // 每次输入时调整
-    promptTextarea.addEventListener('paste', () => { // 粘贴内容后也需要调整
-        // 使用 setTimeout 确保粘贴操作完成后 DOM 更新完毕再执行调整
+    promptTextarea.addEventListener('input', autoResizeTextarea);
+    promptTextarea.addEventListener('paste', () => {
         setTimeout(autoResizeTextarea, 0);
     });
-    // 如果 textarea 可能有默认值或从 localStorage 加载内容，可以在页面加载时调用一次
-    // autoResizeTextarea();
+    // Enter发送消息的监听器也放在这里，确保 promptTextarea 存在
+    if (!promptTextarea.dataset.keydownBound) {
+        promptTextarea.addEventListener('keydown', e => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            send(); // send 函数需要在外部定义
+          }
+        });
+        promptTextarea.dataset.keydownBound = 'true';
+    }
   } else {
-    console.warn("用户输入框 'prompt' 未在HTML中找到。自动调整高度功能将不可用。");
+    console.warn("用户输入框 'prompt' 未在HTML中找到。自动调整高度和Enter发送功能将不可用。");
   }
 
   // --- 6. 对话和聊天区域初始化 ---
   loadConversations();    // 从 Local Storage 加载历史对话
-  renderConversationList(); // 渲染左侧对话列表 (此函数内部会调用 enableConversationDrag)
+  renderConversationList(); // 渲染左侧对话列表
 
   // 初始化聊天界面：加载第一个对话或创建新对话
-  const nonArchivedConversations = conversations.filter(c => !c.archived);
-  if (nonArchivedConversations.length > 0) {
-    loadConversation(nonArchivedConversations[0].id); // 加载第一个未归档的对话
-  } else if (conversations.length > 0) { // 如果只有归档的对话
-    loadConversation(conversations[0].id); // 加载第一个（已归档的）对话
-  } else { // 如果没有任何对话
-    createNewConversation(); // 创建一个新对话
+  const modelSelectForInit = document.getElementById('model');
+  // 确保模型下拉列表已至少有一个选项 (可能是从配置加载的，或加载失败时的回退项)
+  if (modelSelectForInit && modelSelectForInit.options.length > 0) {
+    const nonArchivedConversations = conversations.filter(c => !c.archived);
+    if (nonArchivedConversations.length > 0) {
+      loadConversation(nonArchivedConversations[0].id);
+    } else if (conversations.length > 0) {
+      loadConversation(conversations[0].id);
+    } else {
+      createNewConversation();
+    }
+  } else {
+    console.warn("模型下拉列表在初始化聊天界面时为空或不存在。将尝试创建新对话，可能使用硬编码的默认模型。");
+    createNewConversation(); // createNewConversation 内部应有对 getCurrentModel 的健壮处理
   }
-  enableInlineTitleEdit(); // 为初始加载的对话标题启用行内编辑
+  enableInlineTitleEdit();
 
   // --- 7. 主要按钮和控件的事件监听器 ---
   const sendBtn = document.getElementById('send-btn');
   if (sendBtn) {
     sendBtn.addEventListener('click', e => {
-      e.preventDefault(); // 如果发送按钮是 <button type="submit">，则阻止表单默认提交行为
-      send(); // 调用发送函数
+      e.preventDefault();
+      send(); // send 函数需要在外部定义
     });
   } else {
     console.warn("发送按钮 'send-btn' 未在HTML中找到。");
   }
-
-  // 用户输入框 'prompt' 的 Enter键 发送消息的监听器
-  // (如果 promptTextarea 在上面已找到并初始化)
-  if (promptTextarea && !promptTextarea.dataset.keydownBound) { // 使用 dataset 属性防止重复绑定
-    promptTextarea.addEventListener('keydown', e => {
-      // Shift + Enter 用于换行，单独 Enter 用于发送
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault(); // 阻止 Enter 键的默认行为（如换行）
-        send(); // 调用发送函数
-      }
-    });
-    promptTextarea.dataset.keydownBound = 'true'; // 标记已绑定
-  }
-
+  // Enter发送的监听器已移到 promptTextarea 存在性检查之后
 
   const newConvBtn = document.getElementById('new-conv-btn');
   if (newConvBtn) {
-    newConvBtn.addEventListener('click', createNewConversation);
+    newConvBtn.addEventListener('click', createNewConversation); // createNewConversation 函数需要在外部定义
   } else {
     console.warn("新建对话按钮 'new-conv-btn' 未在HTML中找到。");
   }
@@ -1842,8 +2228,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const archiveCurrentBtn = document.getElementById('archive-current-btn');
   if (archiveCurrentBtn) {
     archiveCurrentBtn.addEventListener('click', () => {
-      if (currentConversationId) { // 确保有当前对话
-        toggleArchive(currentConversationId); // 切换当前对话的归档状态
+      if (currentConversationId) {
+        toggleArchive(currentConversationId); // toggleArchive 函数需要在外部定义
       }
     });
   } else {
@@ -1853,10 +2239,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const deleteCurrentBtn = document.getElementById('delete-current-btn');
   if (deleteCurrentBtn) {
     deleteCurrentBtn.addEventListener('click', () => {
-      if (!currentConversationId) return; // 没有当前对话，不执行操作
-      const conv = getCurrentConversation();
+      if (!currentConversationId) return;
+      const conv = getCurrentConversation(); // getCurrentConversation 函数需要在外部定义
       if (conv && confirm(`确定要删除当前会话「${conv.title}」吗？此操作无法恢复。`)) {
-        deleteConversation(currentConversationId); // 删除当前对话
+        deleteConversation(currentConversationId); // deleteConversation 函数需要在外部定义
       }
     });
   } else {
@@ -1865,45 +2251,64 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const modelSelect = document.getElementById('model');
   if (modelSelect) {
-    // 当模型选择变化时，更新当前对话的 model 属性并保存
     modelSelect.addEventListener('change', (e) => {
       const conv = getCurrentConversation();
       if (conv) {
-        conv.model = e.target.value; // 更新对话数据中的模型
-        // activeModel 变量似乎主要在加载对话时设置，此处更改对话模型后，
-        // activeModel 会在下次加载此对话时同步。如果需要立即同步，可以取消下一行注释。
-        // activeModel = conv.model;
-        saveConversations(); // 保存更改
+        conv.model = e.target.value;
+        saveConversations(); // saveConversations 函数需要在外部定义
       }
     });
+    // 初始化时选中正确模型的逻辑已部分移至 populateModelDropdown 或 loadModelsFromConfig 的回调中
+    // 这里保留的逻辑是确保页面加载时，如果已有当前对话，UI能正确反映
+    if (currentConversationId) {
+        const currentConv = getCurrentConversation();
+        if (currentConv && currentConv.model) {
+            const optionExists = Array.from(modelSelect.options).some(opt => opt.value === currentConv.model);
+            if (optionExists) {
+                modelSelect.value = currentConv.model;
+            } else {
+                // console.warn(`当前对话模型 "${currentConv.model}" 在下拉列表中未找到。`);
+                // 如果模型不在列表，但列表有选项，可以考虑将对话模型更新为列表第一个
+                if (modelSelect.options.length > 0) {
+                    // currentConv.model = modelSelect.options[0].value; // 如果希望强制同步
+                    // saveConversations();
+                    // modelSelect.value = currentConv.model;
+                }
+            }
+        }
+    } else if (modelSelect.options.length > 0 && !modelSelect.value) {
+        // 如果没有当前对话，且下拉框没有默认值（比如value=""），可以让它默认选中第一个
+        // 但 getCurrentModel 已经处理了这种情况，所以这里可以不显式设置
+        // modelSelect.value = modelSelect.options[0].value;
+    }
   } else {
     console.warn("模型选择下拉框 'model' 未在HTML中找到。");
   }
 
   const showSettingsBtn = document.getElementById('show-settings-btn');
   if (showSettingsBtn) {
-    showSettingsBtn.addEventListener('click', showSettings);
+    showSettingsBtn.addEventListener('click', showSettings); // showSettings 函数需要在外部定义
   } else {
     console.warn("显示设置按钮 'show-settings-btn' 未在HTML中找到。");
   }
 
   const backToChatBtn = document.getElementById('back-to-chat-btn');
   if (backToChatBtn) {
-    backToChatBtn.addEventListener('click', showChatArea);
+    backToChatBtn.addEventListener('click', showChatArea); // showChatArea 函数需要在外部定义
   } else {
     console.warn("返回聊天按钮 'back-to-chat-btn' 未在HTML中找到。");
   }
 
   const exportHistoryBtn = document.getElementById('export-history-btn');
   if (exportHistoryBtn) {
-    exportHistoryBtn.addEventListener('click', exportAllHistory);
+    exportHistoryBtn.addEventListener('click', exportAllHistory); // exportAllHistory 函数需要在外部定义
   } else {
     console.warn("导出历史按钮 'export-history-btn' 未在HTML中找到。");
   }
 
   const clearAllHistoryBtn = document.getElementById('clear-all-history-btn');
   if (clearAllHistoryBtn) {
-    clearAllHistoryBtn.addEventListener('click', clearAllHistory);
+    clearAllHistoryBtn.addEventListener('click', clearAllHistory); // clearAllHistory 函数需要在外部定义
   } else {
     console.warn("清除所有历史按钮 'clear-all-history-btn' 未在HTML中找到。");
   }
@@ -1913,37 +2318,30 @@ document.addEventListener('DOMContentLoaded', () => {
   if (importFileInput) {
     importFileInput.addEventListener('change', async e => {
       const file = e.target.files[0];
-      if (!file) return; // 没有选择文件
+      if (!file) return;
 
       try {
-        const text = await file.text(); // 读取文件内容为文本
-        const importedConvs = JSON.parse(text); // 解析JSON
-        if (!Array.isArray(importedConvs)) { // 校验顶层是否为数组
+        const text = await file.text();
+        const importedConvs = JSON.parse(text);
+        if (!Array.isArray(importedConvs)) {
           throw new Error('导入的 JSON 顶层必须是一个对话数组');
         }
 
-        let importedCount = 0; // 记录成功导入的新对话数量
+        let importedCount = 0;
         importedConvs.forEach(importedConv => {
-          // 对每个导入的对话进行校验和处理
           if (importedConv && typeof importedConv === 'object' && 'id' in importedConv && 'title' in importedConv && 'messages' in importedConv) {
-            // 检查ID是否已存在，避免重复导入
             if (!conversations.find(c => c.id === importedConv.id)) {
-              // 规范化导入对话的 messages 数组
               importedConv.messages = (Array.isArray(importedConv.messages) ? importedConv.messages : [])
-                .filter(m => m && m.role && typeof m.content === 'string'); // 过滤无效消息
+                .filter(m => m && m.role && typeof m.content === 'string');
 
-              // 设置默认值或规范化其他字段
               importedConv.archived = typeof importedConv.archived === 'boolean' ? importedConv.archived : false;
-              importedConv.isNew = false; // 导入的对话不标记为新创建
-              // 确保导入的对话有 model 字段，或设为默认值
+              importedConv.isNew = false;
               importedConv.model = importedConv.model || getCurrentModel();
-              // 确保导入的对话也有 reasoning_content 字段（如果适用），或者设为 null/undefined
-              // (如果 messages 里的对象需要此字段，也应在此处或filter中处理)
 
-              conversations.push(importedConv); // 添加到当前对话列表
+              conversations.push(importedConv);
               importedCount++;
             } else {
-              console.log(`跳过导入已存在的对话ID: ${importedConv.id}`);
+              // console.log(`跳过导入已存在的对话ID: ${importedConv.id}`);
             }
           } else {
             console.warn('导入过程中跳过无效的对话对象:', importedConv);
@@ -1951,9 +2349,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (importedCount > 0) {
-          saveConversations();      // 保存合并后的对话列表
-          renderConversationList(); // 重新渲染对话列表
-          // 如果导入前没有当前对话，则加载一个（通常是第一个未归档的）
+          saveConversations();
+          renderConversationList();
           if (currentConversationId === null && conversations.length > 0) {
              const firstNonArchived = conversations.filter(c=>!c.archived)[0];
              loadConversation(firstNonArchived ? firstNonArchived.id : conversations[0].id);
@@ -1966,12 +2363,95 @@ document.addEventListener('DOMContentLoaded', () => {
         console.error('导入历史文件失败:', err);
         alert('导入失败：' + err.message);
       } finally {
-        importFileInput.value = ''; // 清空文件输入框，以便可以再次选择同一个文件
+        importFileInput.value = '';
       }
     });
   } else {
     console.warn("文件导入输入框 'import-file' 未在HTML中找到。");
   }
+
+  // --- 新增：模型管理界面按钮事件监听 ---
+// (确保 modelManagementArea, renderModelManagementUI, openModelFormForEdit,
+// saveModelsToFile, closeModelForm, modelFormModal, modelForm 等变量和函数已在外部定义)
+// (确保 isModelManagementActive, editableModelConfig, modelListEditor 等全局变量已定义)
+// (确保 showSettings, showChatArea 函数已定义并能正确处理侧边栏显示和 isModelManagementActive)
+
+const showModelManagementBtn = document.getElementById('show-model-management-btn');
+if (showModelManagementBtn) {
+    showModelManagementBtn.addEventListener('click', () => {
+        const chatArea = document.getElementById('chat-area');
+        const settingsArea = document.getElementById('settings-area');
+        const modelMgmtArea = document.getElementById('model-management-area'); // 确保这个变量在外部已获取或在此处获取
+        const sidebar = document.querySelector('.sidebar');
+
+        if (chatArea) chatArea.style.display = 'none';
+        if (settingsArea) settingsArea.style.display = 'none';
+        if (modelMgmtArea) modelMgmtArea.style.display = 'flex';
+
+        if (sidebar) sidebar.style.display = 'none'; // 隐藏侧边栏
+
+        isModelManagementActive = true; // 设置状态为在模型管理界面
+
+        if (editableModelConfig) {
+            renderModelManagementUI();
+        } else {
+            if (modelListEditor) {
+                modelListEditor.innerHTML = '<p>模型配置正在加载或加载失败，请稍后再试。</p>';
+            }
+        }
+    });
+} else {
+    console.warn("显示模型管理按钮 'show-model-management-btn' 未在HTML中找到。");
+}
+
+const backToChatFromModelManagementBtn = document.getElementById('back-to-chat-from-model-management-btn'); // 使用新的 ID
+if (backToChatFromModelManagementBtn) {
+    backToChatFromModelManagementBtn.addEventListener('click', () => {
+        // 直接调用 showChatArea() 函数，该函数应负责：
+        // 1. 隐藏 modelManagementArea
+        // 2. 显示 chatArea
+        // 3. 显示 sidebar
+        // 4. 设置 isModelManagementActive = false;
+        // 5. 加载或刷新当前对话
+        showChatArea();
+    });
+} else {
+    console.warn("从模型管理返回聊天按钮 'back-to-chat-from-model-management-btn' 未在HTML中找到。");
+}
+
+const addNewModelBtn = document.getElementById('add-new-model-btn');
+if (addNewModelBtn) {
+    addNewModelBtn.addEventListener('click', () => openModelFormForEdit());
+} else {
+    console.warn("添加新模型按钮 'add-new-model-btn' 未在HTML中找到。");
+}
+
+const saveModelsToFileBtn = document.getElementById('save-models-to-file-btn');
+if (saveModelsToFileBtn) {
+    saveModelsToFileBtn.addEventListener('click', saveModelsToFile);
+} else {
+    console.warn("保存模型到文件按钮 'save-models-to-file-btn' 未在HTML中找到。");
+}
+
+// 模型表单模态框关闭按钮 (这部分逻辑不变，因为它不直接控制主视图切换)
+if (modelFormModal) {
+    const closeModalBtn = modelFormModal.querySelector('.close-modal-btn');
+    if (closeModalBtn) {
+        closeModalBtn.addEventListener('click', closeModelForm);
+    }
+    const cancelModelDetailBtn = document.getElementById('cancel-model-detail-btn');
+    if (cancelModelDetailBtn) {
+        cancelModelDetailBtn.addEventListener('click', closeModelForm);
+    }
+    window.addEventListener('click', (event) => {
+        if (event.target == modelFormModal) {
+            closeModelForm();
+        }
+    });
+} else {
+    console.warn("模型表单模态框 'model-form-modal' 未在HTML中找到，相关关闭功能将不可用。");
+}
+
 }); // DOMContentLoaded 事件监听器结束
 
 // --- END OF FILE script.js ---

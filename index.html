@@ -41,26 +41,44 @@
       <section id="chat-area" class="chat-area">
         <header class="chat-header">
           <h1 id="chat-title">对话</h1>
-          <button id="archive-current-btn" title="归档当前会话">归档</button>
-          <button id="delete-current-btn" title="删除当前会话">删除</button>
+          <div class="header-model-selector">
+            <select id="model">
+              <!-- 这里的选项将由 JavaScript 动态填充 -->
+            </select>
+          </div> <!-- header-model-selector 结束标签 -->
+          <div class="header-actions"> <!-- 将按钮包裹起来以便更好地控制 -->
+            <button id="archive-current-btn" title="归档当前会话">归档</button>
+            <button id="delete-current-btn" title="删除当前会话">删除</button>
+          </div>
         </header>
 
         <div id="empty-chat-placeholder" class="empty-chat-placeholder" style="display: none;">
             <p>发送一条消息开始新聊天</p> </div>
         <div class="messages" id="messages"></div>
 
+        
         <div class="input-area">
-          <div class="input-top-controls">
-            <select id="model">
-              <!-- 这里的选项将由 JavaScript 动态填充 -->
-            </select>
-            <!-- 你可以在这里添加其他顶部按钮 -->
-          </div>
-          <textarea id="prompt" placeholder="输入你的问题，Enter 发送 / Shift+Enter 换行"></textarea>
-          <div class="input-row prompt-and-send-row">
-            <button id="send-btn" type="button">发送</button>
-          </div>
-        </div>
+  <!-- 文件预览区域，放在输入控件行的上方 -->
+  <div id="file-preview-area" class="file-preview-area" style="display: none;">
+    <!-- 预览内容将由 JavaScript 动态添加 -->
+  </div>
+
+  <!-- 用于水平排列按钮、输入框、发送按钮的行 -->
+  <div class="input-main-row">
+    <button id="upload-file-btn-inline" title="上传文件" class="input-action-btn">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
+    </button>
+    <input type="file" id="file-input-inline" accept="image/*,application/pdf,.txt,.md" style="display: none;" multiple />
+
+    <button id="chat-settings-btn-inline" title="聊天设置" class="input-action-btn">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings-2"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+    </button>
+
+    <textarea id="prompt" placeholder="输入你的问题，Enter 发送 / Shift+Enter 换行"></textarea>
+
+    <button id="send-btn" type="button">发送</button>
+  </div>
+        
       </section>
 
       <!-- Settings -->

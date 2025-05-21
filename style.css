@@ -287,52 +287,18 @@ body.light-theme .message.assistant{
 .message pre,.message code{font-family:monospace;}
 .message pre{background:rgba(0,0,0,0.15);padding:8px;border-radius:6px;overflow-x:auto;}
 
-/* style.css */
-
-/* --- 输入区域 .input-area 的样式优化 --- */
+/* --- 输入区域整体布局调整 --- */
 .input-area {
-  flex-shrink: 0; 
-  padding: 10px 15px; 
+  flex-shrink: 0;
+  padding: 12px; /* 稍微调整整体内边距 */
   background: var(--bg-color);
   border-top: 1px solid var(--border-color);
   display: flex;
-  flex-direction: row; 
-  align-items: center; 
-  gap: 10px; 
+  align-items: flex-end; /* 保持底部对齐 */
+  gap: 10px; /* 元素之间的间距 */
 }
 
-/* 模型选择下拉框的样式 */
-.input-area select#model {
-  /* appearance, padding, border, background-image 等保持你之前的设置 */
-  /* (你需要确保你用于美化原生select的 appearance: none; 和 background-image 规则仍然存在于你的CSS文件中其他地方，或者也合并到这里) */
-  appearance: none; /* 假设你需要这个来移除原生样式 */
-  -webkit-appearance: none; /* 针对 Webkit 浏览器 */
-  cursor: pointer; /* 确保有指针手势 */
-  font-family: inherit; /* 继承字体 */
-  font-size: 0.90rem;       /* 略微减小字体，例如从 0.9rem 改为 0.85rem */
-  padding-top: 0;         /* 减小上下内边距 */
-  padding-bottom: 0;      /* 减小上下内边距 */
-  padding-left: 10px;     /* 保持或调整左内边距 */
-  padding-right: 30px;    /* 保持或调整右内边距（为箭头图标留空间） */
-  height: auto; 
-  padding-top: 8px; 
-  padding-bottom: 8px; 
-  /* --- 结束修改 --- */
 
-  border-radius: 4px; /* 可以尝试比其他控件略小的圆角，显得更精致 */
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-color);
-  color: var(--text-color);
-  flex-shrink: 0; 
-  align-self: flex-start; 
-  margin-top: 0; 
-   /* 确保箭头图标的样式也在这里，或者在另一个针对 select#model 的规则中 */
-  background-repeat: no-repeat;
-  background-position: right 8px center; /* 根据 padding-right 调整箭头位置 */
-  background-image: url("data:image/svg+xml;charset=UTF-8,<svg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'><path d='M0 0l5 6 5-6z' fill='%23999'/></svg>");
-  background-size: 10px 6px; /* 调整箭头图标大小 */
-  transition: border-color .2s, box-shadow .2s; /* 保留过渡效果 */
-}
 
 /* 确保你的主题特定箭头颜色仍然生效 */
 body.dark-theme .input-area select#model {
@@ -1773,4 +1739,293 @@ body.light-theme #model-form .form-actions button#cancel-model-detail-btn:hover 
   display: flex;
   flex-direction: column;
   /* ... 其他样式 ... */
+}
+
+/* style.css */
+
+.chat-header {
+  display: flex;
+  align-items: center; /* 垂直居中所有项 */
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-color);
+  min-height: 48px;
+  flex-shrink: 0;
+  gap: 16px; /* 在所有直接子元素之间设置一个统一的间距 */
+}
+
+.chat-header h1#chat-title {
+  margin: 0; /* 移除默认的 h1 margin */
+  font-size: 1.1rem;
+  font-weight: 500;
+  /* 标题不需要 flex-grow: 1 了，让它自然宽度 */
+  white-space: nowrap; /* 防止标题换行 */
+  overflow: hidden; /* 如果标题过长，隐藏超出部分 */
+  text-overflow: ellipsis; /* 用省略号显示被截断的文本 */
+  max-width: 300px; /* 给标题一个最大宽度，避免它挤压其他元素，按需调整 */
+}
+
+.header-model-selector select#model {
+  /* ... 您之前的 select 样式保持不变 ... */
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.9rem;
+  padding: 6px 30px 6px 10px;
+  height: auto;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-image: url("data:image/svg+xml;charset=UTF-8,<svg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'><path d='M0 0l5 6 5-6z' fill='%23999'/></svg>");
+  background-size: 10px 6px;
+  transition: border-color .2s, box-shadow .2s;
+  min-width: 180px; /* 调整最小宽度以适应内容 */
+}
+body.dark-theme .header-model-selector select#model {
+  background-image: url("data:image/svg+xml;charset=UTF-8,<svg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'><path d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.5)'/></svg>");
+}
+
+/* style.css */
+
+/* --- 输入区域整体布局调整 --- */
+.input-area {
+  flex-shrink: 0;
+  padding: 10px 15px; /* 调整内边距以适应按钮 */
+  background: var(--bg-color);
+  border-top: 1px solid var(--border-color);
+  display: flex; /* 改为 flex 布局 */
+  align-items: flex-end; /* 底部对齐，当 textarea 增高时按钮仍在底部 */
+  gap: 8px; /* 各个直接子元素之间的间距 */
+}
+
+/* --- 输入区域左侧操作按钮样式 --- */
+.input-action-btn {
+  flex-shrink: 0;
+  padding: 0; /* 移除内边距，让 SVG 图标决定大小，或设置固定宽高 */
+  width: 40px;  /* 设置固定宽度 */
+  height: 40px; /* 设置固定高度，使其与 textarea 的初始高度接近 */
+  border-radius: 8px; /* 稍大一点的圆角 */
+  border: 1px solid var(--border-color);
+  background-color: transparent; /* 可以尝试透明背景，仅边框 */
+  color: var(--text-secondary, #888); /* 图标颜色使用次要文本颜色 */
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.input-action-btn:hover {
+  border-color: var(--primary);
+  background-color: rgba(var(--primary-rgb), 0.05); /* 非常浅的背景 */
+  color: var(--primary); /* 悬停时图标变主题色 */
+}
+
+.input-action-btn svg {
+  width: 22px;  /* 稍微调整图标大小 */
+  height: 22px; /* 稍微调整图标大小 */
+  stroke-width: 1.8; /* 可以尝试调整线条粗细 */
+  /* currentColor 会继承按钮的 color 属性 */
+}
+
+
+/* --- 文本输入框样式调整 --- */
+.input-area textarea#prompt {
+  flex-grow: 1; /* 让 textarea 占据大部分可用空间 */
+  /* 其他 padding, font-size, border, border-radius, background, color, resize, width,
+     box-sizing, max-height, min-height, line-height, overflow-y, height
+     这些样式基本可以保持不变，但注意其 height 现在是相对于 flex item 的行为 */
+  padding: 8px 10px;
+  font-size: 0.95rem;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-color);
+  color: var(--text-color);
+  resize: none;
+  width: auto; /* 不再是 100%，由 flex-grow 控制 */
+  box-sizing: border-box;
+  max-height: 200px;
+  min-height: 42px; /* 与按钮高度匹配，或稍高 */
+  line-height: 1.6;
+  overflow-y: hidden;
+  /* height: auto; */ /* JS 会控制 */
+}
+
+/* --- 发送按钮样式调整 --- */
+.input-area button#send-btn {
+  flex-shrink: 0;
+  padding: 0 18px; /* 调整内边距 */
+  height: 40px;   /* 与其他元素高度一致 */
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px; /* 与其他元素一致的圆角 */
+  font-size: 0.95rem;
+  font-weight: 500; /* 字体稍粗 */
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  /* display: inline-flex; align-items: center; justify-content: center; */ /* 这些可以保持 */
+}
+.input-area button#send-btn:hover {
+    background-color: rgba(var(--primary-rgb), 0.85); /* 悬停时颜色变深 */
+}
+
+/* style.css */
+
+/* --- 外层输入区域容器 --- */
+.input-area {
+  flex-shrink: 0;
+  padding: 10px 12px; /* 保持合理的内边距 */
+  background: var(--bg-color);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column; /* 预览区和输入行垂直排列 */
+  gap: 8px; /* 预览区和输入行之间的间距 */
+}
+
+/* --- 文件预览区域 (样式基本可以保持) --- */
+.file-preview-area {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 8px;
+  border: 1px dashed var(--border-color-light, #555);
+  border-radius: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* --- 用于水平排列输入控件的行 --- */
+.input-main-row {
+  display: flex;
+  align-items: flex-end; /* 关键：所有子元素底部对齐 */
+  gap: 8px;
+  width: 100%;
+}
+
+/* --- 输入区域左侧操作按钮样式 --- */
+.input-main-row .input-action-btn {
+  flex-shrink: 0; /* 不允许按钮被压缩 */
+  padding: 0;     /* 移除内边距，让 SVG 决定交互区域，或固定宽高 */
+  width: 40px;    /* 固定宽度 */
+  height: 40px;   /* 固定高度，与 textarea 的 min-height 和发送按钮匹配 */
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  background-color: transparent; /* 或者 var(--input-bg, var(--bg-color)); */
+  color: var(--text-secondary, #888);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  box-sizing: border-box; /* 确保 padding 和 border 不会增加总尺寸 */
+}
+.input-main-row .input-action-btn:hover {
+  border-color: var(--primary);
+  background-color: rgba(var(--primary-rgb), 0.05);
+  color: var(--primary);
+}
+.input-main-row .input-action-btn svg {
+  width: 20px;  /* 根据实际图标调整 */
+  height: 20px; /* 根据实际图标调整 */
+  stroke-width: 2; /* 根据实际图标调整 */
+  stroke: currentColor;
+}
+
+/* --- 文本输入框样式调整 --- */
+.input-main-row textarea#prompt {
+  flex-grow: 1; /* 让 textarea 占据所有可用的剩余空间 */
+  padding: 10px 12px;
+  font-size: 0.95rem; /* 与发送按钮字体大小协调 */
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--input-bg, var(--bg-color));
+  color: var(--text-color);
+  resize: none;
+  /* width: auto; -- flex-grow 会处理 */
+  box-sizing: border-box;
+  max-height: 200px; /* 或您期望的最大高度 */
+  min-height: 40px;  /* 与按钮高度保持一致 */
+  line-height: 1.5;
+  overflow-y: hidden; /* JS 会在内容超出时改为 auto */
+  /* height 由 JS 动态调整，初始高度由 min-height 和内容决定 */
+}
+.input-main-row textarea#prompt:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
+    outline: none;
+}
+
+/* --- 发送按钮样式调整 --- */
+.input-main-row button#send-btn {
+  flex-shrink: 0; /* 不允许被压缩 */
+  padding: 0 18px;
+  height: 40px;   /* 与其他元素高度一致 */
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  /* display: inline-flex; align-items: center; justify-content: center; 这几个可以保持 */
+}
+.input-main-row button#send-btn:hover {
+    background-color: rgba(var(--primary-rgb), 0.85);
+}
+
+.file-preview-area {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    /* 要求1：不顶格 - 给整个预览区域添加一些内边距或外边距 */
+    padding: 8px; /* 例如，在区域内部留白 */
+    /* 或者 margin-bottom: 10px; 等，取决于你希望它和哪个元素隔开 */
+    /* border: 1px solid #444; */ /* 调试时可以打开边框看区域 */
+}
+
+.file-preview-item-sleek {
+    display: inline-flex;
+    align-items: center;
+    /* 要求3：底色透明 */
+    background-color: transparent;
+    /* 边框可以保留，或者根据你的主题调整颜色，或者去掉 */
+    border: 1px solid #555; /* 例如，一个深色主题下的灰色边框 */
+    color: #ccc; /* 浅色文字，适应深色背景 */
+    border-radius: 4px;
+    padding: 6px 10px;
+    font-size: 13px; /* 可以微调 */
+    line-height: 1.3;
+    max-width: 180px; /* 限制最大宽度 */
+    box-sizing: border-box;
+}
+
+.file-name-sleek {
+    flex-grow: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis; /* 文件名过长时，从尾部显示省略号 */
+    margin-right: 5px;
+    color: inherit; /* 继承父元素的文字颜色 */
+}
+
+.remove-file-btn-sleek {
+    background: none;
+    border: none;
+    color: #888; /* 移除按钮颜色 */
+    cursor: pointer;
+    font-size: 16px; /* 调整叉号大小 */
+    line-height: 1;
+    padding: 0 0 0 5px;
+}
+
+.remove-file-btn-sleek:hover {
+    color: #fff; /* 鼠标悬浮时文字变白 */
 }

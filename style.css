@@ -1,22 +1,41 @@
 /* ===== 1. 主题变量 ===== */
 :root {
   /* 边框 */
-  --border-light: rgba(0, 0, 0, 0.15);
-  --border-dark:  rgba(255,255,255,0.1);
-  /* 主色 */
-  --primary-light: #1e90ff;
-  --primary-dark:  #3b82f6;
-  --primary-light-rgb: 30,144,255;
-  --primary-dark-rgb:  59,130,246;
-  /* 背景 & 文字 */
-  --bg-light: #ffffff;
-  --bg-dark:  #0f1115;
-  --sidebar-light: #f5f6f8;
-  --sidebar-dark:  #14171d;
-  --text-light: #1f1f1f;
-  --text-dark:  #e2e8f0;
-  /* 其它 */
-  --ui-scale: 1;
+  --border-light: rgba(0, 0, 0, 0.12); /* 浅色主题边框，略微调整透明度以更柔和 */
+  --border-dark:  rgba(255,255,255,0.15); /* 深色主题边框，参考图片中元素分隔，可能需要更明显一点 */
+  /* 主色 - 参考图片，主色调为蓝色 */
+  --primary-light: #1e90ff; /* 浅色主题主色 (道奇蓝) */
+  --primary-dark:  #3b82f6; /* 深色主题主色 (Tailwind Blue 500), 与图片中按钮颜色接近 */
+  --primary-light-rgb: 30,144,255; /* 浅色主题主色 RGB */
+  --primary-dark-rgb:  59,130,246; /* 深色主题主色 RGB */
+  /* 背景 & 文字 - 参考图片，深色主题背景非常深 */
+  --bg-light: #ffffff; /* 浅色主题背景 */
+  --bg-dark:  #0f1115; /* 深色主题背景 (非常深的近黑) */
+  --sidebar-light: #f7f9fc; /* 浅色主题侧边栏背景，更柔和的浅灰 */
+  --sidebar-dark:  #13171c; /* 深色主题侧边栏背景，比主背景略亮一点以区分 */
+  --text-light: #1f1f1f; /* 浅色主题文字 */
+  --text-dark:  #e2e8f0; /* 深色主题文字 (Tailwind Slate 200) */
+  --text-secondary-light: #52525b; /* 浅色主题次要文字 (Tailwind Zinc 600) */
+  --text-secondary-dark: #94a3b8;  /* 深色主题次要文字 (Tailwind Slate 400) */
+  /* 其它 - 增加圆角和阴影变量 */
+  --ui-scale: 1; /* UI 缩放比例 */
+  --border-radius-sm: 4px;
+  --border-radius-md: 6px;
+  --border-radius-lg: 8px;
+  --border-radius-xl: 12px;
+  --border-radius-full: 9999px;
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+  /* Reasoning Block 浅色模式变量 - 保持原始，仅格式化 */
+  --reasoning-bg-light: rgba(250, 250, 252, 0.95);
+  --reasoning-border-light: #c5cbd6;
+  --reasoning-label-light: #4a5a75;
+  --reasoning-fg-light: #222831;
+  --reasoning-content-bg-light: rgba(255, 255, 255, 0.9);
+  --reasoning-content-border-light: #2962ff;
+  --reasoning-content-shadow-light: rgba(41, 98, 255, 0.08);
 }
 body.light-theme {
   --border-color: var(--border-light);
@@ -25,6 +44,18 @@ body.light-theme {
   --bg-color: var(--bg-light);
   --sidebar-bg: var(--sidebar-light);
   --text-color: var(--text-light);
+  --text-secondary: var(--text-secondary-light);
+  --input-bg: #ffffff; /* 输入框背景 */
+  --bg-secondary: #f0f2f5; /* 次要背景，用于卡片、悬浮等 */
+
+  /* Reasoning Block 主题应用 */
+  --reasoning-bg: var(--reasoning-bg-light);
+  --reasoning-border: var(--reasoning-border-light);
+  --reasoning-label: var(--reasoning-label-light);
+  --reasoning-fg: var(--reasoning-fg-light);
+  --reasoning-content-bg: var(--reasoning-content-bg-light);
+  --reasoning-content-border: var(--reasoning-content-border-light);
+  --reasoning-content-shadow: var(--reasoning-content-shadow-light);
 }
 body.dark-theme {
   --border-color: var(--border-dark);
@@ -33,352 +64,499 @@ body.dark-theme {
   --bg-color: var(--bg-dark);
   --sidebar-bg: var(--sidebar-dark);
   --text-color: var(--text-dark);
+  --text-secondary: var(--text-secondary-dark);
+  --input-bg: #242930; /* 深色主题输入框背景，比 sidebar 略深，比主背景略浅 */
+  --bg-secondary: #1a1e24; /* 深色主题次要背景 */
+
+  /* Reasoning Block 主题应用 - 保持原始，仅格式化 */
+  --reasoning-bg: rgba(28, 32, 48, 0.97); /* 与原始一致 */
+  --reasoning-border: rgba(60, 75, 110, 0.35); /* 与原始一致 */
+  --reasoning-label: #9fb8ff; /* 与原始一致 */
+  --reasoning-fg: #dce4ff; /* 与原始一致 */
+  --reasoning-content-bg: rgba(20, 24, 38, 0.9); /* 与原始一致 */
+  --reasoning-content-border: #5578ff; /* 与原始一致 */
+  --reasoning-content-shadow: rgba(85, 120, 255, 0.2); /* 与原始一致 */
 }
 
 /* ===== 2. Reset ===== */
 *,*::before,*::after{box-sizing:border-box;}
-html,body{margin:0;padding:0;height:100%;overflow:hidden;font-family:'Roboto',sans-serif;background:var(--bg-color);color:var(--text-color);zoom:var(--ui-scale);-webkit-tap-highlight-color:transparent;}
-a{color:inherit;text-decoration:none;}
-button{font-family:inherit;cursor:pointer;}
+html,body{margin:0;padding:0;height:100%;overflow:hidden;font-family:'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";background:var(--bg-color);color:var(--text-color);zoom:var(--ui-scale);-webkit-tap-highlight-color:transparent; line-height: 1.6; transition: background-color 0.3s ease, color 0.3s ease;}
+a{color:var(--primary);text-decoration:none; transition: color 0.2s ease;} /* 链接使用主色 */
+a:hover{text-decoration:underline; color: rgba(var(--primary-rgb),0.85);}
+button{font-family:inherit;cursor:pointer; background:transparent; border:none; padding:0; color:inherit;}
 
 /* ===== 3. 布局容器 ===== */
 .container{display:flex;height:100%;width:100%;}
 
 /* ===== 4. 侧边栏 ===== */
 .sidebar{
-  width:240px;
+  width:240px; /* 原始宽度 */
   background:var(--sidebar-bg);
   border-right:1px solid var(--border-color);
   display:flex;flex-direction:column;
+  padding: 16px 0; /* 上下增加些呼吸空间 */
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
-.logo{font-size:1.4rem;padding:20px;text-align:center;}
-.new-btn{
-  margin:0 16px 12px;
+
+.logo{font-size:1.6rem;
+      padding:10px 20px 20px;
+      text-align:center; 
+      color: var(--primary); 
+      font-weight: 600;
+      
+    } /* 调整logo padding, 颜色和字重 */
+
+.new-btn{ /* 新建对话按钮 */
+  margin:0 16px 16px; /* 底部间距增大 */
   padding:10px 0;
   width:auto;
   background:var(--primary);
   color:#fff;
-  border:none;border-radius:6px;
-  font-size:0.95rem;
+  border:none;border-radius:var(--border-radius-md); /* 使用变量 */
+  font-size:1.05rem;
+  font-weight: 500; /* 加一点字重 */
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: var(--shadow-sm);
 }
-.new-btn:hover{background:rgba(var(--primary-rgb),0.9);}
+.new-btn:hover{background:rgba(var(--primary-rgb),0.85); box-shadow: var(--shadow-md);}
 
 .conv-nav{flex:1;overflow-y:auto;margin:0;padding:0;list-style:none;}
-.conv-nav li{
-  padding:12px 18px;
-  border-radius:8px;
+.conv-nav li{ /* 对话列表项 */
+  padding:10px 18px; /* 稍微调整padding */
+  border-radius:var(--border-radius-md); /* 使用变量 */
   white-space:nowrap;
   text-overflow:ellipsis;
   overflow:hidden;
   position:relative;
-  transition:background 0.15s ease;
-  margin: 0 16px;
-  
+  transition:background-color 0.15s ease, color 0.15s ease; /* color transition */
+  margin: 4px 16px; /* 上下间距，与按钮左右边距协调 */
+  font-size: 1.05rem; /* 统一字号 */
+  cursor: pointer;
 }
-.conv-nav li:hover{background:rgba(var(--primary-rgb),0.12);}
-
-
-.sidebar-footer .settings-btn {
-  font-size: 1rem;          /* 字体稍大 */
-  padding: 0.75em 1em;      /* 内边距加大 */
-  min-width: 100px;         /* 最小宽度保证易点 */
-  justify-content: center;  /* 如果是 flex 布局，文字居中 */
+.conv-nav li:hover{background:rgba(var(--primary-rgb),0.1);}
+/* 侧边栏底部设置按钮 - 从补丁区移到这里集中管理 */
+.sidebar-footer .settings-btn { /* 设置按钮 */
+  font-size: 1rem;
+  padding: 0.8em 1em; /* 调整padding */
+  min-width: auto; /* 自适应宽度 */
+  width: calc(100% - 32px); /* 宽度撑满，减去左右margin */
+  margin: 16px 16px 0px; /* 底部按钮外边距 */
+  justify-content: center;
+  border: 1px solid var(--border-color); /* 添加边框 */
+  background-color: var(--bg-secondary); /* 次要背景 */
+  color: var(--text-color);
+  border-radius: var(--border-radius-md);
+  font-weight: 500;
+  text-align: center;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
+.sidebar-footer .settings-btn:hover {
+  background-color: rgba(var(--primary-rgb),0.1);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* 设置区域 (显示在主区域) */
 .settings-area {
-  display: flex;
+  flex: 1; /* 确保能填满并滚动 */
+  overflow-y: auto; /* 确保能滚动 */
+  display: flex; /* 由JS控制显隐 */
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
+  gap: 24px; /* 设置项间距 */
+  padding: 24px 32px;
+  min-height: 0; /* flex item 滚动关键 */
 }
-.setting-item {
+.settings-area h2 { /* 保持原始补丁样式 */
+  font-size: 1.6rem;
+  margin-bottom: 16px;
+  font-weight: 600;
+  padding-bottom: 12px; /* 增加下划线和标题间距 */
+  border-bottom: 1px solid var(--border-color); /* 标题下划线 */
+}
+.setting-item { /* 保持原始补丁样式 */
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
+  gap: 16px;
+  flex-wrap: wrap; /* 允许换行 */
 }
-.setting-item label {
-  margin-right: auto;   /* 左侧自适应扩展 */
+.setting-item label { /* 保持原始补丁样式 */
+  flex: 0 0 200px;
+  font-weight: 500;
 }
-.setting-item input,
-.setting-item select,
-.setting-item button {
-  margin-left: 8px;     /* 各控件间留白 */
-  flex-shrink: 0;
+.setting-item input[type="password"], /* 保持原始补丁样式，增加 text 类型 */
+.setting-item input[type="text"],
+.setting-item select {
+  flex: 1;
+  min-width: 200px;
+  padding: 8px 12px; /* 统一输入控件padding */
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  background-color: var(--input-bg);
+  color: var(--text-color);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-
+.setting-item input[type="password"]:focus,
+.setting-item input[type="text"]:focus,
+.setting-item select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2); /* 现代辉光效果 */
+}
+.setting-item button { /* 保持原始补丁样式 */
+  flex: 0 0 auto;
+  padding: 8px 20px;
+  font-size: 0.95rem;
+  border-radius:var(--border-radius-md);
+  min-width: 80px; /* 原始值 */
+  background-color: var(--primary); /* 主色按钮 */
+  color: #fff;
+  transition: background-color 0.2s ease;
+}
+.setting-item button:hover {
+    background-color: rgba(var(--primary-rgb), 0.85);
+}
 
 /* ===== 5. 主区 ===== */
-.main-area{flex:1;display:flex;flex-direction:column;position:relative;min-width:0;}
+.main-area{flex:1;display:flex;flex-direction:column;position:relative;min-width:0; background-color: var(--bg-color); transition: background-color 0.3s ease;}
 
 /* 5-1 头部 */
 .chat-header{
   display:flex;align-items:center;gap:12px;
-  padding:12px 16px;
+  padding:0 16px; /* 上下由 min-height 控制，左右padding */
   border-bottom:1px solid var(--border-color);
-  background:var(--bg-color);
-  min-height:48px;
-  flex-shrink:0; /* 确保头部高度固定 */
+  background:var(--bg-color); /* 与主区域背景一致 */
+  min-height:52px; /* 稍高一点的头部 */
+  flex-shrink:0;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
-.chat-header h1{margin:0;font-size:1.1rem;font-weight:500;}
+.chat-header h1#chat-title{margin:0;font-size:1.1rem;font-weight:500; white-space: nowrap; overflow:hidden; text-overflow: ellipsis; max-width: 300px;} /* 限制标题最大宽度 */
+
+/* 归档与删除按钮 - 基于原始覆盖，但适配flex布局 */
+#archive-current-btn, #delete-current-btn {
+  position: static !important; /* 移出绝对定位，改为flex item */
+  top: auto !important; right: auto !important; /* 清除原始绝对定位值 */
+  padding: 6px 12px !important;
+  min-width: 70px !important; /* 确保按钮有一定宽度 */
+  text-align: center !important;
+  border-radius: var(--border-radius-md) !important; /* 使用变量 */
+  font-size: 0.9rem !important;
+  cursor: pointer !important;
+  box-shadow: var(--shadow-sm) !important; /* 使用变量 */
+  transition: background-color 0.2s ease, box-shadow 0.2s ease !important;
+  border: 1px solid transparent !important; /* 确保高度一致性 */
+  font-weight: 500; /* 加一点字重 */
+}
+#archive-current-btn { /* 归档按钮，参考图片是浅色底 */
+  background: var(--bg-secondary) !important; /* 用次要背景色 */
+  color: var(--text-color) !important;
+  border-color: var(--border-color) !important; /* 加上边框 */
+  
+}
+#archive-current-btn:hover {
+  background: rgba(var(--primary-rgb),0.1) !important;
+  border-color: var(--primary) !important;
+  color: var(--primary) !important;
+  box-shadow: var(--shadow-md) !important;
+}
+/* 删除按钮 - 保持危险色 */
+#delete-current-btn{background:#e53e3e!important;color:#fff!important;}
+#delete-current-btn:hover{background:#c53030!important; box-shadow: var(--shadow-md) !important;}
+
 
 /* 5-2 聊天内容 - 修改 */
 .chat-area{
   flex:1;
   display:flex;
   flex-direction:column;
-  overflow:hidden; /* 确保 .chat-area 本身不出现滚动条，而是让 .messages 滚动 */
-  min-height:0;   /* 允许内部的 .messages 正确滚动 */
+  overflow:hidden;
+  min-height:0;
 }
 
-
-/* —— 新增：归档按钮样式 —— */
-#archive-current-btn {
-  position: absolute !important;
-  top: 8px !important;
-  /* 让它紧挨删除按钮左侧 — 删除是 right:12px，这里设置一个合适的偏移 */
-  right: 80px !important;        /* 你可以根据按钮宽度微调这个值 */
-  padding: 6px 12px !important;
-  min-width: 55px; /* 新增：设置一个最小宽度，例如 60px，根据实际效果调整 */
-  text-align: center; /* 新增：确保文字在按钮内居中 */
-  background: #fff !important;
-  color: #000 !important;
-  border: 1px solid #ccc !important;
-  border-radius: 4px !important;
-  font-size: 0.9rem !important;
-  cursor: pointer !important;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
-  transition: background 0.2s ease, border-color 0.2s ease !important;
-}
-#archive-current-btn:hover {
-  background: #f7f7f7 !important;
-  border-color: #bbb !important;
-}
-
-/* ===== 聊天消息相关 CSS - 修改开始 ===== */
-
-/* ===== 聊天消息相关 CSS - 统一的 messages 定义 ===== */
-
+/* 聊天消息相关 CSS - 统一的 messages 定义 */
 .messages {
-  flex: 1;                     /* 占据父容器 .chat-area 中除去 .input-area 的剩余空间 */
-  overflow-y: auto;            /* 当内容超出高度时显示垂直滚动条 */
-  /* padding: 24px 24px 75px; */ /* 旧的 padding，底部空间过大 */
-  padding: 24px;               /* 四周统一内边距，底部不再需要为绝对定位的输入框留白 */
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px; /* 四周统一内边距 */
   display: flex;
   flex-direction: column;
-  gap: 14px;                   /* .message-wrapper 之间的间距 */
+  gap: 16px; /* 消息间距 */
   width: 100%;
-}
-
-.message {
-  max-width: 100%; 
-  margin: 0; /* 确保没有额外的外边距 */
-  padding: 8px 12px;
-  border-radius: 16px;
-  line-height: 1.5;
-  font-size: 0.95rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  word-break: break-word;
+  position: relative; /* 用于空聊天提示 */
 }
 
 /* 单条消息的包裹层 */
 .message-wrapper {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-start; /* 头像（如果添加）和气泡顶部对齐 */
   gap: 8px;
   width: fit-content;
-  max-width: 85%; /* 或者你之前设置的，比如 80% 或 75% */
+  max-width: 85%;
 }
-
-/* 用户消息的包裹层：整体靠右 */
 .user-message-wrapper {
   align-self: flex-end;
+  /* flex-direction: row-reverse; 如果有头像且头像在右 */
 }
-
-/* 助手消息的包裹层：整体靠左 */
 .assistant-message-wrapper {
   align-self: flex-start;
 }
-
-/* 消息气泡 (.message) 的样式 */
-.message {
-  max-width: 100%; 
-  margin: 0; 
-  padding: 8px 12px;
-  border-radius: 16px;
-  line-height: 1.5;
+.message { /* 消息气泡 */
+  padding: 10px 14px; /* 内边距 */
+  border-radius: var(--border-radius-lg); /* 使用变量，圆润一些 */
+  line-height: 1.6;
   font-size: 0.95rem;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-  word-break: break-word; /* 将 word-break 移到这里 */
+  box-shadow: var(--shadow-sm); /* 使用变量 */
+  word-break: break-word;
+  max-width: 100%;
+  position: relative; /* 用于内部元素如删除按钮 */
 }
-
-/* ... 你其他的 .message.user, .message.assistant, .delete-message-btn 等样式 ... */
-
-/* 用户气泡颜色 */
-.message.user {
-  background-color: var(--primary); /* 在新版 CSS 中应为 var(--primary-color) */
+.message.user { /* 用户气泡颜色 */
+  background-color: var(--primary);
   color: white;
-  text-align: left; 
+  border-bottom-right-radius: var(--border-radius-sm); /* 模拟小尾巴 */
 }
-
-/* 助手气泡颜色 */
-.message.assistant {
-  /* background-color: var(--bg-secondary); /* 假设你定义了这个变量 */
-  /* color: var(--text-color); */
-  /* 以下是你原有的深色主题下的助手气泡样式，浅色主题会覆盖 */
-  background-color: rgba(255,255,255,0.06);
+.message.assistant { /* 助手气泡颜色 - 参考图片，助手气泡是深灰色 */
+  background-color: var(--input-bg); /* 使用与输入框相似的背景色，与主背景有区分 */
   color: var(--text-color);
-  text-align: left;
+  border-bottom-left-radius: var(--border-radius-sm); /* 模拟小尾巴 */
 }
-body.light-theme .message.assistant{
+body.light-theme .message.assistant{ /* 浅色模式助手气泡 */
   background:#f0f2f5;
   color:var(--text-color);
-  border:1px solid rgba(0,0,0,0.06);
+  border:1px solid rgba(0,0,0,0.08); /* 浅色模式加一点边框 */
 }
-/* ... (其他 message 样式如 pre, code, text p 等保持) ... */
+.message pre{font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; background:rgba(0,0,0,0.12);padding:10px 12px;border-radius:var(--border-radius-md);overflow-x:auto; margin: 0.8em 0;} /* 代码块样式 */
+body.dark-theme .message pre { background: rgba(255,255,255,0.08); color: #cdd3da;}
+.message code{font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace; background-color: rgba(var(--primary-rgb), 0.1); padding: 0.2em 0.4em; border-radius: var(--border-radius-sm); font-size: 0.85em;} /*行内代码*/
 
-
-/* --- 删除单条消息按钮的样式 (修改后) --- */
+/* 删除单条消息按钮的样式 (修改后) */
 .delete-message-btn {
   background: transparent;
   border: none;
-  color: #888; 
+  color: var(--text-secondary); /* 次要文字颜色 */
   cursor: pointer;
-  font-size: 1.2em; 
-  padding: 0;    
+  font-size: 1.1em; /* 稍大一点 */
+  padding: 2px; /* 轻微padding增加点击区域 */
   line-height: 1;
-  
-  /* --- 默认隐藏 --- */
   opacity: 0;
   visibility: hidden;
-  /* --- 结束默认隐藏 --- */
-  
-  transition: opacity 0.2s ease, visibility 0s linear 0.2s, color 0.2s ease; 
-  /* 解释:
-     - opacity 过渡 0.2s
-     - visibility 不立即过渡 (0s)，但在 opacity 过渡完成后 (linear 0.2s) 改变，
-       这样可以避免在元素透明但仍可见时发生意外交互。
-       或者更简单地，只过渡 opacity，然后用 display: none/block，但 display 不支持 transition。
-       对于简单的显隐，只控制 opacity 配合 visibility 效果通常不错。
-  */
-  
-  width: 20px;   
-  height: 20px;  
+  transition: opacity 0.2s ease, visibility 0s linear 0.2s, color 0.2s ease, background-color 0.2s ease;
+  width: 22px; /* 固定宽高 */
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 4px; 
-  margin-top: 4px; 
+  border-radius: var(--border-radius-sm);
+  margin-top: 4px; /* 与气泡大致对齐 */
+  /* 根据 user/assistant wrapper 的 flex-direction 调整 margin */
 }
-
-/* 当鼠标悬停在整个消息包裹层上时，显示删除按钮 */
-.message-wrapper:hover .delete-message-btn {
-  opacity: 0.7; /* 或者 1，如果你希望完全不透明 */
+.user-message-wrapper:hover .delete-message-btn, /* 用户消息删除按钮显示 */
+.assistant-message-wrapper:hover .delete-message-btn { /* 助手消息删除按钮显示 */
+  opacity: 0.7;
   visibility: visible;
-  transition-delay: 0s; /* 确保悬停时 visibility 立即生效 */
+  transition-delay: 0s;
 }
-
-/* 当鼠标直接悬停在删除按钮上时 (可选，可以进一步增强反馈) */
 .delete-message-btn:hover {
-  color: #ff4d4d; 
-  opacity: 1; /* 确保在直接悬停时完全不透明 */
+  color: #e53e3e; /* 危险红色 */
+  opacity: 1;
+  background-color: rgba(229, 62, 62, 0.1); /* 红色背景的浅色版 */
 }
 
-/* ===== 聊天消息相关 CSS - 修改结束 ===== */
-
-.message pre,.message code{font-family:monospace;}
-.message pre{background:rgba(0,0,0,0.15);padding:8px;border-radius:6px;overflow-x:auto;}
-
-/* --- 输入区域整体布局调整 --- */
+/* 输入区域整体布局调整 */
 .input-area {
   flex-shrink: 0;
-  padding: 12px; /* 稍微调整整体内边距 */
-  background: var(--bg-color);
+  padding: 10px 12px; /* 上下减少一点，左右保持 */
+  background: var(--bg-color); /* 或 var(--sidebar-bg) 制造一点层次感 */
   border-top: 1px solid var(--border-color);
+  display: flex; /* 改为 flex，以便内部元素对齐 */
+  align-items: flex-end; /* 底部对齐，当 textarea 增高时按钮仍在底部 */
+  gap: 8px; /* 元素之间的间距 */
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.input-main-row {
   display: flex;
-  align-items: flex-end; /* 保持底部对齐 */
-  gap: 10px; /* 元素之间的间距 */
+  align-items: flex-end; /* 底部对齐，当 textarea 增高时按钮仍在底部 */
+  gap: 8px; /* 元素之间的间距 */
+  width: 100%; /* 确保这一行占满父容器宽度 */
+}
+/* 输入区左侧操作按钮（+号 和 滑块图标）- 参考图片 */
+.input-action-btn {
+  flex-shrink: 0;
+  padding: 0;
+  width: 38px; /* 调整大小 */
+  height: 38px;
+  border-radius: var(--border-radius-md); /* 圆角 */
+  border: 1px solid var(--border-color);
+  background-color: var(--input-bg); /* 与输入框背景一致 */
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+.input-action-btn:hover {
+  border-color: var(--primary);
+  background-color: rgba(var(--primary-rgb), 0.05);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+.input-action-btn svg { /* 按钮内SVG图标 */
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.8; /* SVG线条粗细 */
 }
 
-
-
-/* 确保你的主题特定箭头颜色仍然生效 */
-body.dark-theme .input-area select#model {
-  background-image: url("data:image/svg+xml;charset=UTF-8,<svg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'><path d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.5)'/></svg>"); /* 深色主题箭头 */
-  /* ... 其他深色主题 select 样式 ... */
-}
-
-
-/* style.css */
-
-.input-area textarea {
-  flex-grow: 1; 
-  padding: 8px 10px;
+/* 文本输入框 */
+.input-area textarea#prompt { /* 沿用原始选择器名 */
+  flex-grow: 1;
+  padding: 9px 12px; /* 微调padding */
   font-size: 0.95rem;
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  background: var(--bg-color);
+  border-radius: var(--border-radius-md); /* 使用变量 */
+  background: var(--input-bg); /* 使用新变量 */
   color: var(--text-color);
-  resize: none; /* 禁止用户手动拖拽调整大小，因为我们将用JS控制 */
-  width: 100%; 
-  box-sizing: border-box; 
-  max-height: 200px; /* 最大高度限制 */
-  min-height: 60px;
+  resize: none;
+  width: 100%; /* 确保 flex-grow 生效 */
+  box-sizing: border-box;
+  max-height: 200px;
+  min-height: 38px; /* 与按钮高度匹配 */
   line-height: 1.6;
-  overflow-y: hidden; /* 默认隐藏滚动条，当内容超出max-height时，JS会改为auto */
-                      /* 或者直接设为 auto，但配合JS动态调整可能hidden更好初始状态 */
-  
-  height: auto; /* 让 JS 可以先重置它 */
+  overflow-y: hidden; /* JS 会改为auto */
+  height: auto; /* JS 控制 */
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.3s ease;
 }
-
-.input-area textarea:focus {
+.input-area textarea#prompt:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2); /* 现代辉光效果 */
+  background-color: var(--bg-light); /* 焦点时浅色背景确保可读性 */
 }
-
+body.dark-theme .input-area textarea#prompt:focus {
+    background-color: var(--sidebar-dark); /* 深色主题焦点时比输入背景略亮 */
+}
 
 /* 发送按钮的样式 */
 .input-area button#send-btn {
-  padding: 0 20px; /* 左右内边距 */
-  height: 42px;    /* 固定高度 */
+  padding: 0 18px; /* 调整内边距 */
+  height: 38px;    /* 与其他元素高度一致 */
   background:var(--primary);
   color:#fff;
   border:none;
-  border-radius:6px;
+  border-radius:var(--border-radius-md); /* 使用变量 */
   font-size:0.95rem;
-  flex-shrink: 0; /* 防止按钮被父级 flex 容器压缩 */
+  font-weight: 500; /* 加一点字重 */
+  flex-shrink: 0;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: var(--shadow-sm);
+}
+.input-area button#send-btn:hover {
+  background:rgba(var(--primary-rgb),0.85);
+  box-shadow: var(--shadow-md);
+}
+.input-area button#send-btn:disabled { /* 发送按钮禁用状态 */
+    background-color: var(--border-color);
+    color: var(--text-secondary);
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+
+/* 模型切换下拉 (位于头部) - 保持原始选择器，参考图片调整 */
+.header-model-selector select#model { /* 之前分散，现在统一 */
+  z-index:10; /* 确保在头部不被遮挡 */
+  background:var(--input-bg); /* 使用输入框背景 */
+  color:var(--text-color);
+  border:1px solid var(--border-color);
+  border-radius:var(--border-radius-md);
+  padding: 7px 30px 7px 10px; /* 调整padding以适应箭头 */
+  appearance: none; /* 移除原生下拉箭头 */
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,<svg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'><path d='M0 0l5 6 5-6z' fill='%239CA3AF'/></svg>"); /* 灰色箭头 */
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px 6px;
+  font-size: 0.9rem;
+  min-width: 180px; /* 最小宽度，参考图片 */
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   
-  /* --- 新增/确保以下属性 --- */
-  white-space: nowrap; /* 强制文本不换行 */
-  display: inline-flex; /* 或者 flex, 让内部文本能更好地对齐 */
-  align-items: center;  /* 垂直居中文本 */
-  justify-content: center; /* 水平居中文本 (如果按钮比文本宽) */
-  min-width: fit-content; /* 让按钮的最小宽度至少是其内容的宽度 */
-                          /* 或者设置一个具体的 min-width，例如：min-width: 70px; */
 }
 
-.input-area button#send-btn:hover { 
-  background:rgba(var(--primary-rgb),0.9);
+.header-actions {
+  margin-left: auto; /* 这会将按钮组推到最右边 */
+  display: flex;    /* 让内部按钮水平排列 */
+  gap: 8px;         /* 归档和删除按钮之间的间距，可以根据需要调整，或者用 margin */
 }
 
-/* 模型切换下拉靠左，保持层级 */
-.model-select select{z-index:1000;background:var(--bg-color);color:var(--text-color);border:1px solid var(--border-color);border-radius:6px;padding:6px;}
 
-/* ===== 7. 危险按钮 ===== */
-button.danger,#delete-current-btn{background:#e53e3e!important;color:#fff!important;}
-button.danger:hover,#delete-current-btn:hover{background:#c53030!important;}
+body.dark-theme .header-model-selector select#model { /* 深色主题箭头 */
+  background-image: url("data:image/svg+xml;charset=UTF-8,<svg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'><path d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.5)'/></svg>");
+}
+.header-model-selector select#model:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
+}
+.header-model-selector select#model option {
+  background: var(--bg-color);
+  color: var(--text-color);
+}
 
-/* ===== 8. 滚动条美化 ===== */
-.messages::-webkit-scrollbar{width:8px;}
-.messages::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.25);border-radius:4px;}
-.sidebar::-webkit-scrollbar{width:6px;}
-.sidebar::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.2);border-radius:4px;}
+
+/* ===== 7. 危险按钮 (通用) ===== */
+button.danger{background:#e53e3e!important;color:#fff!important; border-radius: var(--border-radius-md); padding: 8px 16px;} /* 确保有padding和圆角 */
+button.danger:hover{background:#c53030!important;}
+
+/* ===== 8. 滚动条美化 (基本保留原始，增加Firefox兼容) ===== */
+.messages::-webkit-scrollbar, .sidebar::-webkit-scrollbar, .settings-area::-webkit-scrollbar, .model-management-area::-webkit-scrollbar, .reasoning-content::-webkit-scrollbar, .file-preview-area::-webkit-scrollbar { /* 统一选择器 */
+  width:8px;
+  height: 8px; /* 增加水平滚动条高度 */
+}
+.messages::-webkit-scrollbar-thumb, .sidebar::-webkit-scrollbar-thumb, .settings-area::-webkit-scrollbar-thumb, .model-management-area::-webkit-scrollbar-thumb, .reasoning-content::-webkit-scrollbar-thumb, .file-preview-area::-webkit-scrollbar-thumb {
+  background:rgba(0,0,0,0.25);
+  border-radius:var(--border-radius-full); /* 全圆角 */
+  border: 2px solid transparent; /* 使滑块看起来细一点 */
+  background-clip: content-box;
+}
+.messages::-webkit-scrollbar-thumb:hover, .sidebar::-webkit-scrollbar-thumb:hover, .settings-area::-webkit-scrollbar-thumb:hover, .model-management-area::-webkit-scrollbar-thumb:hover, .reasoning-content::-webkit-scrollbar-thumb:hover, .file-preview-area::-webkit-scrollbar-thumb:hover {
+  background:rgba(0,0,0,0.35);
+}
+body.dark-theme .messages::-webkit-scrollbar-thumb, body.dark-theme .sidebar::-webkit-scrollbar-thumb, body.dark-theme .settings-area::-webkit-scrollbar-thumb, body.dark-theme .model-management-area::-webkit-scrollbar-thumb, body.dark-theme .reasoning-content::-webkit-scrollbar-thumb, body.dark-theme .file-preview-area::-webkit-scrollbar-thumb {
+  background:rgba(255,255,255,0.2);
+}
+body.dark-theme .messages::-webkit-scrollbar-thumb:hover, body.dark-theme .sidebar::-webkit-scrollbar-thumb:hover, body.dark-theme .settings-area::-webkit-scrollbar-thumb:hover, body.dark-theme .model-management-area::-webkit-scrollbar-thumb:hover, body.dark-theme .reasoning-content::-webkit-scrollbar-thumb:hover, body.dark-theme .file-preview-area::-webkit-scrollbar-thumb:hover {
+  background:rgba(255,255,255,0.3);
+}
+/* Firefox 滚动条 */
+.messages, .sidebar, .settings-area, .model-management-area, .reasoning-content, .file-preview-area {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0,0,0,0.25) transparent; /* 滑块颜色 轨道颜色 */
+}
+body.dark-theme .messages, body.dark-theme .sidebar, body.dark-theme .settings-area, body.dark-theme .model-management-area, body.dark-theme .reasoning-content, body.dark-theme .file-preview-area {
+  scrollbar-color: rgba(255,255,255,0.2) transparent;
+}
 
 /* ===== 9. 响应式 ===== */
 @media(max-width:768px){
-  .sidebar{display:none;}
+  .sidebar{
+    position: fixed; /* 改为固定定位 */
+    left: -240px; /* 初始隐藏，宽度与.sidebar width一致 */
+    top: 0;
+    bottom: 0;
+    z-index: 1000; /* 置于顶层 */
+    transition: left 0.3s ease-in-out; /* 滑动动画 */
+    box-shadow: var(--shadow-lg); /* 显示时增加阴影 */
+  }
+  /* .sidebar.open { left: 0; } JS控制 */
   .container{flex-direction:column;}
-  .chat-header{padding:10px;}
-  .new-btn{margin:12px;}
+  .chat-header{padding: 0 12px; min-height: 48px;} /* 移动端头部padding和高度 */
+  .new-btn{margin:12px 16px;} /* 移动端新建按钮外边距 */
+  .messages { padding: 16px; } /* 移动端消息区padding */
+  .input-area { padding: 8px; } /* 移动端输入区padding */
 }
 
 /* ===== 10. Helper 类 ===== */
@@ -386,228 +564,54 @@ button.danger:hover,#delete-current-btn:hover{background:#c53030!important;}
 .full-width{width:100%!important;}
 .text-center{text-align:center!important;}
 
-/* —— 补丁开始 —— */
-
-/* 1. 美化侧栏“设置”⚙ 按钮 */
-.settings-btn {
-  display: block;                       /* 从 inline-flex 改为块级 */
-  margin: 0 20px 15px;                  /* 同侧边栏按钮左右间距 */
-  width: calc(100% - 40px);             /* 扣除左右各 20px 外边距后撑满宽度 */
-  height: 48px;                         /* 固定高度，可按需调整 */
-  padding: 0 16px;                      /* 左右 padding 保证文字有呼吸感 */
-  background: #10a37f;
-  color: #fff;
-  font-weight: 500;
-  border: none;
-  border-radius: 6px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-  text-align: center;                   /* 文字水平居中 */
-  line-height: center;                    /* 文字垂直居中 */
-}
-.settings-btn:hover {
-  filter: brightness(0.9);
-}
-
-.settings-btn:hover {
-  filter: brightness(0.9);
-}
+/* —— 补丁开始 (保留原始补丁结构，但应用变量和现代化调整) —— */
+/* 1. 美化侧栏“设置”⚙ 按钮 - 已移至 .sidebar-footer .settings-btn */
 
 /* 2. 侧栏选中项和按钮同宽（修正版） */
-.new-btn {
-  margin: 0 20px 15px;      /* 与列表项左右一致 */
+.new-btn { /* 已在主样式区调整 */
+  margin: 0 16px 16px;
 }
-
-/* 先清除所有默认列表缩进 */
-.conv-nav ul {
+.conv-nav ul { /* 已在主样式区处理 */
   margin: 0;
   padding: 0;
   list-style: none;
 }
-
-/* 列表项统一 */
-.conv-nav li {
-  display: block;
-  margin: 0 20px 5px;
+.conv-nav li { /* 已在主样式区处理 */
+  display: block; /* 保持block */
+  margin: 4px 16px 4px; /* 保持与.new-btn一致的左右边距 */
   padding: 10px 16px;
-  border-radius: 8px;
+  border-radius:var(--border-radius-md);
   cursor: pointer;
 }
-
-/* hover 高亮 */
-.conv-nav li:hover {
+.conv-nav li:hover { /* 已在主样式区处理 */
   background: rgba(var(--primary-rgb), 0.12);
 }
 
+/* 3. 优化模型选择下拉样式 - 已在头部模型选择器中处理 */
 
+/* 4. 设置界面排版调整 - 已在 .settings-area 中处理 */
 
-
-/* 箭头图标（Data URI SVG）*/
-.input-area select#model {
-  background-image: url("data:image/svg+xml;charset=UTF-8,<svg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'><path d='M0 0l5 6 5-6z' fill='%23999'/></svg>");
+/* 5. 精简输入区按钮和下拉整体对齐 - 已在 .input-area 中处理 */
+.input-area { /* 补丁中的padding值，如果需要覆盖主样式 */
+  padding: 10px 16px; /* 原始补丁值，确保一致性 */
 }
-
-/* —— 浅色主题 —— */
-body.light-theme .input-area select#model {
-  background-color: #fff;
-  color: #333;
-  border: 1px solid #ccc;
-}
-body.light-theme .input-area select#model:focus {
-  outline: none;
-  border-color: #40a9ff;
-  box-shadow: 0 0 0 2px rgba(24,144,255,0.2);
-}
-body.light-theme .input-area select#model option {
-  background: #fff;
-  color: #333;
-}
-body.light-theme .input-area select#model option:hover {
-  background-color: #f5f5f5;
-}
-
-/* —— 深色主题 —— */
-body.dark-theme .input-area select#model {
-  background-color: #2e2f3a;
-  color: #ececf1;
-  border: 1px solid #555;
-}
-body.dark-theme .input-area select#model:focus {
-  outline: none;
-  border-color: #409cff;
-  box-shadow: 0 0 0 2px rgba(64,156,255,0.2);
-}
-body.dark-theme .input-area select#model option {
-  background: #2e2f3a;
-  color: #ececf1;
-}
-body.dark-theme .input-area select#model option:hover {
-  background-color: #3a3b45;
-}
-
-
-/* 3. 优化模型选择下拉样式 */
-.input-area select#model {
-  /* ...前面那些 appearance、padding 等不变... */
-
-  /* 把箭头图标放到正确的 selector 里 */
-  background-image: url("data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTIiIGhlaWdo dD0iOCIgdmlld0JveD0iMCAwIDEyIDgiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAw L3N2ZyI+PHBvbHlnb24gcG9pbnRzPSIwIDAgNiA4IDEyIDAgMCAwIiBmaWxsPSIjY2NjIi8+ PC9zdmc+");
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  background-size: 12px 8px;
-}
-
-
-/* 4. 设置界面排版调整 */
-.settings-area {
-  padding: 24px 32px;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-.settings-area h2 {
-  font-size: 1.6rem;
-  margin-bottom: 16px;
-  font-weight: 600;
-}
-.setting-item {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-.setting-item label {
-  flex: 0 0 200px;             /* 固定标签宽度 */
-  font-weight: 500;
-}
-.setting-item input[type="password"],
-.setting-item select {
-  flex: 1;
-  min-width: 200px;
-}
-.setting-item button {
-  flex: 0 0 auto;
-  padding: 8px 20px;
-  font-size: 0.95rem;
-  border-radius: 6px;
-}
-
-/* 5. 精简输入区按钮和下拉整体对齐 */
-.input-area {
-  padding: 8px 20px;           /* 减少上下内边距 */
-}
-
-
 /* —— 补丁结束 —— */
 
-/* ===== 覆盖：删除按钮样式 ===== */
-#delete-current-btn {
-  position: absolute !important;
-  top: 8px !important;
-  right: 12px !important;
-  padding: 6px 12px !important;
-  min-width: 55px; /* 新增：设置与归档按钮相同的最小宽度 */
-  text-align: center; /* 新增：确保文字在按钮内居中 */
-  background: #e53e3e !important;
-  color: #fff !important;
-  border: 1px solid transparent !important;
-  border-radius: 4px !important;
-  font-size: 0.9rem !important;
-  cursor: pointer !important;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
-  transition: background 0.2s ease !important;
-}
-#delete-current-btn:hover {
-  background: #c53030 !important;
-}
+/* ===== 覆盖：删除按钮样式 - 已在头部按钮区处理 ===== */
 
 /* 清除助手机泡内 <p> 的默认 margin */
 .message .text p {
-  margin: 0;
+  margin: 0 0 0.5em 0; /* 保留段落下边距，最后一个p除外 */
 }
+.message .text p:last-child { margin-bottom: 0; }
 /* 隐藏所有空的 <p> */
 .message .text p:empty {
   display: none !important;
 }
 
-body.light-theme ::-webkit-scrollbar {
-  width: 8px;
-}
-body.light-theme ::-webkit-scrollbar-track {
-  background: #f0f0f0;
-  border-radius: 4px;
-}
-body.light-theme ::-webkit-scrollbar-thumb {
-  background-color: #c0c0c0;
-  border-radius: 4px;
-  border: 2px solid #f0f0f0;
-}
-body.light-theme ::-webkit-scrollbar-thumb:hover {
-  background-color: #999;
-}
-body.light-theme {
-  scrollbar-color: #bbb #f0f0f0;
-  scrollbar-width: thin;
-}
-
-body.dark-theme ::-webkit-scrollbar {
-  width: 8px;
-}
-body.dark-theme ::-webkit-scrollbar-track {
-  background: #1f1f1f;
-  border-radius: 4px;
-}
-body.dark-theme ::-webkit-scrollbar-thumb {
-  background-color: #444;
-  border-radius: 4px;
-  border: 2px solid #1f1f1f;
-}
-body.dark-theme ::-webkit-scrollbar-thumb:hover {
-  background-color: #666;
-}
-body.dark-theme {
-  scrollbar-color: #444 #1f1f1f;
-  scrollbar-width: thin;
-}
+/* 主题化滚动条 (旧的，已被新的统一滚动条样式取代或合并思路) - 此部分可考虑移除或注释，因为已有更全面的滚动条样式 */
+/* body.light-theme ::-webkit-scrollbar ... */
+/* body.dark-theme ::-webkit-scrollbar ... */
 
 /* 用户气泡保留换行 */
 .message.user .text {
@@ -617,1415 +621,810 @@ body.dark-theme {
 .message.assistant.loading {
   opacity: 0.6;
   font-style: italic;
-  display: inline-block; /* 让其表现为行内块，宽度由内容决定 */
-  width: auto;           /* 明确宽度自适应 */
-  max-width: fit-content;/* 最大宽度也由内容决定，或者设置一个较小的值，如 200px */
-  align-self: flex-start;/* 确保它在 .messages 容器中是左对齐的 */
-}
-
-/* 清除助手机泡内 <p> 的默认 margin */
-.message .text p {
-  margin: 0;
-}
-/* 隐藏所有真正空的 p（以防万一） */
-.message .text p:empty {
-  display: none !important;
+  display: inline-block;
+  width: auto;
+  max-width: fit-content;
+  align-self: flex-start;
 }
 
 /* 聊天框中所有链接显示为蓝色，并加下划线 */
 .message .text a {
-  color: #0066cc !important;
+  color: var(--primary) !important; /* 使用变量 */
   text-decoration: underline !important;
+  font-weight: 500; /* 加一点字重 */
 }
-
-/* 鼠标移上去时加深一下色 */
+body.light-theme .message.user .text a { color: rgba(255,255,255,0.9) !important; } /* 用户气泡内浅色链接 */
 .message .text a:hover {
-  color: #004999 !important;
+  color: rgba(var(--primary-rgb), 0.8) !important; /* 使用变量的浅色版 */
 }
+body.light-theme .message.user .text a:hover { color: #fff !important; }
 
 /* 聊天消息中的图片自适应宽度、保持纵横比 */
 .message .text img {
-  display: block;             /* 单独一行，自动撑开容器 */
-  max-width: 100% !important; /* 最宽不超过气泡宽度 */
-  height: auto !important;    /* 高度按比例自适应 */
-  margin: 8px 0;              /* 上下加点间距 */
-  border-radius: 4px;         /* 圆润点儿，可选 */
+  display: block;
+  max-width: 100% !important;
+  height: auto !important;
+  margin: 10px 0; /* 上下加点间距 */
+  border-radius: var(--border-radius-md); /* 使用变量 */
+  border: 1px solid var(--border-color); /* 图片加边框 */
 }
 
-#edit-title-btn {
+#edit-title-btn { /* 编辑标题按钮 */
   font-size: 0.9em;
-  vertical-align: middle;
+  vertical-align: middle; /* 图标和文字对齐 */
+  margin-left: 8px; /* 与标题间距 */
+  color: var(--text-secondary);
+  padding: 4px;
+  border-radius: var(--border-radius-sm);
+  transition: color 0.2s ease, background-color 0.2s ease;
 }
 #edit-title-btn:hover {
-  opacity: 0.7;
+  opacity: 1; /* hover时完全不透明 */
+  color: var(--primary);
+  background-color: rgba(var(--primary-rgb),0.1);
 }
 
 /* —— 美化对话标题编辑框 —— */
 #chat-title-input {
-  background-color: rgba(255,255,255,0.05); /* 轻微透明黑 */
-  border: 1px solid #555;                  /* 中灰边框 */
-  border-radius: 4px;                      /* 圆角 */
-  padding: 4px 8px;                        /* 内边距 */
-  color: #fff;                             /* 白色字体 */
-  font-weight: 500;                        /* 稍粗 */
-  font-family: inherit;                    /* 继承节奏 */
-  outline: none;                           /* 去掉默认 outline */
-  min-width: 120px;                        /* 最小宽度 */
-  font-size: 1.00rem; /* 例如，设置为 1.1rem，比聊天头部的 h1 (1.1rem) 略大或一致 */
+  background-color: var(--input-bg); /* 使用输入框背景 */
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  padding: 4px 8px;
+  color: var(--text-color);
+  font-weight: 500;
+  font-family: inherit;
+  outline: none;
+  min-width: 120px;
+  font-size: 1.05rem; /* 与标题显示大小接近 */
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-
-/* 焦点时高亮边框 */
 #chat-title-input:focus {
-  border-color: #3399ff;
-  box-shadow: 0 0 4px rgba(51,153,255,0.6);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2); /* 现代辉光 */
 }
-/* 针对两种主题分别优化编辑框可见性 */
-body.light-theme #chat-title-input {
-  /* 浅色主题下用深色半透明底、深灰边框 */
-  background-color: rgba(0, 0, 0, 0.05);
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  color: var(--text-light);
-}
+/* 主题特定优化已通过变量实现 */
 
-body.dark-theme #chat-title-input {
-  /* 深色主题下用亮色半透明底、中灰边框 */
-  background-color: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: var(--text-dark);
-}
-
-/* 容器保持 inline-flex，让按钮靠右显示 */
+/* UI缩放控件 */
 .scale-frame {
   display: inline-flex;
-  margin-left: 8px;
+  margin-left: 12px; /* 与其他头部组件间距 */
 }
-
-/* 按钮组 */
 .scale-frame .scale-options {
   display: flex;
+  border: 1px solid var(--border-color); /* 整体边框 */
+  border-radius: var(--border-radius-md); /* 整体圆角 */
+  overflow: hidden; /* 确保内部按钮圆角被裁切 */
 }
-
-/* 各按钮：固定宽度、高度，单行文字 */
 .scale-frame .scale-options button {
-  flex: none;               /* 不等分，使用固定宽度 */
-  width: 50px;              /* 根据文字长度调整 */
-  padding: 6px 0;           /* 垂直内边距，水平由 width 决定 */
-  margin: 0 2px;            /* 每个按钮左右留一点间距 */
-  border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  color: var(--text-primary);
+  flex: none;
+  width: auto; /* 宽度自适应 */
+  padding: 6px 10px; /* 调整padding */
+  /* margin: 0 2px; */ /* 由边框分隔，无需margin */
+  border: none; /* 移除独立边框 */
+  border-right: 1px solid var(--border-color); /* 用右边框分隔按钮 */
+  background: var(--bg-secondary); /* 次要背景 */
+  color: var(--text-color);
   text-align: center;
-  font-size: 0.9em;
-  line-height: 1;           /* 让文字垂直居中 */
+  font-size: 0.85em; /* 稍小字号 */
+  line-height: 1;
   cursor: pointer;
-  border-radius: 4px;       /* 全体一致圆角 */
+  border-radius: 0; /* 内部按钮无圆角 */
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+.scale-frame .scale-options button:last-child {
+  border-right: none; /* 最后一个按钮无右边框 */
+}
+.scale-frame .scale-options button.active { /* 选中态 */
+  background-color: var(--primary); /* 主色背景 */
+  color: #fff; /* 白色文字 */
+  /* border-color: var(--primary-color); 原始是 primary-color，现改为背景高亮 */
+}
+.scale-frame .scale-options button:not(.active):hover { /* 未选中按钮hover */
+  /* border-color: var(--primary-color); */
+  background-color: rgba(var(--primary-rgb), 0.1); /* 轻微主色背景 */
 }
 
-/* 选中态仅改变边框颜色，不要背景高亮 */
-.scale-frame .scale-options button.active {
-  border-color: var(--primary-color);
-  color: var(--primary-color);
+/* 拖拽排序 */
+.sortable-ghost { /* 拖拽占位符 */
+  opacity: 0.4 !important; /* 半透明 */
+  background: rgba(var(--primary-rgb), 0.15) !important; /* 淡主色背景 */
 }
-
-/* 去掉之前的 hover 背景高亮，仅加个边框反馈 */
-.scale-frame .scale-options button:hover {
-  border-color: var(--primary-color);
+.sortable-chosen { /* 被选中的拖拽项 */
+  background: rgba(var(--primary-rgb), 0.25) !important; /* 略深的主色背景 */
+  border: 1px dashed rgba(var(--primary-rgb), 0.5) !important; /* 虚线边框 */
+  box-shadow: var(--shadow-lg) !important; /* 更明显的阴影 */
 }
-
-/* 把 ghost 隐掉，直接移动原始 li */
-.sortable-ghost {
-  opacity: 0 !important;
-}
-
-/* 被拖住的 li 加个样式提示一下 */
-.sortable-chosen {
-  background: rgba(var(--primary-rgb), 0.2) !important;
-  border: 1px dashed rgba(var(--primary-rgb), 0.5) !important;
-}
-
-
-/* 让所有列表项相对定位，便于 ::before 绝对定位画线 */
-#conversation-list li {
-  position: relative;        /* 新增：建立定位上下文 */
-  display: block;
-  margin: 0 20px 5px;
-  padding: 10px 16px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-#conversation-list li:hover {
-  background: rgba(var(--primary-rgb), 0.12);  /* 自行调整 alpha 值，看着舒服就好 */
-  color: inherit;                             /* 保持文字原色 */
-}
-
 /* 拖拽时在空位处的元素上画一条蓝色分隔线 */
-#conversation-list li.sortable-ghost::before {
+#conversation-list li.sortable-ghost::before { /* 选择器限定在对话列表 */
   content: "";
   position: absolute;
   left: 0;
   right: 0;
-  top: 0;           /* 如果想在上方画线，就 top:0 */
-  height: 2px;      /* 线的粗细 */
-  background: var(--primary-color);
+  top: -1px; /* 在上方画线 */
+  height: 2px;
+  background: var(--primary); /* 使用主色 */
+  z-index: 10; /* 确保在最上层 */
 }
 
-.setting-item button {
+.setting-item button { /* 已在主设置区处理 */
   min-width: 80px;
 }
 
 /* 分隔线 */
 .archive-divider {
   text-align: center;
-  color: var(--text-secondary);
+  color: var(--text-secondary); /* 次要文字颜色 */
   font-size: 0.8em;
-  margin: 8px 0;
+  margin: 12px 20px; /* 协调外边距 */
+  padding-top: 8px; /* 与顶部内容间距 */
+  border-top: 1px solid var(--border-color); /* 分隔线 */
 }
-
 /* 已归档项样式 */
-.conversation-item.archived .title {
-  opacity: 0.6;
+.conversation-item.archived .title { /* 选择器统一为.conversation-item */
+  opacity: 0.65; /* 略微增加不透明度 */
+  font-style: italic;
 }
-
-
-/* 1. 先把旧版 btn-delete / btn-archive（如果残留）彻底隐藏 */
-#conversation-list li .btn-delete,
+/* 归档列表相关按钮和交互 */
+#conversation-list li .btn-delete, /* 旧的删除归档按钮，确保隐藏 */
 #conversation-list li .btn-archive {
   display: none !important;
 }
-
-/* 2. 针对我们自己插入的 .del 按钮：默认不显示 */
-#conversation-list li .del {
-  position: absolute;        /* 新增：脱离文档流 */
-  right: 16px;               /* 距离右侧 16px */
-  top: 50%;                  /* 垂直中心线 */
-  transform: translateY(-50%);/* 垂直居中 */
-  
-  display: none;             /* 默认不显示 */
+#conversation-list li .del { /* 新的删除按钮，悬停显示 */
+  position: absolute;
+  right: 12px; /* 调整位置 */
+  top: 50%;
+  transform: translateY(-50%);
+  display: none; /* 默认隐藏 */
   opacity: 0;
   visibility: hidden;
-  
   background: transparent !important;
   border: none !important;
-  color: red !important;
-  font-size: 0.9rem !important;
+  color: #e53e3e !important; /* 危险红色 */
+  font-size: 0.9rem !important; /* 图标大小 */
   cursor: pointer !important;
+  padding: 4px; /* 增加点击区域 */
+  line-height: 1; /* 确保图标垂直居中 */
+  border-radius: var(--border-radius-sm);
+  transition: opacity 0.2s ease, visibility 0s linear 0.2s, background-color 0.2s ease;
 }
-
 #conversation-list li:hover .del {
-  display: inline-block !important;
+  display: inline-block !important; /* 用inline-block使其能与文字流式布局 */
   opacity: 1 !important;
   visibility: visible !important;
 }
-
-/* 二级菜单默认收起 */
+#conversation-list li:hover .del:hover {
+  background-color: rgba(229, 62, 62, 0.1) !important; /* 红色背景浅色版 */
+}
+/* 已归档列表折叠 */
 .archived-list {
-  display: none;
-  margin-left: 16px;
+  display: none; /* 默认收起 */
+  /* margin-left: 16px; */ /* 移除，使归档项与普通项对齐 */
   padding-left: 0;
   list-style: none;
 }
-
-/* 点击“已归档”时展开 */
 .archive-toggle.expanded + .archived-list {
-  display: block;
+  display: block; /* 点击展开 */
 }
-
-/* 样式美化 */
-.archive-toggle {
+.archive-toggle { /* “已归档” 文字开关 */
   cursor: pointer;
-  font-weight: bold;
-  padding: 8px 16px;
-  user-select: none;
+  font-weight: 600; /* 加粗 */
+  padding: 8px 20px; /* 协调padding */
+  user-select: none; /* 禁止选中文本 */
+  display: flex; /* 便于图标对齐 */
+  align-items: center; /* 垂直对齐 */
+  color: var(--text-secondary);
+  transition: color 0.2s ease, background-color 0.2s ease;
+  border-radius: var(--border-radius-md);
+  margin: 8px 16px 4px; /* 外边距 */
 }
-.archive-toggle::before {
+.archive-toggle:hover {
+    color: var(--text-color);
+    background-color: rgba(var(--primary-rgb), 0.05);
+}
+.archive-toggle::before { /* 箭头图标 */
   content: '▶';
   display: inline-block;
-  margin-right: 6px;
+  margin-right: 8px; /* 图标和文字间距 */
   transform: rotate(0deg);
-  transition: transform 0.2s;
+  transition: transform 0.2s ease;
+  font-size: 0.7em; /* 图标大小 */
 }
 .archive-toggle.expanded::before {
-  transform: rotate(90deg);
+  transform: rotate(90deg); /* 展开时箭头旋转 */
 }
 
 /* —— 活动项高亮 —— */
-#conversation-list li.active {
-  background: var(--primary) !important;
-  color: #fff !important;
+#conversation-list li.active { /* 选择器保持 */
+  background: var(--primary) !important; /* 主色背景 */
+  color: #fff !important; /* 白色文字 */
+  font-weight: 500; /* 加一点字重 */
 }
-
-/* 🧠 思考过程块整体容器 */
-.reasoning-block {
-  margin-bottom: 1em;
-}
-
-/* 标签：思考过程 */
-.reasoning-label {
-  font-weight: bold;
-  margin-bottom: 0.5em;
-}
-
-/* 内容区域：设为灰色字体 */
-.reasoning-content {
-  color: #aaa;
-  white-space: pre-wrap;
-  font-size: 0.95em;
-  line-height: 1.6;
-}
-
-/* 分隔线 */
-.reasoning-sep {
-  margin-top: 1em;
-  margin-bottom: 1em;
-  border: none;
-  border-top: 1px solid #555;
-}
-.model-note {
-  margin-top: 0.5em;
-  font-size: 0.85em;
-  color: #888;
-  text-align: left;
-  font-style: italic;
-}
-
 
 /* 代码块复制按钮 */
-.text pre {
-  position: relative; /* 建立定位上下文 */
-}
-
-.text pre .copy-btn {
-  position: absolute;
-  top: 4px;
-  right: 8px;
-  display: none;
-  background: rgba(0, 0, 0, 0.5);
-  color: #fff;
-  border: none;
-  border-radius: 3px;
-  padding: 2px 6px;
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-
-.text pre .copy-btn:hover {
-  background: rgba(0,0,0,0.7);
-}
-
-/* 悬浮时显示 */
-.text pre:hover .copy-btn {
-  display: block;
-}
-
-/* 浅色模式下的 copy 按钮 */
-body.light-theme .text pre .copy-btn {
-  background: rgba(255,255,255,0.7) !important;
-  color: #333 !important;
-}
-body.light-theme .text pre .copy-btn:hover {
-  background: rgba(255,255,255,0.9) !important;
-}
-
-body.light-theme .reasoning-content {
-  color: #777; /* 具体可以根据需要微调 */
-}
-
-/* —— API Key 组 —— */
-.settings-area .api-key-group {
-  display: flex;
-  align-items: center;
-  margin-bottom: 0.75em;
-}
-.settings-area .api-key-group label {
-  width: 140px;
-  flex-shrink: 0;
-  font-size: 0.95rem;
-  color: var(--text-color);
-}
-.settings-area .api-key-group select,
-.settings-area .api-key-group input {
-  flex: 1;
-  padding: 6px 10px;
-  border: 1px solid var(--border-color);
-  border-radius: 4px;
-  background: var(--bg-color);
-  color: var(--text-color);
-  font-size: 0.95rem;
-}
-.settings-area .api-key-group select:focus,
-.settings-area .api-key-group input:focus {
-  outline: none;
-  border-color: var(--primary);
-}
-
-
-/* —— “保存当前 API Key” 蓝色按钮 —— */
-#save-api-btn {
-  display: inline-block;               /* 和其他按钮保持一致 */
-  margin: 0 20px 15px;                 /* 左右间距与其他按钮相同 */
-  padding: 10px 22px;                  /* 内边距一致 */
-  background: var(--primary) !important;
-  color: #fff !important;
-  border: none !important;
-  border-radius: 6px;
-  font-size: 0.95rem;
-  cursor: pointer;
-  transition: background 0.2s ease;
-  text-align: center;
-}
-#save-api-btn:hover {
-  background: rgba(var(--primary-rgb), 0.9) !important;
-}
-
-/* ————— 代码块复制按钮 ————— */
-.text pre {
+.text pre { /* 已在主消息区 .message pre 中处理 */
   position: relative;
 }
 .text pre .copy-btn {
   position: absolute;
-  top: 4px;
-  right: 8px;
-  display: none;
-  background: rgba(0,0,0,0.5);
+  top: 6px; /* 调整位置 */
+  right: 6px;
+  display: none; /* 默认隐藏 */
+  background: rgba(0,0,0,0.6); /* 深色按钮背景 */
   color: #fff;
   border: none;
-  border-radius: 3px;
-  padding: 2px 6px;
+  border-radius: var(--border-radius-sm); /* 使用变量 */
+  padding: 3px 7px; /* 调整padding */
   font-size: 0.75rem;
   cursor: pointer;
-  transition: background .2s;
+  transition: background-color 0.2s, opacity 0.2s;
+  opacity: 0.7; /* 默认轻微透明 */
 }
 .text pre:hover .copy-btn {
-  display: block;
+  display: block; /* 悬停显示 */
+  opacity: 1; /* 完全不透明 */
 }
-/* 浅色主题下按钮配色 */
+.text pre .copy-btn:hover {
+  background: rgba(0,0,0,0.8); /* 悬停加深背景 */
+}
+/* 浅色模式下的 copy 按钮 */
 body.light-theme .text pre .copy-btn {
-  background: rgba(255,255,255,0.7);
-  color: #333;
+  background: rgba(255,255,255,0.8) !important; /* 浅色按钮背景 */
+  color: #333 !important; /* 深色文字 */
+  border: 1px solid rgba(0,0,0,0.1); /* 加一点边框 */
 }
 body.light-theme .text pre .copy-btn:hover {
-  background: rgba(255,255,255,0.9);
+  background: rgba(255,255,255,0.95) !important; /* 悬停加深背景 */
 }
 
-/* ===== 思考过程块的样式 (已调整为思考过程在回复上方) ===== */
-
-.reasoning-block {
-  /* margin-bottom: 12px; */ /* 这个是之前思考过程在下面时的间距，现在它在上面 */
-  margin-top: 0;          /* 如果是气泡内第一个元素，通常不需要上边距 */
-  margin-bottom: 10px;    /* 与下方的正式回复内容之间的间距 */
-
-  /* padding-top: 10px; */  /* 如果是第一个元素，可能不需要顶部内边距，或者由气泡整体padding控制 */
-  padding-top: 0;         /* 通常设为0，让标签和内容自然排列 */
-  padding-bottom: 10px;   /* 思考过程内容与下方分隔线/主要回复的间距 */
-
-  /* 分隔线应该在思考过程的底部，与主要回复内容分隔 */
-  border-top: none;       /* 移除可能存在的上边框 */
-  border-bottom: 1px dashed rgba(128, 128, 128, 0.3); /* 分隔线在底部 */
-
-  font-size: 0.9em;
-  line-height: 1.5;
-}
-
-/* 如果 reasoning-block 是消息气泡内的第一个可见子元素，
-   并且消息气泡本身有 padding-top，那么 reasoning-block 可能不需要额外的 margin-top。
-   这个 :first-child 选择器确保如果它是第一个，其顶部没有多余的边距。
-*/
-.message > .reasoning-block:first-child {
-  margin-top: 0;
-}
-/* (或者，如果你不希望它有任何上边距，无论是否第一个，都可以在 .reasoning-block 中直接设置 margin-top: 0;) */
-
-
-.reasoning-label {
-  font-weight: bold;
-  margin-bottom: 6px;
-  /* 颜色将由主题特定样式覆盖 */
-}
-
-.reasoning-content { /* 这是 <pre> 标签 */
-  white-space: pre-wrap;
-  word-break: break-all; /* 对于非常长的无空格字符串，可以考虑 break-word 可能更柔和 */
-  overflow-wrap: break-word;
-  padding: 8px 10px; /* 调整内边距，使其看起来更紧凑 */
-  border-radius: 4px;    /* 给 pre 标签也加个圆角 */
-  max-height: 200px;     /* 调整最大高度 */
-  overflow-y: auto;
-  /* 背景和文字颜色将由主题特定样式覆盖 */
-  font-size: 0.95em; /* 让 pre 内的文字大小与 reasoning-block 的 font-size 相对独立或一致 */
-}
-
-/* --- 浅色主题下的思考过程样式 --- */
-body.light-theme .reasoning-block {
-  /* border-top-color: rgba(0, 0, 0, 0.15); /* 改为 border-bottom-color */
-  border-bottom-color: rgba(0, 0, 0, 0.1); /* 浅色主题下的底部线条颜色 */
-}
-body.light-theme .reasoning-label {
-  color: #444; /* 标签颜色加深一点 */
-}
-body.light-theme .reasoning-content {
-  background-color: #f8f9fa; /* 非常浅的灰色 */
-  color: #333;
-  border: 1px solid #e9ecef;
-}
-/* 浅色主题下思考过程滚动条 */
-body.light-theme .reasoning-content::-webkit-scrollbar { width: 6px; }
-body.light-theme .reasoning-content::-webkit-scrollbar-thumb { background-color: #ced4da; border-radius: 3px; }
-body.light-theme .reasoning-content { scrollbar-color: #ced4da #f8f9fa; scrollbar-width: thin; }
-
-
-/* --- 深色主题下的思考过程样式 --- */
-body.dark-theme .reasoning-block {
-  /* border-top-color: rgba(255, 255, 255, 0.15); /* 改为 border-bottom-color */
-  border-bottom-color: rgba(255, 255, 255, 0.2); /* 深色主题下的底部线条颜色 */
-}
-body.dark-theme .reasoning-label {
-  color: #ccc;
-}
-body.dark-theme .reasoning-content {
-  background-color: rgba(255, 255, 255, 0.05); /* 深色背景 */
-  color: #ddd;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-}
-/* 深色主题下思考过程滚动条 */
-body.dark-theme .reasoning-content::-webkit-scrollbar { width: 6px; }
-body.dark-theme .reasoning-content::-webkit-scrollbar-thumb { background-color: #444; border-radius: 3px; }
-body.dark-theme .reasoning-content { scrollbar-color: #444 rgba(255, 255, 255, 0.05); scrollbar-width: thin; }
-
-
-/*
-   不再需要这两个选择器了，因为我们直接在 .reasoning-block 设置了 margin-bottom
-   来控制与下方 .text 的间距。
-   而且 .text 相对于气泡顶部的间距，如果上面没有 reasoning-block，
-   则由气泡的 padding-top 控制；如果上面有 reasoning-block，
-   则由 reasoning-block 的 margin-bottom 和自身的 margin-top (如果有的话) 控制。
-*/
-/*
-.message .reasoning-block:first-child {
-    margin-top: 0;
-}
-
-.message .reasoning-block + .text {
-    margin-top: 10px;
-}
-*/
-
-/* 如果需要，可以给 .text (主要回复内容) 一个默认的 margin-top，
-   或者当它前面是 .reasoning-block 时才给它 margin-top。
-   但通常 .reasoning-block 的 margin-bottom 已经处理了间距。
-   如果 .reasoning-block 不存在，.text 应该是气泡内的第一个主要内容元素。
-*/
-.message > .text:first-child { /* 如果 .text 是气泡内第一个子元素 (即没有思考过程) */
-  margin-top: 0; /* 通常不需要上边距，由气泡的 padding 控制 */
-}
-.message > .reasoning-block + .text { /* 如果 .text 前面是 .reasoning-block */
-  margin-top: 10px; /* 确保主要回复和上面的思考过程之间有明确的间距 */
-}
-
-
-/* ===== 结束 思考过程块的样式 ===== */
-
-/* style.css */
-
-/* ... 其他样式 ... */
-
-.settings-area {
-  /* display: flex; (这个由 JS 控制，当显示时会设为 flex) */
-  flex-direction: column; /* 保持内容垂直排列 */
-  gap: 20px;             /* 设置项之间的间距，根据你的喜好调整 */
-  padding: 24px 32px;    /* 内边距 */
-
-  /* --- 核心修改，确保滚动 --- */
-  flex: 1;                /* 让 .settings-area 占据 .main-area 中的剩余垂直空间 */
-  overflow-y: auto;       /* 当内容高度超过 .settings-area 高度时，显示垂直滚动条 */
-  min-height: 0;          /* 在 flex 布局中，这有助于确保 overflow 生效 */
-  /* --- 结束核心修改 --- */
-}
-
-/* 你可以保留或调整 settings-area h2 和 setting-item 的样式 */
-.settings-area h2 {
-  font-size: 1.6rem;
-  margin-top: 0; /* 通常标题顶部不需要额外margin，由padding控制 */
-  margin-bottom: 16px;
-  font-weight: 600;
-}
-.setting-item {
+/* API Key 组 */
+.settings-area .api-key-group {
   display: flex;
   align-items: center;
-  gap: 16px;
-  flex-wrap: wrap; /* 如果一行放不下，允许换行 */
+  /* margin-bottom: 0.75em; */ /* 由父级 gap 控制 */
+  gap: 10px; /* 内部元素间距 */
 }
-.setting-item label {
-  flex: 0 0 200px; 
-  font-weight: 500;
+.settings-area .api-key-group label {
+  width: 140px; /* 原始值 */
+  flex-shrink: 0;
+  font-size: 0.95rem;
+  color: var(--text-color);
 }
-.setting-item input[type="password"],
-.setting-item select,
-.setting-item input[type="text"] /* 如果有其他类型输入框 */ {
-  flex: 1;
-  min-width: 200px;
+.settings-area .api-key-group select, /* 已在主设置区处理 */
+.settings-area .api-key-group input {
+  /* flex: 1; ... */
 }
-.setting-item button {
-  flex-shrink: 0; /* 防止按钮被压缩 */
-  /* padding: 8px 20px; (这些通常由通用按钮样式或特定按钮ID/类控制) */
-  /* font-size: 0.95rem; */
-  /* border-radius: 6px; */
+/* “保存当前 API Key” 蓝色按钮 */
+#save-api-btn { /* 应用通用按钮样式，减少特异性 */
+  /* display: inline-block; */ /* button 默认 inline-block 或 inline */
+  margin: 0; /* 外边距由父容器 gap 控制 */
+  /* padding: 10px 22px; */ /* 使用 setting-item button 的 padding */
+  /* background: var(--primary) !important; */ /* 使用 setting-item button 的背景 */
+  /* ...其他样式复用 .setting-item button */
 }
 
+/* 设置区域滚动 - 已在 .settings-area 主样式中处理 */
+
+/* 返回聊天按钮 */
 #back-to-chat-btn {
   background: none;
   border: none;
   padding: 8px 12px;
-  color: var(--primary); /* 使用主题色作为文字/图标颜色 */
-  font-size: 1rem;     /* 或者根据你的图标大小调整 */
+  color: var(--primary);
+  font-size: 1rem;
   font-weight: 500;
   cursor: pointer;
-  display: inline-flex; /* 使图标和文字能良好对齐 */
+  display: inline-flex;
   align-items: center;
-  gap: 6px; /* 图标和文字之间的间距 */
-  border-radius: 4px;
+  gap: 6px;
+  border-radius: var(--border-radius-md); /* 使用变量 */
   transition: background-color 0.2s ease, color 0.2s ease;
+  margin-right: auto; /* 确保在头部左侧 */
 }
-
 #back-to-chat-btn:hover {
-  background-color: rgba(var(--primary-rgb), 0.1); /* 悬停时轻微背景高亮 */
-  color: var(--primary-dark); /* 如果有定义深一点的主题色 */
+  background-color: rgba(var(--primary-rgb), 0.1); /* 轻微主色背景 */
+  /* color: var(--primary-dark); */ /* 无需改变颜色，保持主色 */
 }
-
-/* 假设你用一个伪元素来做箭头图标 */
-#back-to-chat-btn::before {
-  content: '←'; /* 或者使用 SVG 图标作为 background-image */
+#back-to-chat-btn::before { /* 箭头图标 */
+  content: '←';
   font-weight: bold;
-  margin-right: 4px; /* 如果文字在右边 */
+  /* margin-right: 4px; */ /* 由 gap 控制 */
 }
 
-.setting-item input[type="range"] {
-  flex-grow: 1; /* 让滑块占据更多可用空间 */
-  margin-left: 10px;
-  /* 你可能需要一些特定于浏览器的前缀来美化滑块轨道和滑块本身 */
+/* 温度滑块 */
+.setting-item input[type="range"] { /* 移至主设置区 .setting-item input[type="range"]#temperature-slider */
+  /* flex-grow: 1; */
+  /* margin-left: 10px; */
 }
-
-/* style.css */
-
-/* --- Temperature 滑块美化 --- */
 .setting-item input[type="range"]#temperature-slider {
-  /* 1. 重置外观，移除大部分原生样式 */
-  -webkit-appearance: none; /* Safari an Chrome */
-  -moz-appearance: none;    /* Firefox */
-  appearance: none;         /* 标准属性 */
-  
-  width: 100%; /* 让滑块轨道尽可能宽 */
-  height: 20px; /* 整个控件的高度，主要是为了给手柄留出垂直空间 */
-  background: transparent; /* 移除 input 元素本身的背景 */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 20px; /* 控件高度 */
+  background: transparent; /* input本身透明 */
   cursor: pointer;
-  outline: none; /* 移除焦点时的默认轮廓 */
-  margin-left: 10px; /* 与标签的间距 */
+  outline: none;
+  padding: 0; /* 移除原生padding */
+  /* margin-left: 10px; 由父级gap控制 */
 }
-
-/* --- WebKit/Blink 浏览器 (Chrome, Edge, Safari, Opera) --- */
 .setting-item input[type="range"]#temperature-slider::-webkit-slider-runnable-track {
   width: 100%;
-  height: 6px; /* 轨道的高度 */
+  height: 6px; /* 轨道高度 */
   cursor: pointer;
-  background: #555; /* 轨道背景色 (深灰色) */
-  border-radius: 3px; /* 轨道圆角 */
-  /* border: 1px solid #333; /* 可选：轨道边框 */
+  background: var(--border-color); /* 轨道背景 */
+  border-radius: var(--border-radius-full); /* 全圆角轨道 */
 }
-
 .setting-item input[type="range"]#temperature-slider::-webkit-slider-thumb {
-  -webkit-appearance: none; /* 必须，移除原生手柄样式 */
+  -webkit-appearance: none;
   appearance: none;
-  
-  border: 2px solid var(--primary-dark); /* 手柄边框颜色 (你的主题蓝色) */
-  height: 16px;       /* 手柄高度 */
-  width: 16px;        /* 手柄宽度 */
-  border-radius: 50%; /* 使手柄为圆形 */
-  background: #fff;   /* 手柄背景色 (白色，与蓝色边框形成对比) */
+  border: 2px solid var(--primary); /* 滑块边框 */
+  height: 18px; /* 滑块高度 */
+  width: 18px;  /* 滑块宽度 */
+  border-radius: 50%; /* 圆形滑块 */
+  background: #fff;   /* 滑块背景 */
   cursor: pointer;
-  margin-top: -5px;   /* 关键：调整手柄相对于轨道的垂直位置 */
-                      /* 计算方式: (轨道高度 - 手柄高度) / 2 
-                         例如: (6px - 16px) / 2 = -5px 
-                         如果手柄有边框，边框宽度也需要考虑进去
-                         (6px - (16px + 2*2px_border)) / 2 + 2px_border 类似这样，具体要微调
-                      */
-  box-shadow: 0 0 2px rgba(0,0,0,0.5); /* 可选：手柄阴影 */
+  margin-top: -6px;   /* 垂直居中滑块: (轨道高度 - 滑块高度) / 2 */
+  box-shadow: var(--shadow-sm); /* 轻微阴影 */
+  transition: transform 0.1s ease; /* 点击反馈 */
 }
-
-/* --- Gecko 浏览器 (Firefox) --- */
-.setting-item input[type="range"]#temperature-slider::-moz-range-track {
+.setting-item input[type="range"]#temperature-slider:active::-webkit-slider-thumb {
+    transform: scale(1.1); /* 点击时放大 */
+}
+.setting-item input[type="range"]#temperature-slider::-moz-range-track { /* Firefox 轨道 */
   width: 100%;
   height: 6px;
   cursor: pointer;
-  background: #555;
-  border-radius: 3px;
-  /* border: 1px solid #333; */
+  background: var(--border-color);
+  border-radius: var(--border-radius-full);
 }
-
-.setting-item input[type="range"]#temperature-slider::-moz-range-thumb {
-  border: 2px solid var(--primary-dark);
-  height: 12px; /* Firefox 下手柄的 border 会算在 height/width 之外，所以这里用 16px - 2*2px */
-  width: 12px;
+.setting-item input[type="range"]#temperature-slider::-moz-range-thumb { /* Firefox 滑块 */
+  border: 2px solid var(--primary);
+  height: 14px; /* (18px - 2*2px border) */
+  width: 14px;
   border-radius: 50%;
   background: #fff;
   cursor: pointer;
-  box-shadow: 0 0 2px rgba(0,0,0,0.5);
+  box-shadow: var(--shadow-sm);
 }
-
-/* 可选：Firefox 焦点样式 (移除默认虚线框) */
 .setting-item input[type="range"]#temperature-slider::-moz-focus-outer {
-  border: 0;
+  border: 0; /* 移除Firefox焦点虚线框 */
 }
-
-/* --- 与标签和数值显示的对齐 --- */
-.setting-item label[for="temperature-slider"] {
-  /* 你可能需要调整 label 的样式使其与其他设置项的 label 对齐 */
-  white-space: nowrap; /* 防止标签换行 */
-}
-#temperature-value {
+#temperature-value { /* 温度值显示 */
   display: inline-block;
-  min-width: 2.8em; /* 调整宽度以容纳 "0.0" 到 "2.0" */
-  text-align: left; /* 或者 right，根据你的偏好 */
-  font-weight: bold;
-  margin-left: 8px;
+  min-width: 2.8em; /* 确保宽度 */
+  text-align: left;
+  font-weight: 500; /* 加粗 */
+  margin-left: 8px; /* 与滑块间距 */
+  color: var(--primary); /* 主色显示 */
 }
 
-.messages {
-  /* ... 你现有的 .messages 样式 ... */
-  position: relative; /* 如果需要用绝对定位来居中提示，虽然 flex 更方便 */
+/* 空聊天状态占位提示 */
+.empty-chat-placeholder {
   display: flex;
   flex-direction: column;
-  /* align-items: center; /* 如果希望提示块水平居中 */
-  /* justify-content: center; /* 如果希望提示块垂直居中 (当 messages 高度固定时) */
-}
-
-/* 新增：空聊天状态的占位提示样式 */
-.empty-chat-placeholder {
-  /* 使用 flex 在 .messages 容器中居中这个提示 */
-  display: flex; /* 设为 flex 以便内部的 p 元素可以更容易地对齐 */
-  flex-direction: column;
-  justify-content: center; /* 垂直居中 */
-  align-items: center;   /* 水平居中 */
+  justify-content: center;
+  align-items: center;
   text-align: center;
-  
-  /* 让它占据 .messages 的可用空间，这样才能有效居中 */
-  flex-grow: 1; 
-  
-  color: var(--text-secondary, #888); /* 使用次要文字颜色 */
+  flex-grow: 1; /* 占据剩余空间以居中 */
+  color: var(--text-secondary);
   font-size: 1rem;
   padding: 20px;
-  user-select: none; /* 防止用户意外选中这段文字 */
+  user-select: none;
 }
-
 .empty-chat-placeholder p {
   margin: 0;
 }
 
-
-/* --- 模型管理区域 --- */
+/* 模型管理区域 */
 .model-management-area {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 20px;
-  overflow-y: auto; /* 如果内容过多，允许滚动 */
+  padding: 24px; /* 统一内边距 */
+  overflow-y: auto;
+  gap: 24px; /* 各部分间距 */
 }
-
 .model-management-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 10px;
+  margin-bottom: 0; /* 由父级gap控制 */
+  padding-bottom: 16px; /* 标题和内容间距 */
   border-bottom: 1px solid var(--border-color);
 }
-
 .model-management-header h2 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.6rem; /* 调整字号 */
+}
+.model-management-controls button { /* 头部控制按钮 */
+  margin-left: 10px; /* 按钮间距 */
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  color: var(--text-color);
+  font-weight: 500; /* 加一点字重 */
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+.model-management-controls button:hover {
+  border-color: var(--primary);
+  background-color: rgba(var(--primary-rgb), 0.1);
+  color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}
+.model-management-controls button.primary-action { /* 主要操作按钮 */
+  background-color: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+.model-management-controls button.primary-action:hover {
+  background-color: rgba(var(--primary-rgb), 0.85);
+  border-color: rgba(var(--primary-rgb), 0.85);
+  color: white; /* 确保文字颜色不变 */
 }
 
-.model-management-controls button {
-  margin-left: 10px;
-}
-
-.model-list-editor {
+.model-list-editor { /* 模型列表 */
   display: flex;
   flex-direction: column;
-  gap: 20px; /* 模型组之间的间距 */
+  gap: 20px;
 }
-
-.model-group-editor {
+.model-group-editor { /* 模型组 */
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 15px;
-  background-color: rgba(var(--primary-rgb), 0.03); /* 轻微背景色区分 */
+  border-radius: var(--border-radius-lg); /* 更大圆角 */
+  padding: 20px; /* 内边距 */
+  background-color: rgba(var(--primary-rgb), 0.02); /* 非常浅的背景 */
+  box-shadow: var(--shadow-sm);
+  position: relative; /* 便于内部绝对定位或拖拽指示 */
 }
 body.dark-theme .model-group-editor {
-  background-color: rgba(255,255,255, 0.03);
+  background-color: rgba(255,255,255, 0.03); /* 原始值 */
 }
-
-
-.model-group-header {
+.model-group-header { /* 模型组头部 */
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  margin-bottom: 16px; /* 与内容间距 */
+  padding-bottom: 12px; /* 分隔线与内容间距 */
+  border-bottom: 1px dashed var(--border-color); /* 虚线分隔 */
 }
-
-.model-group-header h4 {
+.model-group-header h4 { /* 组标题 */
   margin: 0;
-  font-size: 1.1rem;
-  cursor: grab; /* 提示可以拖拽组 */
+  font-size: 1.15rem; /* 调整字号 */
+  cursor: grab; /* 拖拽手势 */
+  flex-grow: 1; /* 占据剩余空间 */
+  font-weight: 600; /* 加粗 */
 }
-.model-group-header input.group-label-editor {
-  font-size: 1.1rem;
-  font-weight: bold;
-  padding: 4px 8px;
-  border: 1px dashed var(--border-color);
-  background: transparent;
-  color: var(--text-color);
+.model-group-header input.group-label-editor { /* 组名编辑框 */
+  flex-grow: 1;
+  margin-right: 10px; /* 与按钮间距 */
+  font-size: 1.1rem; /* 与显示标题一致 */
+  font-weight: bold; /* 保持原始 */
+  padding: 6px 10px; /* 调整padding */
+  border: 1px solid var(--border-color); /* 统一边框 */
+  background: var(--input-bg); /* 统一背景 */
+  color: var(--text-color); /* 统一颜色 */
+  border-radius: var(--border-radius-md); /* 统一圆角 */
+}
+.add-option-to-group-btn { /* 添加选项到组按钮 */
+    margin-right: 10px;
+    padding: 5px 10px; /* 调整padding */
+    font-size: 0.85rem; /* 调整字号 */
+    /* 其他样式可继承 .model-group-header button */
+}
+.model-group-header button { /* 模型组头部按钮通用 */
+  padding: 5px 10px;
+  font-size: 0.85rem;
+  border-radius: var(--border-radius-sm); /* 统一圆角 */
+  border: 1px solid transparent;
+  background-color: transparent;
+  color: var(--text-secondary); /* 次要文字颜色 */
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  margin-left: 8px; /* 按钮间距 */
+}
+.model-group-header button:hover {
+  background-color: rgba(var(--primary-rgb), 0.08); /* 轻微主色背景 */
+  color: var(--text-color); /* 主要文字颜色 */
+}
+.model-group-header button.danger-text {
+  color: #e53e3e; /* 危险红色 */
+}
+.model-group-header button.danger-text:hover {
+  background-color: rgba(229, 62, 62, 0.1); /* 红色背景浅色版 */
+  color: #c53030; /* 加深红色 */
 }
 
-
-.model-group-options {
+.model-group-options { /* 模型选项列表 */
   list-style: none;
   padding: 0;
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px; /* 模型项之间的间距 */
+  gap: 12px; /* 选项间距 */
 }
-
-.model-option-editor {
+.model-option-editor { /* 单个模型选项 */
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px;
-  border: 1px solid rgba(var(--border-color), 0.5);
-  border-radius: 6px;
-  background-color: var(--bg-color);
-  cursor: grab; /* 提示可以拖拽项 */
+  padding: 12px 16px; /* 调整padding */
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  background-color: var(--bg-color); /* 与主背景一致，和组背景区分 */
+  cursor: grab;
+  box-shadow: var(--shadow-sm);
+  position: relative; /* 便于拖拽指示 */
+  transition: box-shadow 0.2s ease; /* 悬停阴影过渡 */
 }
-
-.model-option-editor .details {
+.model-option-editor:hover {
+    box-shadow: var(--shadow-md); /* 悬停时阴影加深 */
+}
+.model-option-editor .details { /* 模型详情 */
   flex-grow: 1;
   font-size: 0.9rem;
 }
-.model-option-editor .details strong {
+.model-option-editor .details strong { /* 模型名 */
   display: block;
   margin-bottom: 3px;
+  font-weight: 600; /* 加粗 */
 }
-.model-option-editor .details span {
-  color: #888;
+.model-option-editor .details span { /* 模型值 */
+  color: var(--text-secondary);
   font-size: 0.85rem;
+  word-break: break-all; /* 长值换行 */
 }
-body.dark-theme .model-option-editor .details span {
-  color: #aaa;
-}
-
-
-.model-option-editor .actions button {
-  padding: 5px 8px;
-  font-size: 0.8rem;
-  margin-left: 5px;
-  background-color: var(--sidebar-bg); /* 使用侧边栏背景色作为按钮底色 */
+.model-option-editor .actions button { /* 模型项操作按钮 */
+  padding: 6px 12px; /* 调整padding */
+  font-size: 0.85rem;
+  border-radius: var(--border-radius-md); /* 统一圆角 */
   border: 1px solid var(--border-color);
+  background-color: var(--bg-secondary); /* 次要背景 */
   color: var(--text-color);
-}
-.model-option-editor .actions button.danger-text {
-  color: #e53e3e;
+  font-weight: 500; /* 加一点字重 */
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  margin-left: 8px;
 }
 .model-option-editor .actions button:hover {
-  filter: brightness(0.9);
+  border-color: var(--primary);
+  background-color: rgba(var(--primary-rgb), 0.1);
+  color: var(--primary);
 }
-body.dark-theme .model-option-editor .actions button:hover {
-  filter: brightness(1.2);
+.model-option-editor .actions button.danger-text { /* 危险按钮 */
+  background-color: rgba(229, 62, 62, 0.08); /* 红色背景浅色版 */
+  border-color: rgba(229, 62, 62, 0.3); /* 红色边框浅色版 */
+  color: #e53e3e;
+}
+.model-option-editor .actions button.danger-text:hover {
+  background-color: rgba(229, 62, 62, 0.15);
+  border-color: rgba(229, 62, 62, 0.5);
+  color: #c53030;
 }
 
-
-/* --- 模态对话框样式 --- */
+/* 模态对话框样式 */
 .modal {
   position: fixed;
-  z-index: 1001; /* 比其他内容高 */
+  z-index: 1001;
   left: 0;
   top: 0;
   width: 100%;
   height: 100%;
-  overflow: auto;
-  background-color: rgba(0,0,0,0.6); /* 半透明背景 */
-  display: flex; /* 用于垂直居中 */
+  overflow: auto; /* 如果内容过长，允许模态框内部滚动 */
+  background-color: rgba(0,0,0,0.65); /* 加深遮罩 */
+  display: flex;
   align-items: center;
   justify-content: center;
+  padding: 20px; /* 防止模态框紧贴边缘 */
 }
-
 .modal-content {
   background-color: var(--bg-color);
   margin: auto;
-  padding: 25px;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  width: 80%;
-  max-width: 500px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+  padding: 28px; /* 增大内边距 */
+  border: none; /* 移除边框，用阴影 */
+  border-radius: var(--border-radius-lg); /* 更大圆角 */
+  width: 90%; /* 响应式宽度 */
+  max-width: 520px; /* 最大宽度 */
+  box-shadow: var(--shadow-lg); /* 更明显阴影 */
   position: relative;
+  /* animation: modal-fade-in 0.3s ease-out; 保留动画 */
 }
-
 .close-modal-btn {
-  color: #aaa;
+  color: var(--text-secondary);
   position: absolute;
-  top: 10px;
-  right: 15px;
-  font-size: 28px;
-  font-weight: bold;
+  top: 16px; /* 调整位置 */
+  right: 16px;
+  font-size: 1.8rem; /* 图标大小 */
+  font-weight: normal; /* 不加粗 */
   cursor: pointer;
+  line-height: 1;
+  padding: 4px; /* 增加点击区域 */
+  border-radius: 50%; /* 圆形点击区域 */
+  transition: color 0.2s ease, background-color 0.2s ease;
 }
 .close-modal-btn:hover,
 .close-modal-btn:focus {
   color: var(--text-color);
-  text-decoration: none;
+  background-color: rgba(var(--primary-rgb),0.08); /* 轻微背景 */
 }
-
 #model-form .form-group {
-  margin-bottom: 15px;
+  margin-bottom: 20px; /* 增大间距 */
 }
 #model-form label {
   display: block;
-  margin-bottom: 5px;
+  margin-bottom: 8px; /* 标签与输入框间距 */
   font-weight: 500;
+  font-size: 0.95rem;
 }
 #model-form input[type="text"] {
-  width: calc(100% - 20px); /* 减去 padding */
-  padding: 8px 10px;
+  width: 100%; /* 占满 */
+  padding: 10px 14px; /* 舒适padding */
   border: 1px solid var(--border-color);
-  border-radius: 4px;
-  background-color: var(--bg-color);
+  border-radius: var(--border-radius-md);
+  background-color: var(--input-bg);
   color: var(--text-color);
   font-size: 0.95rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 #model-form input[type="text"]:focus {
   outline: none;
   border-color: var(--primary);
-  box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2); /* 辉光效果 */
 }
 #model-form small {
   display: block;
   font-size: 0.8rem;
-  color: #777;
-  margin-top: 3px;
+  color: var(--text-secondary);
+  margin-top: 6px;
 }
-body.dark-theme #model-form small {
-  color: #aaa;
-}
-
 #model-form .form-actions {
-  margin-top: 20px;
+  margin-top: 28px; /* 与表单内容间距 */
   text-align: right;
+  display: flex; /* 使用flex控制按钮 */
+  justify-content: flex-end; /* 按钮靠右 */
+  gap: 12px; /* 按钮间距 */
 }
-#model-form .form-actions button {
-  margin-left: 10px;
-}
-button.primary-action {
-    background-color: var(--primary) !important;
-    color: white !important;
-}
-button.primary-action:hover {
-    filter: brightness(0.9);
-}
-button.secondary {
-  background-color: #6c757d;
-  color: white;
-}
-button.secondary:hover {
-  background-color: #5a6268;
-}
-
-/* style.css */
-
-/* --- 模型管理界面头部控制按钮 --- */
-.model-management-controls button {
-  padding: 8px 16px; /* 增加内边距 */
-  font-size: 0.9rem;
-  border-radius: 5px; /* 圆角 */
-  border: 1px solid var(--border-color); /* 统一边框 */
-  background-color: var(--sidebar-bg); /* 使用侧边栏背景色，与深色主题协调 */
-  color: var(--text-color);
-  cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease; /* 过渡效果 */
-  margin-left: 10px; /* 保持按钮间距 */
-}
-
-/* 鼠标悬停效果 */
-.model-management-controls button:hover {
-  border-color: var(--primary); /* 悬停时边框变主题色 */
-  background-color: rgba(var(--primary-rgb), 0.1); /* 轻微主题色背景 */
-}
-
-/* 主要操作按钮 (例如 "保存更改") */
-.model-management-controls button.primary-action {
-  background-color: var(--primary);
-  color: white;
-  border-color: var(--primary);
-}
-
-.model-management-controls button.primary-action:hover {
-  background-color: rgba(var(--primary-rgb), 0.85); /* 主题色变深一点 */
-  border-color: rgba(var(--primary-rgb), 0.85);
-}
-
-/* style.css */
-
-/* --- 模型组头部按钮 (例如 "删除组") --- */
-.model-group-header button {
-  padding: 5px 10px;
-  font-size: 0.85rem;
-  border-radius: 4px;
-  border: 1px solid transparent; /* 默认透明边框 */
-  background-color: transparent; /* 默认透明背景 */
-  color: #adb5bd; /* 默认浅灰色文字，不那么突出 */
-  cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease;
-}
-body.light-theme .model-group-header button { /* 浅色主题下的颜色 */
-    color: #6c757d;
-}
-
-
-.model-group-header button:hover {
-  background-color: rgba(255, 255, 255, 0.05); /* 悬停时轻微背景 */
-  color: var(--text-color); /* 悬停时文字变亮 */
-}
-body.light-theme .model-group-header button:hover {
-  background-color: rgba(0, 0, 0, 0.05);
-}
-
-
-/* 如果有明确的 "删除组" 按钮，可以给它特定的危险色 */
-.model-group-header button.danger-text { /* 您之前已有这个类 */
-  color: #e53e3e; /* 危险红色 */
-}
-
-.model-group-header button.danger-text:hover {
-  background-color: rgba(229, 62, 62, 0.1); /* 红色背景的浅色版 */
-  color: #c53030; /* 悬停时红色加深 */
-}
-
-/* style.css */
-
-/* --- 模型选项内的操作按钮 (编辑, 删除) --- */
-.model-option-editor .actions button {
-  padding: 6px 12px; /* 调整内边距 */
-  font-size: 0.85rem; /* 字体大小 */
-  border-radius: 4px;
+#model-form .form-actions button { /* 表单按钮通用 */
+  padding: 10px 22px; /* 舒适padding */
+  font-size: 0.95rem;
+  border-radius: var(--border-radius-md);
   border: 1px solid var(--border-color);
-  background-color: rgba(var(--primary-rgb), 0.08); /* 非常浅的主题色背景 */
-  color: var(--text-color);
-  cursor: pointer;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
-  margin-left: 8px; /* 按钮间距 */
-}
-body.light-theme .model-option-editor .actions button {
-  background-color: #f0f2f5; /* 浅色主题下的背景 */
-  border: 1px solid #d9d9d9;
-}
-
-.model-option-editor .actions button:hover {
-  border-color: var(--primary);
-  background-color: rgba(var(--primary-rgb), 0.15); /* 悬停时背景加深 */
-}
-body.light-theme .model-option-editor .actions button:hover {
-  border-color: var(--primary);
-  background-color: #e6f7ff; /* 浅色主题悬停背景 */
-}
-
-
-/* 删除按钮的特定样式 */
-.model-option-editor .actions button.danger-text { /* 您之前已有这个类 */
-  background-color: rgba(229, 62, 62, 0.1); /* 默认就给一点红色背景 */
-  border-color: rgba(229, 62, 62, 0.3);
-  color: #e53e3e;
-}
-body.light-theme .model-option-editor .actions button.danger-text {
-  background-color: #fff1f0;
-  border-color: #ffccc7;
-}
-
-
-.model-option-editor .actions button.danger-text:hover {
-  background-color: rgba(229, 62, 62, 0.2);
-  border-color: rgba(229, 62, 62, 0.5);
-  color: #c53030; /* 悬停时红色加深 */
-}
-body.light-theme .model-option-editor .actions button.danger-text:hover {
-  background-color: #ffccc7;
-  border-color: #ffa39e;
-}
-
-/* style.css */
-
-/* --- 模型表单模态对话框 - 动作按钮 --- */
-#model-form .form-actions {
-  margin-top: 25px; /* 增加与上方表单项的间距 */
-  text-align: right; /* 按钮默认靠右对齐 */
-  display: flex; /* 使用 flex 布局以便更好地控制按钮间距和对齐 */
-  justify-content: flex-end; /* 确保按钮靠右 */
-  gap: 10px; /* 按钮之间的间距 */
-}
-
-#model-form .form-actions button {
-  padding: 10px 20px; /* 统一的、更舒适的内边距 */
-  font-size: 0.95rem; /* 字体大小 */
-  border-radius: 5px; /* 圆角 */
-  border: 1px solid var(--border-color);
-  cursor: pointer;
+  font-weight: 500;
   transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
-  font-weight: 500; /* 字体稍粗一些 */
 }
-
-/* "保存模型" 按钮 (主要操作按钮) */
-#model-form .form-actions button#save-model-detail-btn {
-  background-color: var(--primary); /* 主题色背景 */
-  color: white; /* 白色文字 */
-  border-color: var(--primary); /* 主题色边框 */
+button.primary-action, /* 主要操作按钮，如保存 */
+#model-form .form-actions button#save-model-detail-btn { /* 特定ID也应用 */
+    background-color: var(--primary) !important; /* 确保覆盖 */
+    color: white !important;
+    border-color: var(--primary) !important; /* 边框与背景一致 */
+    box-shadow: var(--shadow-sm);
 }
-
+button.primary-action:hover,
 #model-form .form-actions button#save-model-detail-btn:hover {
-  background-color: rgba(var(--primary-rgb), 0.85); /* 悬停时主题色变深 */
-  border-color: rgba(var(--primary-rgb), 0.85);
-  box-shadow: 0 2px 8px rgba(var(--primary-rgb), 0.3); /* 悬停时轻微阴影 */
+    filter: brightness(0.9); /* 变暗一点 */
+    box-shadow: var(--shadow-md);
 }
-
-/* "取消" 按钮 (次要/中性操作按钮) */
+button.secondary, /* 次要按钮，如取消 */
 #model-form .form-actions button#cancel-model-detail-btn {
-  background-color: var(--sidebar-bg); /* 使用与侧边栏或次要元素一致的背景色 */
-  color: var(--text-color); /* 文本颜色 */
-  border-color: var(--border-color); /* 边框颜色 */
+  background-color: var(--bg-secondary); /* 次要背景 */
+  color: var(--text-color);
+  border-color: var(--border-color);
 }
-/* 针对浅色主题的取消按钮优化 */
-body.light-theme #model-form .form-actions button#cancel-model-detail-btn {
-    background-color: #f0f2f5; /* 浅灰色背景 */
-    border-color: #d9d9d9;
-    color: #555; /* 深灰色文字 */
-}
-
-
+button.secondary:hover,
 #model-form .form-actions button#cancel-model-detail-btn:hover {
-  background-color: rgba(var(--primary-rgb), 0.1); /* 悬停时轻微主题色背景 */
-  border-color: var(--primary); /* 悬停时边框变主题色 */
-  color: var(--primary); /* 悬停时文字变主题色 */
-}
-/* 针对浅色主题的取消按钮悬停优化 */
-body.light-theme #model-form .form-actions button#cancel-model-detail-btn:hover {
-    background-color: #e6f7ff; /* 浅蓝色背景 */
-    border-color: var(--primary);
-    color: var(--primary);
+  background-color: rgba(var(--primary-rgb),0.1); /* 轻微主色背景 */
+  border-color: var(--primary); /* 主色边框 */
+  color: var(--primary); /* 主色文字 */
 }
 
-/* style.css - 检查 .container 和 .main-area 的样式 */
-.container {
-  display: flex; /* 确保是 flex 布局 */
-  height: 100%;
-  width: 100%;
-}
-
-.sidebar {
-  width: 240px; /* 或者你设置的宽度 */
-  /* display: flex; */ /* 它的 display 由 JS 控制 */
-  /* ... 其他样式 ... */
-}
-
-.main-area {
-  flex: 1; /* 当侧边栏隐藏时，它会占据所有剩余空间 */
-  display: flex;
-  flex-direction: column;
-  /* ... 其他样式 ... */
-}
-
-/* style.css */
-
-.chat-header {
-  display: flex;
-  align-items: center; /* 垂直居中所有项 */
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--bg-color);
-  min-height: 48px;
-  flex-shrink: 0;
-  gap: 16px; /* 在所有直接子元素之间设置一个统一的间距 */
-}
-
-.chat-header h1#chat-title {
-  margin: 0; /* 移除默认的 h1 margin */
-  font-size: 1.1rem;
-  font-weight: 500;
-  /* 标题不需要 flex-grow: 1 了，让它自然宽度 */
-  white-space: nowrap; /* 防止标题换行 */
-  overflow: hidden; /* 如果标题过长，隐藏超出部分 */
-  text-overflow: ellipsis; /* 用省略号显示被截断的文本 */
-  max-width: 300px; /* 给标题一个最大宽度，避免它挤压其他元素，按需调整 */
-}
-
-.header-model-selector select#model {
-  /* ... 您之前的 select 样式保持不变 ... */
-  appearance: none;
-  -webkit-appearance: none;
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 0.9rem;
-  padding: 6px 30px 6px 10px;
-  height: auto;
-  border-radius: 4px;
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-color);
-  color: var(--text-color);
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  background-image: url("data:image/svg+xml;charset=UTF-8,<svg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'><path d='M0 0l5 6 5-6z' fill='%23999'/></svg>");
-  background-size: 10px 6px;
-  transition: border-color .2s, box-shadow .2s;
-  min-width: 180px; /* 调整最小宽度以适应内容 */
-}
-body.dark-theme .header-model-selector select#model {
-  background-image: url("data:image/svg+xml;charset=UTF-8,<svg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'><path d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.5)'/></svg>");
-}
-
-/* style.css */
-
-/* --- 输入区域整体布局调整 --- */
-.input-area {
-  flex-shrink: 0;
-  padding: 10px 15px; /* 调整内边距以适应按钮 */
-  background: var(--bg-color);
-  border-top: 1px solid var(--border-color);
-  display: flex; /* 改为 flex 布局 */
-  align-items: flex-end; /* 底部对齐，当 textarea 增高时按钮仍在底部 */
-  gap: 8px; /* 各个直接子元素之间的间距 */
-}
-
-/* --- 输入区域左侧操作按钮样式 --- */
-.input-action-btn {
-  flex-shrink: 0;
-  padding: 0; /* 移除内边距，让 SVG 图标决定大小，或设置固定宽高 */
-  width: 40px;  /* 设置固定宽度 */
-  height: 40px; /* 设置固定高度，使其与 textarea 的初始高度接近 */
-  border-radius: 8px; /* 稍大一点的圆角 */
-  border: 1px solid var(--border-color);
-  background-color: transparent; /* 可以尝试透明背景，仅边框 */
-  color: var(--text-secondary, #888); /* 图标颜色使用次要文本颜色 */
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-}
-
-.input-action-btn:hover {
-  border-color: var(--primary);
-  background-color: rgba(var(--primary-rgb), 0.05); /* 非常浅的背景 */
-  color: var(--primary); /* 悬停时图标变主题色 */
-}
-
-.input-action-btn svg {
-  width: 22px;  /* 稍微调整图标大小 */
-  height: 22px; /* 稍微调整图标大小 */
-  stroke-width: 1.8; /* 可以尝试调整线条粗细 */
-  /* currentColor 会继承按钮的 color 属性 */
-}
-
-
-/* --- 文本输入框样式调整 --- */
-.input-area textarea#prompt {
-  flex-grow: 1; /* 让 textarea 占据大部分可用空间 */
-  /* 其他 padding, font-size, border, border-radius, background, color, resize, width,
-     box-sizing, max-height, min-height, line-height, overflow-y, height
-     这些样式基本可以保持不变，但注意其 height 现在是相对于 flex item 的行为 */
-  padding: 8px 10px;
-  font-size: 0.95rem;
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  background: var(--bg-color);
-  color: var(--text-color);
-  resize: none;
-  width: auto; /* 不再是 100%，由 flex-grow 控制 */
-  box-sizing: border-box;
-  max-height: 200px;
-  min-height: 42px; /* 与按钮高度匹配，或稍高 */
-  line-height: 1.6;
-  overflow-y: hidden;
-  /* height: auto; */ /* JS 会控制 */
-}
-
-/* --- 发送按钮样式调整 --- */
-.input-area button#send-btn {
-  flex-shrink: 0;
-  padding: 0 18px; /* 调整内边距 */
-  height: 40px;   /* 与其他元素高度一致 */
-  background: var(--primary);
-  color: #fff;
-  border: none;
-  border-radius: 8px; /* 与其他元素一致的圆角 */
-  font-size: 0.95rem;
-  font-weight: 500; /* 字体稍粗 */
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  /* display: inline-flex; align-items: center; justify-content: center; */ /* 这些可以保持 */
-}
-.input-area button#send-btn:hover {
-    background-color: rgba(var(--primary-rgb), 0.85); /* 悬停时颜色变深 */
-}
-
-/* style.css */
-
-/* --- 外层输入区域容器 --- */
-.input-area {
-  flex-shrink: 0;
-  padding: 10px 12px; /* 保持合理的内边距 */
-  background: var(--bg-color);
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column; /* 预览区和输入行垂直排列 */
-  gap: 8px; /* 预览区和输入行之间的间距 */
-}
-
-/* --- 文件预览区域 (样式基本可以保持) --- */
-.file-preview-area {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 8px;
-  border: 1px dashed var(--border-color-light, #555);
-  border-radius: 6px;
-  max-height: 120px;
-  overflow-y: auto;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-/* --- 用于水平排列输入控件的行 --- */
-.input-main-row {
-  display: flex;
-  align-items: flex-end; /* 关键：所有子元素底部对齐 */
-  gap: 8px;
-  width: 100%;
-}
-
-/* --- 输入区域左侧操作按钮样式 --- */
-.input-main-row .input-action-btn {
-  flex-shrink: 0; /* 不允许按钮被压缩 */
-  padding: 0;     /* 移除内边距，让 SVG 决定交互区域，或固定宽高 */
-  width: 40px;    /* 固定宽度 */
-  height: 40px;   /* 固定高度，与 textarea 的 min-height 和发送按钮匹配 */
-  border-radius: 8px;
-  border: 1px solid var(--border-color);
-  background-color: transparent; /* 或者 var(--input-bg, var(--bg-color)); */
-  color: var(--text-secondary, #888);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-  box-sizing: border-box; /* 确保 padding 和 border 不会增加总尺寸 */
-}
-.input-main-row .input-action-btn:hover {
-  border-color: var(--primary);
-  background-color: rgba(var(--primary-rgb), 0.05);
-  color: var(--primary);
-}
-.input-main-row .input-action-btn svg {
-  width: 20px;  /* 根据实际图标调整 */
-  height: 20px; /* 根据实际图标调整 */
-  stroke-width: 2; /* 根据实际图标调整 */
-  stroke: currentColor;
-}
-
-/* --- 文本输入框样式调整 --- */
-.input-main-row textarea#prompt {
-  flex-grow: 1; /* 让 textarea 占据所有可用的剩余空间 */
-  padding: 10px 12px;
-  font-size: 0.95rem; /* 与发送按钮字体大小协调 */
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  background: var(--input-bg, var(--bg-color));
-  color: var(--text-color);
-  resize: none;
-  /* width: auto; -- flex-grow 会处理 */
-  box-sizing: border-box;
-  max-height: 200px; /* 或您期望的最大高度 */
-  min-height: 40px;  /* 与按钮高度保持一致 */
-  line-height: 1.5;
-  overflow-y: hidden; /* JS 会在内容超出时改为 auto */
-  /* height 由 JS 动态调整，初始高度由 min-height 和内容决定 */
-}
-.input-main-row textarea#prompt:focus {
-    border-color: var(--primary);
-    box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
-    outline: none;
-}
-
-/* --- 发送按钮样式调整 --- */
-.input-main-row button#send-btn {
-  flex-shrink: 0; /* 不允许被压缩 */
-  padding: 0 18px;
-  height: 40px;   /* 与其他元素高度一致 */
-  background: var(--primary);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-  /* display: inline-flex; align-items: center; justify-content: center; 这几个可以保持 */
-}
-.input-main-row button#send-btn:hover {
-    background-color: rgba(var(--primary-rgb), 0.85);
-}
-
+/* 文件预览区域 */
 .file-preview-area {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    /* 要求1：不顶格 - 给整个预览区域添加一些内边距或外边距 */
-    padding: 8px; /* 例如，在区域内部留白 */
-    /* 或者 margin-bottom: 10px; 等，取决于你希望它和哪个元素隔开 */
-    /* border: 1px solid #444; */ /* 调试时可以打开边框看区域 */
+    gap: 8px; /* 统一间距 */
+    padding: 8px;
+    border: 1px dashed var(--border-color); /* 虚线边框 */
+    border-radius: var(--border-radius-md);
+    max-height: 120px;
+    overflow-y: auto;
+    width: 100%;
+    box-sizing: border-box;
+    background-color: rgba(var(--primary-rgb), 0.02); /* 非常浅的背景 */
 }
-
-.file-preview-item-sleek {
+.file-preview-item-sleek { /* 单个预览文件 */
     display: inline-flex;
     align-items: center;
-    /* 要求3：底色透明 */
-    background-color: transparent;
-    /* 边框可以保留，或者根据你的主题调整颜色，或者去掉 */
-    border: 1px solid #555; /* 例如，一个深色主题下的灰色边框 */
-    color: #ccc; /* 浅色文字，适应深色背景 */
-    border-radius: 4px;
+    background-color: var(--bg-secondary); /* 次要背景 */
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    border-radius: var(--border-radius-sm);
     padding: 6px 10px;
-    font-size: 13px; /* 可以微调 */
+    font-size: 0.85rem; /* 稍小字体 */
     line-height: 1.3;
-    max-width: 180px; /* 限制最大宽度 */
+    max-width: 180px;
     box-sizing: border-box;
+    box-shadow: var(--shadow-sm);
 }
-
 .file-name-sleek {
     flex-grow: 1;
     white-space: nowrap;
     overflow: hidden;
-    text-overflow: ellipsis; /* 文件名过长时，从尾部显示省略号 */
-    margin-right: 5px;
-    color: inherit; /* 继承父元素的文字颜色 */
+    text-overflow: ellipsis;
+    margin-right: 6px; /* 文件名和关闭按钮间距 */
+    color: inherit;
 }
-
 .remove-file-btn-sleek {
     background: none;
     border: none;
-    color: #888; /* 移除按钮颜色 */
+    color: var(--text-secondary);
     cursor: pointer;
-    font-size: 16px; /* 调整叉号大小 */
+    font-size: 1.1em; /* 调整图标大小 */
     line-height: 1;
-    padding: 0 0 0 5px;
+    padding: 0 0 0 6px; /* 左侧padding，与文件名隔开 */
+    transition: color 0.2s ease;
+}
+.remove-file-btn-sleek:hover {
+    color: #e53e3e; /* 危险红色 */
 }
 
-.remove-file-btn-sleek:hover {
-    color: #fff; /* 鼠标悬浮时文字变白 */
+/* AI思考过程展示 (Reasoning Block) */
+.reasoning-block.reasoning-block-empty { /* 初始隐藏空的思考块 */
+    display: none !important;
+}
+.reasoning-block { /* 外层包裹容器 */
+    border-radius: var(--border-radius-lg); /* 统一圆角 */
+    padding: 16px 20px;
+    margin: 16px 0; /* 上下间距，与消息块协调 */
+    font-size: 1em;
+    transition: background-color 0.3s ease, border-color 0.3s ease; /* 主题切换过渡 */
+    background: var(--reasoning-bg);
+    border: 1.5px solid var(--reasoning-border);
+    box-shadow: 0 3px 8px var(--reasoning-content-shadow); /* 使用变量，原始值可能特定 */
+}
+.reasoning-label { /* 标签样式 ("Thinking:") */
+    font-weight: 600;
+    margin-bottom: 12px; /* 与内容间距 */
+    color: var(--reasoning-label);
+    letter-spacing: 0.05em; /* 字符间距 */
+    font-size: 1.05em; /* 略大字号 */
+    display: block;
+}
+.reasoning-content { /* 思考内容块 */
+    color: var(--reasoning-fg);
+    white-space: pre-wrap; /* 保留换行和空格 */
+    word-wrap: break-word;
+    line-height: 1.65;
+    max-height: 200px;
+    overflow-y: auto;
+    font-size: 0.9em;
+    border-left: 3px solid var(--reasoning-content-border); /* 左侧强调线，加粗一点 */
+    background: var(--reasoning-content-bg);
+    padding: 12px 16px; /* 内边距 */
+    border-radius: 0 var(--border-radius-md) var(--border-radius-md) 0; /* 右侧圆角 */
+    box-shadow: inset 0 1px 4px var(--reasoning-content-shadow); /* 轻微内阴影 */
+}
+/* Webkit滚动条自定义（兼容深色浅色）- 已在全局滚动条部分处理 */
+.reasoning-content pre { /* 内容区中的代码块 */
+    background-color: rgba(var(--primary-rgb), 0.08); /* 使用主色调的浅色背景 */
+    padding: 10px 14px;
+    border-radius: var(--border-radius-md);
+    overflow-x: auto;
+    margin: 12px 0; /* 上下间距 */
+    font-size: 0.95em;
+    color: var(--text-color); /* 与普通文本颜色一致或稍作区分 */
+    border: 1px solid var(--border-color); /* 统一边框 */
+}
+body.dark-theme .reasoning-content pre { /* 深色主题代码块 */
+    background-color: rgba(var(--primary-dark-rgb), 0.15);
+    color: var(--text-dark);
+}
+.reasoning-content code { /* 行内代码 */
+    font-family: Consolas, Monaco, 'Andale Mono', 'Ubuntu Mono', monospace; /* 原始字体栈 */
+    font-size: 0.98em;
+    background-color: rgba(var(--primary-rgb), 0.1); /* 主色调浅背景 */
+    padding: 0.2em 0.4em;
+    border-radius: var(--border-radius-sm);
+    color: var(--primary); /* 主色文字 */
+}
+body.dark-theme .reasoning-content code { /* 深色主题行内代码 */
+    color: var(--primary-dark);
+    background-color: rgba(var(--primary-dark-rgb), 0.15);
 }

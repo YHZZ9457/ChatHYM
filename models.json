@@ -12,6 +12,10 @@
           "text": "Gemini 2.5 FLash"
         },
         {
+          "text": "Gemini 2.5 Flash-0520",
+          "value": "gemini::gemini-2.5-flash-preview-05-20"
+        },
+        {
           "value": "gemini::gemini-2.0-flash",
           "text": "Gemini 2.0 FLash"
         }
@@ -135,6 +139,10 @@
         {
           "value": "ollama::qwen3:0.6b",
           "text": "Ollama Qwen3-0.6b"
+        },
+        {
+          "text": "Deepseek R1-8B",
+          "value": "ollama::deepseek-r1:8b"
         }
       ]
     }

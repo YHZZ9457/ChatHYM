@@ -20,6 +20,10 @@ let modelFormModal = null;
 let modelForm = null;
 let sidebarElement = null; // 如果您在 show...Area 函数中用到它
 let modelFormTitle = null;
+let temperatureSliderInline = null;
+let temperatureInputInline = null;
+let inlineChatSettingsPanel = null;
+let chatSettingsBtnInlineElement = null; // 用于 document click 事件
 
 let _internalUploadedFilesData = []; // 使用带下划线的内部变量
 Object.defineProperty(window, 'uploadedFilesData', {
@@ -1060,11 +1064,6 @@ function mapMessagesForStandardOrClaude(messagesHistory, provider, currentFilesD
 
     const mappedApiMessages = [];
 
-    // 1. 转换历史消息 (如果API需要完整的历史)
-    // 这一步很重要，因为历史消息中可能也包含之前的多模态内容，你需要确保它们也被正确格式化
-    // 或者，如果API只接受最后几条消息，或者只接受最后的用户输入和文件，你需要调整这里的逻辑。
-    // 为简化，我们假设 messagesHistory 中的 content 都已经是字符串或API期望的简单格式。
-    // 如果历史消息也需要复杂的多模态处理，这里的逻辑会更复杂。
     messagesHistory.forEach(msg => {
         if (msg.role === 'system') {
             // Anthropic 和 Ollama 的 system message 通常在顶层单独传递，
@@ -1425,7 +1424,10 @@ async function send() {
     }
 
     if (currentConversationId === conversationIdAtRequestTime) {
-      const initialReasoningText = (shouldUseStreaming && (providerToUse === 'ollama' || providerToUse === 'deepseek' || providerToUse === 'openai' || providerToUse === 'siliconflow' /*或其他支持<think>的*/ )) ? "" : undefined;
+      const initialReasoningText = (shouldUseStreaming && (providerToUse === 'ollama' || 
+        providerToUse === 'deepseek' || 
+        providerToUse === 'openai' || 
+        providerToUse === 'siliconflow' /*或其他支持<think>的*/ )) ? "" : undefined;
       
       
         if (typeof appendMessage === 'function') {
@@ -1528,7 +1530,7 @@ async function send() {
             alert("无法构建有效的请求内容。请检查输入或文件。");
             return;
         }
-        
+        console.log("DEBUG: bodyPayload being sent to Anthropic:", JSON.stringify(bodyPayload, null, 2));
         const response = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(bodyPayload) });
         responseContentType = response.headers.get('content-type');
         // isStreamingResponse 现在是最初的期望
@@ -1728,8 +1730,38 @@ async function send() {
 
                                 let sseThinkingText = "";
                                 let sseReplyText = "";
-
-                                if (providerToUse === 'deepseek') {
+                                if (providerToUse === 'anthropic') {
+                                    // console.log("[Anthropic Stream Chunk]:", JSON.stringify(chunk, null, 2)); // 调试：打印原始chunk
+                                    if (chunk.type === 'message_start') {
+                                        console.log("[Anthropic Stream] Message started. ID:", chunk.message?.id);
+                                        // 你可以在这里初始化一些与消息相关的状态，如果需要
+                                        accumulatedAssistantReply = ""; // 重置累积回复
+                                        accumulatedThinkingForDisplay = ""; // Anthropic 通常不显式输出思考，但以防万一
+                                    } else if (chunk.type === 'content_block_start') {
+                                        // console.log("[Anthropic Stream] Content block started. Index:", chunk.index, "Type:", chunk.content_block?.type);
+                                    } else if (chunk.type === 'content_block_delta') {
+                                        if (chunk.delta && chunk.delta.type === 'text_delta') {
+                                            sseReplyText = chunk.delta.text || ''; // 获取文本片段
+                                        }
+                                    } else if (chunk.type === 'content_block_stop') {
+                                        // console.log("[Anthropic Stream] Content block stopped. Index:", chunk.index);
+                                    } else if (chunk.type === 'message_delta') {
+                                        // console.log("[Anthropic Stream] Message delta:", chunk.delta);
+                                        // 可以检查 chunk.delta.stop_reason 和 chunk.delta.stop_sequence
+                                    } else if (chunk.type === 'message_stop') {
+                                        console.log("[Anthropic Stream] Message stopped.");
+                                        isCurrentlyInThinkingBlock = false; // 确保重置
+                                    } else if (chunk.type === 'ping') {
+                                        // console.log("[Anthropic Stream] Ping event received.");
+                                    } else if (chunk.type === 'error') {
+                                        console.error("[Anthropic Stream] Error event received:", chunk.error);
+                                        // 你可能需要在这里处理错误，例如停止流并显示错误信息
+                                        sseReplyText = `\n[错误：Anthropic API 流错误 - ${chunk.error?.type}: ${chunk.error?.message || '未知错误'}]`;
+                                    }
+                                    // 对于 Anthropic，思考过程是隐式的，我们只处理 sseReplyText
+                                    sseThinkingText = ""; // 明确设置为空，因为它不使用 <think>
+                                
+                                } else if (providerToUse === 'deepseek') {
                                     sseThinkingText = chunk.choices?.[0]?.delta?.reasoning_content || '';
                                     sseReplyText = chunk.choices?.[0]?.delta?.content || '';
                                 } else if (providerToUse === 'openai' || providerToUse === 'siliconflow') {
@@ -1756,6 +1788,7 @@ async function send() {
                                         if (reasoningContentElement) {
                                             accumulatedThinkingForDisplay += sseThinkingText;
                                             reasoningContentElement.textContent = accumulatedThinkingForDisplay;
+                                            reasoningContentElement.scrollTop = reasoningContentElement.scrollHeight;
                                             if (reasoningBlockDiv && reasoningBlockDiv.classList.contains('reasoning-block-empty') && accumulatedThinkingForDisplay.trim() !== '') {
                                                 reasoningBlockDiv.classList.remove('reasoning-block-empty');
                                             }
@@ -2708,6 +2741,95 @@ document.addEventListener('DOMContentLoaded', async () => {
     modelForm = document.getElementById('model-form');
     sidebarElement = document.querySelector('.sidebar');
     modelFormTitle = document.getElementById('model-form-title');
+    chatSettingsBtnInlineElement = document.getElementById('chat-settings-btn-inline');
+    inlineChatSettingsPanel = document.getElementById('inline-chat-settings-panel');
+    temperatureInputInline = document.getElementById('temperature-input-inline');
+    temperatureValueDisplayInline = document.getElementById('temperature-value-inline');
+
+ // --- 为行内聊天设置按钮添加事件监听器 ---
+    if (chatSettingsBtnInlineElement && inlineChatSettingsPanel) {
+        chatSettingsBtnInlineElement.addEventListener('click', (event) => {
+            event.stopPropagation();
+            // 使用 classList.toggle 来切换一个 'active' 或 'visible' 类更佳，
+            // 但直接操作 style.display 也可以，确保与 CSS 初始状态一致。
+            const isCurrentlyVisible = inlineChatSettingsPanel.style.display === 'block' || inlineChatSettingsPanel.style.display === 'flex'; // 根据你CSS如何显示它
+            
+            if (isCurrentlyVisible) {
+                inlineChatSettingsPanel.style.display = 'none';
+                console.log("Inline chat settings panel HIDDEN");
+            } else {
+                // ★★★ 显示面板时，确保CSS使其可见 ★★★
+                // 你在CSS中用的是 .inline-chat-settings-panel { display: flex; } (如果你希望内容flex排列)
+                // 或者 .inline-chat-settings-panel { display: block; }
+                // 我们这里用 block 来匹配你HTML中的 style="display: none;"
+                inlineChatSettingsPanel.style.display = 'block'; 
+                console.log("Inline chat settings panel SHOWN (display: block)");
+            }
+        });
+
+        // 点击页面其他地方关闭行内设置面板
+        document.addEventListener('click', (event) => {
+            if (inlineChatSettingsPanel && 
+                (inlineChatSettingsPanel.style.display === 'block' || inlineChatSettingsPanel.style.display === 'flex') &&
+                chatSettingsBtnInlineElement) {
+                
+                const clickedOnButtonOrPanel = 
+                    (chatSettingsBtnInlineElement.contains(event.target) || event.target === chatSettingsBtnInlineElement) ||
+                    inlineChatSettingsPanel.contains(event.target);
+
+                if (!clickedOnButtonOrPanel) {
+                    inlineChatSettingsPanel.style.display = 'none';
+                    console.log("Inline chat settings panel closed due to outside click.");
+                }
+            }
+        });
+        // 防止点击面板内部导致关闭
+        inlineChatSettingsPanel.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+
+    } else {
+        if (!chatSettingsBtnInlineElement) console.warn("DOMContentLoaded: Button 'chat-settings-btn-inline' not found!");
+        if (!inlineChatSettingsPanel) console.warn("DOMContentLoaded: Panel 'inline-chat-settings-panel' not found!");
+    }
+
+    // --- 初始化行内温度输入框 ---
+    const defaultTemperature = 0.70;
+    if (temperatureInputInline && temperatureValueDisplayInline) {
+        let currentTemp = parseFloat(localStorage.getItem('model-temperature'));
+        if (isNaN(currentTemp) || currentTemp < 0 || currentTemp > 2) {
+            currentTemp = defaultTemperature;
+        }
+        currentTemp = Math.round(currentTemp / 0.01) * 0.01;
+        const formattedTemp = currentTemp.toFixed(2);
+
+        temperatureInputInline.value = formattedTemp;
+        temperatureValueDisplayInline.textContent = formattedTemp;
+
+        temperatureInputInline.addEventListener('change', () => { // 使用 'change' 事件
+            let newTemp = parseFloat(temperatureInputInline.value);
+            if (isNaN(newTemp)) {
+                const storedTemp = parseFloat(localStorage.getItem('model-temperature') || defaultTemperature);
+                const resetValue = (Math.round(storedTemp / 0.01) * 0.01).toFixed(2);
+                temperatureInputInline.value = resetValue;
+                temperatureValueDisplayInline.textContent = resetValue;
+                return;
+            }
+            if (newTemp < 0) newTemp = 0;
+            if (newTemp > 2) newTemp = 2;
+            newTemp = Math.round(newTemp / 0.01) * 0.01;
+            const newFormattedTemp = newTemp.toFixed(2);
+            temperatureInputInline.value = newFormattedTemp;
+            temperatureValueDisplayInline.textContent = newFormattedTemp;
+            localStorage.setItem('model-temperature', newFormattedTemp.toString());
+            // ... (可选的同步主设置页面滑块逻辑) ...
+        });
+        temperatureInputInline.addEventListener('keydown', (event) => { /* ... Enter键处理 ... */ });
+    } else {
+        if (!temperatureInputInline) console.warn("DOMContentLoaded: Input 'temperature-input-inline' not found!");
+        if (!temperatureValueDisplayInline) console.warn("DOMContentLoaded: Span 'temperature-value-inline' not found!");
+    }
+    
 
     if (modelFormTitle) {
         console.log("DOMContentLoaded: 'modelFormTitle' was SUCCESSFULLY INITIALIZED to:", modelFormTitle);
@@ -2752,25 +2874,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     console.info("DOMContentLoaded: Frontend API Key management logic is removed. Keys should be managed via backend/environment variables.");
     // const providerSelect = document.getElementById('api-provider'); // Retain for reference if needed
 
-    // 4. Temperature (模型温度) 设置初始化和事件处理
-    const temperatureSlider = document.getElementById('temperature-slider');
-    const temperatureValueDisplay = document.getElementById('temperature-value');
-    const defaultTemperature = 0.7;
-    if (temperatureSlider && temperatureValueDisplay) {
-        let currentTemp = parseFloat(localStorage.getItem('model-temperature'));
-        if (isNaN(currentTemp) || currentTemp < 0 || currentTemp > 2) {
-            currentTemp = defaultTemperature;
-        }
-        temperatureSlider.value = currentTemp;
-        temperatureValueDisplay.textContent = currentTemp.toFixed(2);
-        temperatureSlider.addEventListener('input', () => {
-            const newTemp = parseFloat(temperatureSlider.value);
-            temperatureValueDisplay.textContent = newTemp.toFixed(2);
-            localStorage.setItem('model-temperature', newTemp.toString());
-        });
-    } else {
-        console.warn("DOMContentLoaded: Temperature control elements ('temperature-slider' or 'temperature-value') not found.");
-    }
+    
 
     // 5. Textarea (用户输入框) 自动调整高度 和 Enter 发送
     const promptTextarea = document.getElementById('prompt');
@@ -3065,13 +3169,7 @@ if (showModelManagementBtn) {
         console.warn(`DOMContentLoaded: Inline file upload elements not fully found. Missing: ${missingInlineUploadElements.join(' and ')}.`);
     }
 
-    if (chatSettingsBtnInline) {
-        chatSettingsBtnInline.addEventListener('click', () => {
-            alert('聊天设置功能暂未启用。'); // Placeholder
-        });
-    } else {
-        // console.warn("DOMContentLoaded: Inline chat settings button 'chat-settings-btn-inline' not found.");
-    }
+    
     
     console.log("DEBUG DOMContentLoaded: All initializations and event bindings complete.");
 }); // DOMContentLoaded 事件监听器结束

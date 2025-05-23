@@ -177,7 +177,7 @@ button{font-family:inherit;cursor:pointer; background:transparent; border:none; 
   display: flex;
   align-items: center;
   gap: 16px;
-  flex-wrap: wrap; /* 允许换行 */
+  flex-wrap: nowrap; /* 允许换行 */
 }
 .setting-item label { /* 保持原始补丁样式 */
   flex: 0 0 200px;
@@ -377,10 +377,11 @@ body.dark-theme .message pre { background: rgba(255,255,255,0.08); color: #cdd3d
 }
 
 .input-main-row {
-  display: flex;
-  align-items: flex-end; /* 底部对齐，当 textarea 增高时按钮仍在底部 */
-  gap: 8px; /* 元素之间的间距 */
-  width: 100%; /* 确保这一行占满父容器宽度 */
+    display: flex;
+    align-items: center;
+    gap: 8px; /* 按钮、容器、输入框之间的间距 */
+    padding: 8px 0; /* 给整行一些垂直内边距 */
+    position: relative; /* 如果面板需要相对于这一整行定位，而不是按钮的直接父容器 */
 }
 /* 输入区左侧操作按钮（+号 和 滑块图标）- 参考图片 */
 .input-action-btn {
@@ -1430,4 +1431,111 @@ body.dark-theme .reasoning-content pre { /* 深色主题代码块 */
 body.dark-theme .reasoning-content code { /* 深色主题行内代码 */
     color: var(--primary-dark);
     background-color: rgba(var(--primary-dark-rgb), 0.15);
+}
+
+/* 行内聊天设置按钮及其面板的容器 - (这部分保持不变) */
+.inline-settings-container {
+    position: relative; 
+    display: inline-flex; 
+    align-items: center;
+}
+
+/* 行内聊天设置面板的样式 - (这部分主要保持不变，可以微调宽度) */
+.inline-chat-settings-panel {
+    position: absolute;
+    bottom: calc(100% + 8px); 
+    left: 0;                  
+    
+    width: auto;
+    min-width: 200;
+    background: rgba(38, 40, 45, 0.95); 
+    backdrop-filter: blur(10px);        
+    border: 1px solid #303238;         
+    border-radius: 10px;                
+    padding: 12px 15px; /* 稍微调整内边距 */
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.2); 
+    z-index: 1070;                      
+    color: #dde1e8;                     
+    font-size: 14px; /* 调整了基础字体大小 */
+    /* display: none; */ 
+    transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out; 
+}
+
+/* 面板标题 - (保持不变) */
+.inline-chat-settings-panel h4.inline-settings-title {
+    margin: 0 0 12px 0;
+    font-size: 0.9em; 
+    color: #c0c8d8; 
+    font-weight: 500;
+    border-bottom: 1px solid #383a40;
+    padding-bottom: 10px;
+    text-align: left;
+}
+
+/* 单个设置项的布局 (核心修改) */
+.inline-chat-settings-panel .setting-item.inline-setting-item { 
+    display: flex;          
+    align-items: center;    
+    
+    /* justify-content: space-between; */ /* 移除这个，或者改为 flex-start */
+    justify-content: flex-start; /* 让元素从左边开始排列 */
+    
+    margin-bottom: 0;       
+}
+
+/* 标签样式 */
+.inline-chat-settings-panel .setting-item label { 
+    font-size: 0.9em; /* 与面板基础字体一致或略小 */
+    color: #b0bac8; 
+    white-space: nowrap; 
+    margin-right: 8px;  /* ★★★ 调整标签和输入框之间的固定间距 ★★★ */
+    flex-shrink: 0;      
+}
+
+/* 数字输入框样式 */
+.inline-chat-settings-panel .setting-item input[type="number"] { 
+    width: 60px;       /* ★★★ 可以尝试减小输入框宽度 ★★★ */
+    padding: 5px 7px;  /* 调整内边距 */
+    background: #1e1f24; 
+    color: #dde1e8;   
+    border: 1px solid #40434b; 
+    border-radius: 5px;
+    font-size: 0.9em; /* 与标签字体大小一致 */
+    text-align: center; 
+    outline: none;
+    transition: border-color 0.15s, background-color 0.15s;
+    -moz-appearance: textfield; 
+}
+.inline-chat-settings-panel .setting-item input[type="number"]::-webkit-outer-spin-button,
+.inline-chat-settings-panel .setting-item input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none; 
+    margin: 0;
+}
+.inline-chat-settings-panel .setting-item input[type="number"]:focus {
+    border-color: #5c85d6; 
+    background: #25282e;
+}
+
+/* 浅色主题适配 (你需要根据你的浅色主题颜色来调整) */
+body:not(.dark-theme) .inline-chat-settings-panel {
+    background: rgba(248, 249, 250, 0.95);
+    color: #212529;
+    border-color: #ced4da;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.08);
+}
+body:not(.dark-theme) .inline-chat-settings-panel h4.inline-settings-title {
+    color: #343a40;
+    border-bottom-color: #dee2e6;
+}
+body:not(.dark-theme) .inline-chat-settings-panel .setting-item label {
+    color: #495057;
+}
+body:not(.dark-theme) .inline-chat-settings-panel .setting-item input[type="number"] {
+    background: #ffffff;
+    color: #212529;
+    border-color: #ced4da;
+}
+body:not(.dark-theme) .inline-chat-settings-panel .setting-item input[type="number"]:focus {
+    border-color: #80bdff;
+    background: #ffffff;
 }

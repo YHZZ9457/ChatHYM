@@ -65,15 +65,45 @@
 
   <!-- 用于水平排列按钮、输入框、发送按钮的行 -->
   <div class="input-main-row">
-    <button id="upload-file-btn-inline" title="上传文件" class="input-action-btn">
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-plus"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
-    </button>
-    <input type="file" id="file-input-inline" accept="image/*,application/pdf,.txt,.md" style="display: none;" multiple />
+        <button id="upload-file-btn-inline" title="上传文件" class="input-action-btn">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" 
+               viewBox="0 0 24 24" fill="none" stroke="currentColor" 
+               stroke-width="2" stroke-linecap="round" stroke-linejoin="round" 
+               class="lucide lucide-plus">
+            <path d="M5 12h14"/>
+            <path d="M12 5v14"/>
+          </svg>
+        </button>
 
-    <button id="chat-settings-btn-inline" title="聊天设置" class="input-action-btn">
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings-2"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
-    </button>
+        <input type="file" id="file-input-inline" accept="image/*,application/pdf,.txt,.md" 
+               style="display: none;" multiple />
 
+        <div class="inline-settings-container"> <!-- 新的父容器 -->
+          <button id="chat-settings-btn-inline" title="聊天设置" class="input-action-btn">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" 
+                 viewBox="0 0 24 24" fill="none" stroke="currentColor" 
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" 
+                 class="lucide lucide-settings-2">
+              <path d="M20 7h-9"/>
+              <path d="M14 17H5"/>
+              <circle cx="17" cy="17" r="3"/>
+              <circle cx="7" cy="7" r="3"/>
+            </svg>
+          </button>
+
+          <!-- 新增的行内聊天设置面板 (初始隐藏) -->
+          <div id="inline-chat-settings-panel" class="inline-chat-settings-panel" style="display: none;">
+            <h4 class="inline-settings-title">聊天参数</h4> <!-- 使用类名以便CSS控制 -->
+            <div class="setting-item inline-setting-item"> <!-- 使用新的或特定的类名 -->
+              <label for="temperature-input-inline" id="temperature-label-inline">
+                Temperature (<span id="temperature-value-inline">0.70</span>):
+              </label>
+              <input type="number" id="temperature-input-inline" name="temperature" 
+                     min="0" max="2" step="0.01" value="0.70">
+            </div>
+            <!-- 未来可以添加更多行内设置项，每个都是一个 .inline-setting-item -->
+          </div>
+        </div>
     <textarea id="prompt" placeholder="输入你的问题，Enter 发送 / Shift+Enter 换行"></textarea>
 
     <button id="send-btn" type="button">发送</button>
@@ -102,10 +132,7 @@
           <label>切换浅/深色主题</label>
           <button id="toggle-theme-btn">切换主题</button>
         </div>
-        <div class="setting-item">
-          <label for="temperature-slider">模型 Temperature (<span id="temperature-value">0.7</span>):</label>
-          <input type="range" id="temperature-slider" name="temperature" min="0" max="2" step="0.05" value="0.7">
-        </div>
+        
         <div class="setting-item">
           <label>界面缩放</label>
           <div class="scale-frame">
@@ -130,7 +157,7 @@
           <h2>模型管理</h2>
           <div class="model-management-controls">
             <button id="add-new-model-btn" class="action-btn">＋ 添加新模型</button>
-            <button id="save-models-to-file-btn" class="action-btn primary-action">保存模型</button>
+            <button id="save-models-to-file-btn" class="action-btn primary-action">保存模型更改</button>
             <button id="back-to-chat-from-model-management-btn">返回聊天</button>
           </div>
         </header>

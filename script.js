@@ -24,6 +24,9 @@ let temperatureSliderInline = null;
 let temperatureInputInline = null;
 let inlineChatSettingsPanel = null;
 let chatSettingsBtnInlineElement = null; // 用于 document click 事件
+let qwenThinkModeToggle = null;
+let currentQwenThinkMode = false; // 存储当前模式，默认为不开启
+const QWEN_THINK_MODE_STORAGE_KEY = 'qwen-think-mode-enabled';
 
 let _internalUploadedFilesData = []; // 使用带下划线的内部变量
 Object.defineProperty(window, 'uploadedFilesData', {
@@ -375,38 +378,74 @@ function appendMessage(role, messageContent, modelForNote, reasoningText) {
 }
 
 
-    // --- 2. 处理主要内容 (文本和文件信息) ---
+// --- 2. 处理主要内容 (文本和文件信息) ---
     let textPart = '';
-    let filesInfoPart = '';
+    let filesInfoPart = ''; // 用于存储 "[已附带文件: ...]" 这样的信息
 
+    // 解析传入的 messageContent
     if (typeof messageContent === 'string') {
-        textPart = messageContent;
+        textPart = messageContent; // 如果 messageContent 是字符串，直接赋给 textPart
     } else if (messageContent && typeof messageContent === 'object') {
+        // 如果 messageContent 是对象，尝试从中提取 .text 和 .files
         if (typeof messageContent.text === 'string') {
-            textPart = messageContent.text;
+            textPart = messageContent.text; // 获取文本部分
         }
+        // 只有用户消息才处理 files 数组来生成 filesInfoPart
         if (role === 'user' && Array.isArray(messageContent.files) && messageContent.files.length > 0) {
             const fileNames = messageContent.files.map(f => f.name).join(', ');
             filesInfoPart = `[已附带文件: ${fileNames}]`;
-        } else if (role !== 'user') {
-            if (messageContent.toString() === '[object Object]' && Object.keys(messageContent).length > 0) {
-                console.warn(`[AppendMessage] Assistant message content is an unexpected object for role '${role}'. Displaying as empty. Content:`, messageContent);
-                textPart = "";
-            } else {
-                textPart = String(messageContent || '');
-            }
         }
     } else if (messageContent !== null && messageContent !== undefined) {
+        // 其他情况（例如布尔值、数字，虽然不太可能），尝试转换为字符串
         textPart = String(messageContent);
     }
+    // 此时，textPart 包含了来自 messageContent 的原始文本（可能包含 /think 或 /no_think）
+    // filesInfoPart 包含了文件信息字符串（如果存在）
 
-    let markdownInput = textPart.trim();
-    if (filesInfoPart) {
-        if (markdownInput) {
-            markdownInput += "\n" + filesInfoPart;
-        } else {
-            markdownInput = filesInfoPart;
+    // ▼▼▼ 针对用户角色的消息，清理 textPart 中的内部指令 ▼▼▼
+    if (role === 'user') {
+        const thinkPattern = /\s*\/think$/;       // 匹配末尾的 " /think" (前面可能有空格)
+        const noThinkPattern = /\s*\/no_think$/; // 匹配末尾的 " /no_think"
+
+        if (thinkPattern.test(textPart)) {
+            textPart = textPart.replace(thinkPattern, '');
+            // console.log("[AppendMessage] User role: Removed '/think' from textPart for UI display.");
+        } else if (noThinkPattern.test(textPart)) {
+            textPart = textPart.replace(noThinkPattern, '');
+            // console.log("[AppendMessage] User role: Removed '/no_think' from textPart for UI display.");
         }
+    }
+    // ▲▲▲ 清理结束 ▲▲▲
+
+
+    // ▼▼▼ 组合最终用于 Markdown 解析的字符串 ▼▼▼
+    let markdownInput = "";
+    const trimmedTextPart = textPart.trim(); // 清理后的用户文本或原始助手文本
+
+    if (trimmedTextPart && filesInfoPart) { // 如果文本和文件信息都存在 (主要针对用户消息)
+        markdownInput = trimmedTextPart + "\n" + filesInfoPart; // 用单个换行连接
+    } else if (trimmedTextPart) { // 只有文本
+        markdownInput = trimmedTextPart;
+    } else if (filesInfoPart) { // 只有文件信息 (主要针对用户消息)
+        markdownInput = filesInfoPart;
+    } else if (role === 'assistant' || role === 'model') {
+        // 对于助手/模型，如果文本为空（例如流式占位符），markdownInput 也为空字符串
+        // 这将使得后续的 contentDiv.innerHTML = '';
+        markdownInput = "";
+    } else {
+        // 对于用户消息，如果文本和文件信息都为空，也视为空
+        markdownInput = "";
+    }
+    // ▲▲▲ 组合结束 ▲▲▲
+
+    let contentHtml = '';
+    // 只有当最终要处理的 Markdown 输入非空（trim后），
+    // 或者特定条件下（如助手消息无思考过程，但仍需创建空的.text div以便流式填充），才进行解析
+    if (markdownInput.trim() !== '' || ((role === 'assistant' || role === 'model') && !reasoningText) ) {
+        contentHtml = (typeof marked !== 'undefined') ? marked.parse(markdownInput) : escapeHtml(markdownInput);
+    } else if (role === 'assistant' || role === 'model') {
+        // 确保即使 markdownInput 为空，助手消息的 contentHtml 也是空字符串，而不是 undefined
+        contentHtml = '';
     }
 
     // --- 创建并填充 .text div ---
@@ -422,28 +461,94 @@ function appendMessage(role, messageContent, modelForNote, reasoningText) {
 
 
     // --- 为 <pre> 标签添加复制按钮 ---
-    if (messageDiv.contains(contentDiv)) {
-        contentDiv.querySelectorAll('pre').forEach(pre => {
-            pre.style.position = 'relative';
-            const btn = document.createElement('button');
-            btn.className = 'copy-btn';
-            btn.textContent = '复制';
-            btn.addEventListener('click', e => {
-                e.stopPropagation();
-                const codeElem = pre.querySelector('code');
-                let textToCopy = codeElem ? codeElem.innerText : (() => {
-                    const clone = pre.cloneNode(true);
-                    clone.querySelector('.copy-btn')?.remove();
-                    return clone.innerText;
-                })();
+    const preElements = contentDiv.querySelectorAll('pre');
+    console.log(`[AppendMessage] Found ${preElements.length} <pre> elements to process for copy buttons.`);
+
+    preElements.forEach((pre, preIndex) => {
+        console.log(`[AppendMessage] Processing <pre> element #${preIndex + 1}`);
+        pre.style.position = 'relative';
+
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn'; // 确保 CSS 中有 .copy-btn 的样式
+        btn.textContent = '复制';
+        btn.setAttribute('aria-label', '复制此代码块'); // 增强可访问性
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            console.log("[CopyButton] Clicked on copy button for <pre>:", pre);
+
+            const codeElem = pre.querySelector('code');
+            let textToCopy = "";
+
+            if (codeElem) {
+                textToCopy = codeElem.innerText;
+            } else {
+                // Fallback: clone pre, remove button, then get innerText
+                const clone = pre.cloneNode(true);
+                const buttonInClone = clone.querySelector('.copy-btn');
+                if (buttonInClone) {
+                    buttonInClone.remove();
+                }
+                textToCopy = clone.innerText;
+            }
+            textToCopy = textToCopy.trim(); // 去除首尾空白
+
+            if (textToCopy === "") {
+                console.warn("[CopyButton] No text content found in <pre> to copy.");
+                const originalButtonText = btn.textContent;
+                btn.textContent = '无内容';
+                btn.disabled = true;
+                setTimeout(() => {
+                    btn.textContent = originalButtonText;
+                    btn.disabled = false;
+                }, 2000);
+                return;
+            }
+
+            console.log("[CopyButton] Attempting to copy text:", textToCopy.substring(0, 50) + "..."); // 只打印部分文本
+
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
                 navigator.clipboard.writeText(textToCopy).then(() => {
-                    btn.textContent = '已复制';
-                    setTimeout(() => btn.textContent = '复制', 2000);
+                    console.log("[CopyButton] Text successfully copied to clipboard.");
+                    btn.textContent = '已复制!';
+                    setTimeout(() => {
+                        btn.textContent = '复制';
+                    }, 2000);
+                }).catch(err => {
+                    console.error('[CopyButton] Failed to copy using navigator.clipboard:', err);
+                    alert('自动复制失败。您的浏览器可能不支持或未授予权限。\n请尝试手动复制 (Ctrl+C / Cmd+C)。\n错误: ' + err.message);
+                    // 可选：尝试 selectText(codeElem || pre);
                 });
-            });
-            pre.appendChild(btn);
+            } else {
+                console.warn('[CopyButton] navigator.clipboard.writeText is not available.');
+                // 尝试传统的 execCommand('copy') 作为后备 (兼容性更好，但正在被废弃)
+                try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = textToCopy;
+                    textarea.style.position = 'fixed'; // Prevent scrolling to bottom
+                    document.body.appendChild(textarea);
+                    textarea.focus();
+                    textarea.select();
+                    const successful = document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    if (successful) {
+                        console.log("[CopyButton] Text copied to clipboard using execCommand fallback.");
+                        btn.textContent = '已复制!';
+                        setTimeout(() => { btn.textContent = '复制'; }, 2000);
+                    } else {
+                        throw new Error('execCommand("copy") failed.');
+                    }
+                } catch (err) {
+                    console.error('[CopyButton] execCommand("copy") fallback failed:', err);
+                    alert('浏览器不支持自动复制。请手动复制 (Ctrl+C / Cmd+C)。');
+                    // 可选：尝试 selectText(codeElem || pre);
+                }
+            }
         });
-    }
+
+        pre.appendChild(btn);
+        console.log("[AppendMessage] Copy button appended to <pre> element.");
+    });
 
     // --- 清理空节点 ---
     if (typeof pruneEmptyNodes === 'function' && messageDiv.contains(contentDiv)) {
@@ -1342,15 +1447,18 @@ async function send() {
     let isCurrentlyInThinkingBlock = false;
     let shouldUseStreaming = false; // 初始化
 
-    console.log("DEBUG: send() function initiated.");
-    console.log("DEBUG send() START: Raw _internalUploadedFilesData is:", JSON.parse(JSON.stringify(_internalUploadedFilesData)));
-    console.log("DEBUG send() START: Raw window.uploadedFilesData (via getter) is:", JSON.parse(JSON.stringify(window.uploadedFilesData)));
+    
+
+    console.log("================ DEBUG: send() function initiated ================");
+    console.log("[Send Pre-Check] Initial _internalUploadedFilesData:", JSON.parse(JSON.stringify(_internalUploadedFilesData)));
+    console.log("[Send Pre-Check] Initial window.uploadedFilesData (getter):", JSON.parse(JSON.stringify(window.uploadedFilesData)));
+    console.log("[Send Pre-Check] Initial currentQwenThinkMode (global):", currentQwenThinkMode);
 
     // --- 步骤1: 捕获发起请求时的对话信息 ---
     const conversationAtRequestTime = getCurrentConversation();
     if (!conversationAtRequestTime) {
         alert("错误：无法获取当前对话。请先选择或创建一个对话。");
-        console.error("[send] CRITICAL: conversationAtRequestTime is null or undefined.");
+        console.error("[send] CRITICAL: conversationAtRequestTime is null or undefined. Aborting.");
         return;
     }
     const conversationIdAtRequestTime = conversationAtRequestTime.id;
@@ -1358,13 +1466,14 @@ async function send() {
 
     if (!modelValueFromOption) {
         alert("错误：当前对话没有指定模型。请检查对话数据。");
-        console.error("[send] CRITICAL: modelValueFromOption is null or undefined for the current conversation.");
+        console.error("[send] CRITICAL: modelValueFromOption is null or undefined for current conversation:", conversationIdAtRequestTime, "Aborting.");
         return;
     }
+    console.log(`[Send] Current Conversation ID: ${conversationIdAtRequestTime}, Model from option: ${modelValueFromOption}`);
 
+    // --- 2. 解析提供商和模型名称 ---
     let actualProvider;
     let modelNameForAPI;
-
     const parts = String(modelValueFromOption).split('::');
     if (parts.length === 2) {
         const prefix = parts[0].toLowerCase();
@@ -1377,81 +1486,119 @@ async function send() {
             case 'anthropic': actualProvider = 'anthropic'; break;
             case 'ollama': actualProvider = 'ollama'; break;
             default:
-                console.error(`[send] 未知的模型前缀: "${prefix}" 在模型值 "${modelValueFromOption}" 中。`);
+                console.error(`[send] 未知的模型前缀: "${prefix}" 在模型值 "${modelValueFromOption}" 中。 Aborting.`);
                 alert(`模型 "${modelValueFromOption}" 配置错误：无法识别的提供商前缀 "${prefix}"。`);
                 return;
         }
     } else {
-        console.error(`[send] 模型值 "${modelValueFromOption}" 格式不正确，缺少提供商前缀。`);
+        console.error(`[send] 模型值 "${modelValueFromOption}" 格式不正确，缺少提供商前缀。 Aborting.`);
         alert(`模型 "${modelValueFromOption}" 配置错误：缺少提供商前缀。`);
         return;
     }
     const providerToUse = actualProvider;
+    console.log(`[Send] Determined Provider: ${providerToUse}, Model for API: ${modelNameForAPI}`);
 
+    // --- 3. 获取用户输入的原始 promptText ---
     const promptInput = document.getElementById('prompt');
     if (!promptInput) {
-        console.error("[send] CRITICAL: Prompt input element not found.");
+        console.error("[send] CRITICAL: Prompt input element with ID 'prompt' not found. Aborting.");
         alert("发生内部错误：找不到输入框。");
         return;
     }
-    const promptText = promptInput.value.replace(/\n$/, '');
+    const promptText = promptInput.value.replace(/\n$/, ''); // 用户在输入框输入的原始文本
 
-    // 使用 window.uploadedFilesData (通过 getter) 进行判断
-    if (!promptText.trim() && (!window.uploadedFilesData || window.uploadedFilesData.length === 0)) {
+    // --- 4. 获取已上传文件 (拷贝一份) ---
+    const filesToActuallySend = window.uploadedFilesData ? [...window.uploadedFilesData] : [];
+    console.log("[Send] Files to actually send (copied from window.uploadedFilesData):", JSON.parse(JSON.stringify(filesToActuallySend)));
+    console.log("[Send] window.uploadedFilesData state (AFTER COPY, BEFORE any potential clear in finally):", JSON.parse(JSON.stringify(window.uploadedFilesData)));
+
+
+    // --- 5. 检查是否有有效输入 (原始文本或文件) ---
+    if (!promptText.trim() && filesToActuallySend.length === 0) {
         alert("请输入问题或上传文件后再发送。");
-        console.log("DEBUG send(): Alert triggered. Prompt empty and window.uploadedFilesData empty or undefined.");
-        console.log("DEBUG send(): Value of promptText.trim():", `"${promptText.trim()}"`);
-        console.log("DEBUG send(): Value of window.uploadedFilesData at alert:", JSON.parse(JSON.stringify(window.uploadedFilesData)));
+        console.log("[Send] Alert: No text or files to send. Aborting.");
         return;
     }
 
-    let userMessageContentForHistory;
-    let displayMessageForUI = promptText.trim();
-    // 关键：在这里拷贝数据，filesToActuallySend 将用于本次API调用
-    const filesToActuallySend = window.uploadedFilesData ? [...window.uploadedFilesData] : [];
-    console.log("DEBUG send(): filesToActuallySend (AFTER COPY) contains:", JSON.parse(JSON.stringify(filesToActuallySend)));
-    console.log("DEBUG send(): window.uploadedFilesData (AFTER COPY, BEFORE POTENTIAL CLEAR in finally) is still:", JSON.parse(JSON.stringify(window.uploadedFilesData)));
+    // --- 6. 预处理 promptText (为Qwen模型附加 /think 或 /no_think 指令) ---
+    //    这个 processedPromptTextForAPI 将用于存储到历史记录和传递给消息映射函数
+    let processedPromptTextForAPI = promptText.trim(); // ★★★ 在这里声明并用 trim 后的原始文本初始化 ★★★
+    const modelIdentifier = modelValueFromOption.toLowerCase(); // 使用 modelValueFromOption 进行判断
 
+    if (modelIdentifier.includes('qwen')) { // 简单判断是否为 Qwen 模型
+        console.log(`[Send] Qwen model detected. currentQwenThinkMode state is: ${currentQwenThinkMode}`);
+        if (currentQwenThinkMode === true) {
+            processedPromptTextForAPI += " /think"; // 在 trim 后的文本基础上附加
+        } else {
+            processedPromptTextForAPI += " /no_think";
+        }
+        console.log(`[Send] Qwen: Final processedPromptTextForAPI for history/mapping: "${processedPromptTextForAPI}"`);
+    }
+
+    // --- 7. 构建用于存储到 conversation.messages 的 userMessageContentForHistory ---
+    let userMessageContentForHistory;
     if (filesToActuallySend.length > 0) {
         userMessageContentForHistory = {
-            text: promptText.trim(),
-            files: filesToActuallySend.map(f => ({ name: f.name, type: f.type })) // 存储文件元数据
+            text: processedPromptTextForAPI, // ★★★ 使用包含指令的文本 ★★★
+            files: filesToActuallySend.map(f => ({ name: f.name, type: f.type })) // 文件元数据
         };
-        const fileNames = filesToActuallySend.map(f => f.name).join(', ');
-        displayMessageForUI = promptText.trim() ? `${promptText.trim()}\n[已附带文件: ${fileNames}]` : `[已发送文件: ${fileNames}]`;
     } else {
-        userMessageContentForHistory = promptText.trim();
+        userMessageContentForHistory = processedPromptTextForAPI; // ★★★ 使用包含指令的文本 ★★★
     }
+    console.log("[Send] userMessageContentForHistory (to be pushed to conversation.messages):", JSON.parse(JSON.stringify(userMessageContentForHistory)));
 
+
+    // --- 8. 构建用于立即在UI上显示的 displayMessageForUI ---
+    //    这个通常不应该包含内部指令如 /think。
+    let displayMessageForUI = promptText.trim(); // 使用原始的、未处理的文本
+    if (filesToActuallySend.length > 0) {
+        const fileNames = filesToActuallySend.map(f => f.name).join(', ');
+        displayMessageForUI = (promptText.trim() ? `${promptText.trim()}\n[已附带文件: ${fileNames}]` : `[已发送文件: ${fileNames}]`);
+
+        // ★★★ 如果你希望点击发送后立即清除预览，这是执行的地方 ★★★
+        console.log("[Send] Clearing uploaded files data and re-rendering preview (because files were present and processed for send).");
+        window.uploadedFilesData = []; // 清空全局状态
+        if (typeof renderFilePreview === 'function') {
+            renderFilePreview(); // 更新UI
+        }
+    }
+    console.log("[Send] displayMessageForUI (for appending to chat UI):", displayMessageForUI);
+
+
+    // --- 9. 将用户消息添加到UI (使用不含指令的文本) ---
     if (currentConversationId === conversationIdAtRequestTime) {
-      const initialReasoningText = (shouldUseStreaming && (providerToUse === 'ollama' || 
-        providerToUse === 'deepseek' || 
-        providerToUse === 'openai' || 
-        providerToUse === 'siliconflow' /*或其他支持<think>的*/ )) ? "" : undefined;
-      
-      
         if (typeof appendMessage === 'function') {
-            appendMessage('user', displayMessageForUI, null, null);
-        } else { console.error("[send] appendMessage function is not defined."); }
+            appendMessage('user', displayMessageForUI, null, undefined); // reasoningText 为 undefined
+        } else { console.error("[send] appendMessage function is not defined when trying to append user message."); }
     }
 
+    // --- 10. 将包含指令的用户消息内容添加到实际的对话历史数据中 ---
     conversationAtRequestTime.messages.push({
         role: 'user',
-        content: userMessageContentForHistory, // 存储包含文件元数据或纯文本的内容
+        content: userMessageContentForHistory, // 这个 content 对象或字符串将被 mapMessages... 函数使用
         model: modelValueFromOption
     });
-
-    promptInput.value = ''; // 清空输入框
-    if (promptInput.style.height !== (promptInput.style.minHeight || '42px')) { // 重置输入框高度
-        const initialTextareaHeight = promptInput.style.minHeight || '42px';
-        promptInput.style.height = initialTextareaHeight;
-        promptInput.style.overflowY = 'hidden';
+    // 打印确认，确保 mapMessages... 函数能拿到正确的数据
+    if (conversationAtRequestTime.messages.length > 0) {
+        console.log("[Send] Last user message in conversationAtRequestTime.messages (this is input for mappers):",
+                    JSON.parse(JSON.stringify(conversationAtRequestTime.messages[conversationAtRequestTime.messages.length - 1])));
     }
 
+    // --- 11. 后续操作：清空输入框，保存对话，显示loading等 ---
+    if (promptInput) { // 再次确认 promptInput 存在
+        promptInput.value = '';
+        if (promptInput.style.height !== (promptInput.style.minHeight || '42px')) {
+            const initialTextareaHeight = promptInput.style.minHeight || '42px';
+            promptInput.style.height = initialTextareaHeight;
+            promptInput.style.overflowY = 'hidden';
+        }
+    }
     if (typeof saveConversations === 'function') saveConversations();
     const loadingDiv = typeof appendLoading === 'function' ? appendLoading() : null;
 
     
+    
+
 
     /**
  * 将对话历史和当前上传的文件映射为标准或Claude API的消息格式。
@@ -2733,6 +2880,7 @@ async function saveModelsToFile() {
 
 // --- DOMContentLoaded: 页面加载完成后的主要设置和初始化 ---
 document.addEventListener('DOMContentLoaded', async () => {
+    
     // 初始化全局 DOM 元素引用
     filePreviewArea = document.getElementById('file-preview-area');
     modelManagementArea = document.getElementById('model-management-area');
@@ -2745,6 +2893,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     inlineChatSettingsPanel = document.getElementById('inline-chat-settings-panel');
     temperatureInputInline = document.getElementById('temperature-input-inline');
     temperatureValueDisplayInline = document.getElementById('temperature-value-inline');
+    qwenThinkModeToggle = document.getElementById('qwen-think-mode-toggle');
 
  // --- 为行内聊天设置按钮添加事件监听器 ---
     if (chatSettingsBtnInlineElement && inlineChatSettingsPanel) {
@@ -2830,6 +2979,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (!temperatureValueDisplayInline) console.warn("DOMContentLoaded: Span 'temperature-value-inline' not found!");
     }
     
+    // --- 初始化 Qwen 思考模式开关 ---
+    if (qwenThinkModeToggle) {
+        // 从 LocalStorage 读取保存的状态
+        const savedThinkMode = localStorage.getItem(QWEN_THINK_MODE_STORAGE_KEY);
+        if (savedThinkMode !== null) 
+        currentQwenThinkMode = savedThinkMode === 'true'; // 转换为布尔值
+        qwenThinkModeToggle.checked = currentQwenThinkMode;
+        console.log("DOMContentLoaded: Qwen Think Mode initialized to:", currentQwenThinkMode);
+
+        qwenThinkModeToggle.addEventListener('change', function() {
+            currentQwenThinkMode = this.checked;
+            localStorage.setItem(QWEN_THINK_MODE_STORAGE_KEY, currentQwenThinkMode.toString());
+            console.log("Qwen Think Mode changed to:", currentQwenThinkMode);
+        });
+    } else {
+        console.warn("DOMContentLoaded: Qwen think mode toggle 'qwen-think-mode-toggle' not found.");
+    }
 
     if (modelFormTitle) {
         console.log("DOMContentLoaded: 'modelFormTitle' was SUCCESSFULLY INITIALIZED to:", modelFormTitle);

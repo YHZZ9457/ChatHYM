@@ -335,41 +335,36 @@ def create_main_window():
     global root, selected_provider_var, app_style, api_key_input_area_container, providers_config
 
     if TTK_THEMES_AVAILABLE:
-        root = ThemedTk()
+        root = ThemedTk(theme="arc")
     else:
         root = tk.Tk()
-    
+
     root.title("API Key 配置与启动")
-    
-    root.update_idletasks() 
+    root.configure(bg="#f4f6fa")
+
+    root.update_idletasks()
     _initial_scale_factor = get_dpi_scale_factor(root)
     app_style = AppStyle(root, _initial_scale_factor)
-    
-    if TTK_THEMES_AVAILABLE and app_style.theme_applied_name:
-        try:
-            root.set_theme(app_style.theme_applied_name)
-        except tk.TclError: 
-             pass
-    root.configure(bg=app_style.COLOR_PRIMARY_BG)
 
-    base_window_width = int(560 * app_style.scale_factor) 
-    base_window_height = int(530 * app_style.scale_factor)
-    screen_width = root.winfo_screenwidth()
-    screen_height = root.winfo_screenheight()
-    position_top = max(0, int(screen_height / 2 - base_window_height / 2))
-    position_right = max(0, int(screen_width / 2 - base_window_width / 2))
-    root.geometry(f"{base_window_width}x{base_window_height}+{position_right}+{position_top}")
-    root.minsize(int(480 * app_style.scale_factor), int(460 * app_style.scale_factor))
-
-    main_padding = int(20 * app_style.scale_factor)
+    main_padding = int(26 * app_style.scale_factor)
     main_frame = ttk.Frame(root, padding=main_padding)
     main_frame.pack(expand=True, fill=tk.BOTH)
 
-    app_title_label = ttk.Label(main_frame, text="API Key 配置与启动", font=app_style.font_header, anchor="center")
-    app_title_label.pack(pady=(0, int(20 * app_style.scale_factor)), fill=tk.X)
+    app_title_label = ttk.Label(
+        main_frame,
+        text="API Key 配置与启动",
+        font=("Segoe UI", int(22*app_style.scale_factor), "bold"),
+        anchor="center",
+        foreground="#364f6b"
+    )
+    app_title_label.pack(pady=(0, int(18 * app_style.scale_factor)), fill=tk.X)
 
-    provider_select_labelframe = ttk.Labelframe(main_frame, text="1. 选择 API 服务商", padding=(int(10*app_style.scale_factor), int(8*app_style.scale_factor)))
-    provider_select_labelframe.pack(fill=tk.X, pady=(0, int(15 * app_style.scale_factor)))
+    provider_select_labelframe = ttk.Labelframe(
+        main_frame,
+        text="1. 选择 API 服务商",
+        padding=(int(12*app_style.scale_factor), int(9*app_style.scale_factor)),
+    )
+    provider_select_labelframe.pack(fill=tk.X, pady=(0, int(14 * app_style.scale_factor)))
 
     selected_provider_var = tk.StringVar()
     _providers_setup_data = [
@@ -379,82 +374,96 @@ def create_main_window():
         ("Google Gemini", "GEMINI_API_KEY_SECRET", "Google AI (Gemini) API Key:", "例如: AIzaSy..."),
         ("SiliconFlow", "SILICONFLOW_API_KEY_SECRET", "SiliconFlow API Key:", "例如: sk-..."),
     ]
-    
-    # Load existing .env values before creating UI elements
+
     existing_env_values = load_keys_from_env()
 
     provider_names_for_combobox = []
-    providers_config = {} # Re-initialize here to be clean
+    providers_config = {}
     for display_name, env_var, label_text, placeholder in _providers_setup_data:
         provider_names_for_combobox.append(display_name)
-        
-        # Create StringVar and pre-fill it
         s_var = tk.StringVar()
         initial_value = existing_env_values.get(env_var, placeholder)
         s_var.set(initial_value)
-
         providers_config[display_name] = {
             "env_var": env_var, "label_text": label_text, "placeholder": placeholder,
             "string_var": s_var, "frame": None,
         }
-    
-    provider_combobox = ttk.Combobox(provider_select_labelframe, textvariable=selected_provider_var,
-                                     values=provider_names_for_combobox, state="readonly",
-                                     font=app_style.font_combo, width=35) 
+
+    provider_combobox = ttk.Combobox(
+        provider_select_labelframe, textvariable=selected_provider_var,
+        values=provider_names_for_combobox, state="readonly",
+        font=app_style.font_combo, width=35
+    )
     provider_combobox.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, int(5*app_style.scale_factor)))
     provider_combobox.bind("<<ComboboxSelected>>", on_provider_select)
 
-    api_key_input_labelframe = ttk.Labelframe(main_frame, text="2. 输入所选服务商的 API Key", padding=(int(10*app_style.scale_factor), int(10*app_style.scale_factor)))
-    api_key_input_labelframe.pack(fill=tk.BOTH, expand=True, pady=(0, int(15 * app_style.scale_factor)))
-    
-    api_key_input_area_container = ttk.Frame(api_key_input_labelframe) 
+    api_key_input_labelframe = ttk.Labelframe(
+        main_frame,
+        text="2. 输入所选服务商的 API Key",
+        padding=(int(12*app_style.scale_factor), int(12*app_style.scale_factor)),
+    )
+    api_key_input_labelframe.pack(fill=tk.BOTH, expand=True, pady=(0, int(13 * app_style.scale_factor)))
+
+    api_key_input_area_container = ttk.Frame(api_key_input_labelframe)
     api_key_input_area_container.pack(fill=tk.BOTH, expand=True)
     api_key_input_area_container.grid_rowconfigure(0, weight=1)
     api_key_input_area_container.grid_columnconfigure(0, weight=1)
 
-
     for display_name, config in providers_config.items():
         frame = ttk.Frame(api_key_input_area_container, padding=(0, int(5*app_style.scale_factor)))
         config["frame"] = frame
-        
-        ttk.Label(frame, text=config["label_text"], font=app_style.font_label).pack(anchor='w', pady=(0,int(3*app_style.scale_factor)))
-        entry = ttk.Entry(frame, textvariable=config["string_var"], font=app_style.font_entry, width=60)
-        
-        # Set initial foreground color based on whether it's a real value or placeholder
+        ttk.Label(
+            frame, text=config["label_text"], font=app_style.font_label
+        ).pack(anchor='w', pady=(0,int(3*app_style.scale_factor)))
+        entry = ttk.Entry(
+            frame, textvariable=config["string_var"], font=app_style.font_entry, width=60
+        )
         if config["string_var"].get() == config["placeholder"]:
-            entry.config(foreground=app_style.COLOR_PLACEHOLDER)
+            entry.config(foreground="#a3b0c0")
         else:
             try:
                 default_fg = app_style.style.lookup('TEntry', 'foreground')
                 entry.config(foreground=default_fg)
-            except (AttributeError, tk.TclError):
-                entry.config(foreground=app_style.COLOR_TEXT) # Use defined color if style lookup fails
-
+            except Exception:
+                entry.config(foreground="#364f6b")
         entry.bind("<FocusIn>", lambda e, p=config["placeholder"], v=config["string_var"], widget=entry: handle_focus_in(e, p, v, widget))
         entry.bind("<FocusOut>", lambda e, p=config["placeholder"], v=config["string_var"], widget=entry: handle_focus_out(e, p, v, widget))
-        
-        entry.pack(fill=tk.X, ipady=int(4*app_style.scale_factor), expand=True) 
+        entry.pack(fill=tk.X, ipady=int(4*app_style.scale_factor), expand=True)
         entry_widgets_map[config["env_var"]] = entry
 
     if provider_names_for_combobox:
         selected_provider_var.set(provider_names_for_combobox[0])
         on_provider_select()
 
+    safety_label = ttk.Label(
+        main_frame,
+        text="所有 API Key 仅保存在本地 .env 文件，不会上传云端。请妥善保管。",
+        font=("Segoe UI", int(9.5*app_style.scale_factor)),
+        foreground="#7a859c",
+        anchor="center",
+    )
+    safety_label.pack(pady=(8, 2), fill=tk.X)
+
     button_frame = ttk.Frame(main_frame)
-    button_frame.pack(fill=tk.X, pady=(int(10 * app_style.scale_factor), 0))
+    button_frame.pack(fill=tk.X, pady=(int(12 * app_style.scale_factor), 0))
     button_frame.columnconfigure(0, weight=1)
     button_frame.columnconfigure(1, weight=1)
 
-    save_only_button = ttk.Button(button_frame, text="仅保存 Keys", command=save_keys_to_env)
-    save_only_button.grid(row=0, column=0, sticky=tk.EW, padx=(0, int(5 * app_style.scale_factor)), ipady=int(6*app_style.scale_factor))
+    save_only_button = ttk.Button(
+        button_frame, text="💾 仅保存 Keys", command=save_keys_to_env
+    )
+    save_only_button.grid(row=0, column=0, sticky=tk.EW, padx=(0, int(8 * app_style.scale_factor)), ipady=int(6*app_style.scale_factor))
 
-    save_launch_button = ttk.Button(button_frame, text="保存并启动", command=save_and_launch, style="Accent.TButton")
-    save_launch_button.grid(row=0, column=1, sticky=tk.EW, padx=(int(5 * app_style.scale_factor), 0), ipady=int(6*app_style.scale_factor))
+    save_launch_button = ttk.Button(
+        button_frame, text="🚀 保存并启动", command=save_and_launch
+    )
+    save_launch_button.grid(row=0, column=1, sticky=tk.EW, padx=(int(8 * app_style.scale_factor), 0), ipady=int(6*app_style.scale_factor))
 
+    # “可选安装 ttkthemes”提示
     if not TTK_THEMES_AVAILABLE:
         status_text = "提示: 可选安装 `ttkthemes` (pip install ttkthemes) 以获得更丰富的界面主题。"
         status_label = ttk.Label(main_frame, text=status_text, font=app_style.font_small_note, relief=tk.GROOVE, anchor=tk.W, padding=(int(5*app_style.scale_factor)))
-        status_label.pack(side=tk.BOTTOM, fill=tk.X, pady=(int(10*app_style.scale_factor),0), ipady=int(3*app_style.scale_factor))
+        status_label.pack(side=tk.BOTTOM, fill=tk.X, pady=(int(8*app_style.scale_factor),0), ipady=int(3*app_style.scale_factor))
 
     root.protocol("WM_DELETE_WINDOW", root.destroy)
     root.mainloop()

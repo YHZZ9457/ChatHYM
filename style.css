@@ -175,14 +175,12 @@ button{font-family:inherit;cursor:pointer; background:transparent; border:none; 
 }
 .setting-item { /* 保持原始补丁样式 */
   display: flex;
+  justify-content: space-between;
   align-items: center;
   gap: 16px;
   flex-wrap: nowrap; /* 允许换行 */
 }
-.setting-item label { /* 保持原始补丁样式 */
-  flex: 0 0 200px;
-  font-weight: 500;
-}
+
 .setting-item input[type="password"], /* 保持原始补丁样式，增加 text 类型 */
 .setting-item input[type="text"],
 .setting-item select {
@@ -387,8 +385,8 @@ body.dark-theme .message pre { background: rgba(255,255,255,0.08); color: #cdd3d
 .input-action-btn {
   flex-shrink: 0;
   padding: 0;
-  width: 38px; /* 调整大小 */
-  height: 38px;
+  width: 42px; /* 调整大小 */
+  height: 42px;
   border-radius: var(--border-radius-md); /* 圆角 */
   border: 1px solid var(--border-color);
   background-color: var(--input-bg); /* 与输入框背景一致 */
@@ -412,7 +410,7 @@ body.dark-theme .message pre { background: rgba(255,255,255,0.08); color: #cdd3d
 }
 
 /* 文本输入框 */
-.input-area textarea#prompt { /* 沿用原始选择器名 */
+.input-area textarea#prompt { 
   flex-grow: 1;
   padding: 9px 12px; /* 微调padding */
   font-size: 0.95rem;
@@ -424,7 +422,7 @@ body.dark-theme .message pre { background: rgba(255,255,255,0.08); color: #cdd3d
   width: 100%; /* 确保 flex-grow 生效 */
   box-sizing: border-box;
   max-height: 200px;
-  min-height: 38px; /* 与按钮高度匹配 */
+  min-height: 42px; /* 与按钮高度匹配 */
   line-height: 1.6;
   overflow-y: hidden; /* JS 会改为auto */
   height: auto; /* JS 控制 */
@@ -443,7 +441,7 @@ body.dark-theme .input-area textarea#prompt:focus {
 /* 发送按钮的样式 */
 .input-area button#send-btn {
   padding: 0 18px; /* 调整内边距 */
-  height: 38px;    /* 与其他元素高度一致 */
+  height: 42px;    /* 与其他元素高度一致 */
   background:var(--primary);
   color:#fff;
   border:none;
@@ -516,6 +514,9 @@ button.danger{background:#e53e3e!important;color:#fff!important; border-radius: 
 button.danger:hover{background:#c53030!important;}
 
 /* ===== 8. 滚动条美化 (基本保留原始，增加Firefox兼容) ===== */
+#messages::-webkit-scrollbar, 
+#conversation-list::-webkit-scrollbar,
+#model-list-editor::-webkit-scrollbar,
 .messages::-webkit-scrollbar, .sidebar::-webkit-scrollbar, .settings-area::-webkit-scrollbar, .model-management-area::-webkit-scrollbar, .reasoning-content::-webkit-scrollbar, .file-preview-area::-webkit-scrollbar { /* 统一选择器 */
   width:8px;
   height: 8px; /* 增加水平滚动条高度 */
@@ -853,15 +854,16 @@ body.light-theme .message.user .text a:hover { color: #fff !important; }
   top: 6px; /* 调整位置 */
   right: 6px;
   display: none; /* 默认隐藏 */
-  background: rgba(0,0,0,0.6); /* 深色按钮背景 */
+  background: rgba(19, 19, 19, 0.7); /* 深色按钮背景 */
   color: #fff;
   border: none;
   border-radius: var(--border-radius-sm); /* 使用变量 */
   padding: 3px 7px; /* 调整padding */
   font-size: 0.75rem;
   cursor: pointer;
-  transition: background-color 0.2s, opacity 0.2s;
-  opacity: 0.7; /* 默认轻微透明 */
+  
+  opacity: 0; /* 默认完全透明，但仍然占据空间并可以响应事件（如果 visibility 不是 hidden） */
+  transition: opacity 0.2s, visibility 0.2s; /* 过渡效果 */
 }
 .text pre:hover .copy-btn {
   display: block; /* 悬停显示 */
@@ -893,10 +895,11 @@ body.light-theme .text pre .copy-btn:hover {
   font-size: 0.95rem;
   color: var(--text-color);
 }
-.settings-area .api-key-group select, /* 已在主设置区处理 */
-.settings-area .api-key-group input {
-  /* flex: 1; ... */
-}
+/* .settings-area .api-key-group select, 已在主设置区处理 */
+/* .settings-area .api-key-group input {
+   flex: 1; ... 
+}*/
+
 /* “保存当前 API Key” 蓝色按钮 */
 #save-api-btn { /* 应用通用按钮样式，减少特异性 */
   /* display: inline-block; */ /* button 默认 inline-block 或 inline */
@@ -934,11 +937,7 @@ body.light-theme .text pre .copy-btn:hover {
   /* margin-right: 4px; */ /* 由 gap 控制 */
 }
 
-/* 温度滑块 */
-.setting-item input[type="range"] { /* 移至主设置区 .setting-item input[type="range"]#temperature-slider */
-  /* flex-grow: 1; */
-  /* margin-left: 10px; */
-}
+
 .setting-item input[type="range"]#temperature-slider {
   -webkit-appearance: none;
   -moz-appearance: none;
@@ -1445,7 +1444,7 @@ body.dark-theme .reasoning-content code { /* 深色主题行内代码 */
     position: absolute;
     bottom: calc(100% + 8px); 
     left: 0;                  
-    
+    max-width: 280px;
     width: auto;
     min-width: 200;
     background: rgba(38, 40, 45, 0.95); 
@@ -1472,16 +1471,15 @@ body.dark-theme .reasoning-content code { /* 深色主题行内代码 */
     text-align: left;
 }
 
-/* 单个设置项的布局 (核心修改) */
 .inline-chat-settings-panel .setting-item.inline-setting-item { 
     display: flex;          
     align-items: center;    
-    
-    /* justify-content: space-between; */ /* 移除这个，或者改为 flex-start */
-    justify-content: flex-start; /* 让元素从左边开始排列 */
-    
-    margin-bottom: 0;       
+    justify-content: flex-start; /* 或者不设置，默认为 flex-start */
+    width: 100%;
+    gap: 10px; /* ★★★ 用 gap 控制所有子元素（标签和控件）的水平间距 ★★★ */
+    margin-bottom: 10px; 
 }
+
 
 /* 标签样式 */
 .inline-chat-settings-panel .setting-item label { 
@@ -1494,7 +1492,8 @@ body.dark-theme .reasoning-content code { /* 深色主题行内代码 */
 
 /* 数字输入框样式 */
 .inline-chat-settings-panel .setting-item input[type="number"] { 
-    width: 60px;       /* ★★★ 可以尝试减小输入框宽度 ★★★ */
+    appearance: textfield;
+    width: 50px;       /* ★★★ 可以尝试减小输入框宽度 ★★★ */
     padding: 5px 7px;  /* 调整内边距 */
     background: #1e1f24; 
     color: #dde1e8;   
@@ -1505,6 +1504,7 @@ body.dark-theme .reasoning-content code { /* 深色主题行内代码 */
     outline: none;
     transition: border-color 0.15s, background-color 0.15s;
     -moz-appearance: textfield; 
+    
 }
 .inline-chat-settings-panel .setting-item input[type="number"]::-webkit-outer-spin-button,
 .inline-chat-settings-panel .setting-item input[type="number"]::-webkit-inner-spin-button {
@@ -1538,4 +1538,59 @@ body:not(.dark-theme) .inline-chat-settings-panel .setting-item input[type="numb
 body:not(.dark-theme) .inline-chat-settings-panel .setting-item input[type="number"]:focus {
     border-color: #80bdff;
     background: #ffffff;
+}
+
+/* Toggle Switch 样式 */
+.inline-chat-settings-panel .setting-item label.switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;  /* 开关宽度 */
+  height: 20px; /* 开关高度 */
+  flex-shrink: 0; /* 防止被压缩 */
+}
+
+.inline-chat-settings-panel .setting-item label.switch input { 
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.inline-chat-settings-panel .setting-item .slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #454950; /* 关闭状态下的背景色 */
+  -webkit-transition: .2s;
+  transition: .2s;
+  border-radius: 20px; /* 使其为圆形轨道 */
+}
+
+.inline-chat-settings-panel .setting-item .slider:before {
+  position: absolute;
+  content: "";
+  height: 14px; /* 滑块高度 */
+  width: 14px;  /* 滑块宽度 */
+  left: 3px;    /* 滑块初始位置 */
+  bottom: 3px;  /* 滑块初始位置 */
+  background-color: white;
+  -webkit-transition: .2s;
+  transition: .2s;
+  border-radius: 50%; /* 圆形滑块 */
+}
+
+.inline-chat-settings-panel .setting-item input:checked + .slider {
+  background-color: #007bff; /* 开启状态下的背景色 (例如蓝色) */
+}
+
+.inline-chat-settings-panel .setting-item input:focus + .slider {
+  box-shadow: 0 0 1px #007bff; /* 可选：聚焦时的效果 */
+}
+
+.inline-chat-settings-panel .setting-item input:checked + .slider:before {
+  -webkit-transform: translateX(20px); /* 滑块移动距离 = 开关宽度 - 滑块宽度 - 2*left */
+  -ms-transform: translateX(20px);
+  transform: translateX(20px);
 }

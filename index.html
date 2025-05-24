@@ -25,7 +25,7 @@
 <body>
   <div class="container">
     <aside class="sidebar">
-      <div class="logo">LocalGPT v3.5</div> <!-- 版本号更新 -->
+      <div class="logo">LocalGPT v3.6</div> <!-- 版本号更新 -->
       <button id="new-conv-btn" class="new-btn">+ 新对话</button>
       <nav class="conv-nav">
         <ul id="conversation-list" class="conv-nav">
@@ -101,6 +101,13 @@
               <input type="number" id="temperature-input-inline" name="temperature" 
                      min="0" max="2" step="0.01" value="0.70">
             </div>
+            <div class="setting-item inline-setting-item">
+          <label for="qwen-think-mode-toggle">Qwen 思考模式:</label>
+          <label class="switch">
+            <input type="checkbox" id="qwen-think-mode-toggle">
+            <span class="slider round"></span>
+          </label>
+        </div>
             <!-- 未来可以添加更多行内设置项，每个都是一个 .inline-setting-item -->
           </div>
         </div>

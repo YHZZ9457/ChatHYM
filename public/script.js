@@ -2427,7 +2427,7 @@ async function loadModelsFromConfig() {
   modelSelect.innerHTML = '';
   console.log("[loadModelsFromConfig] About to fetch models.json"); // ★★★ 日志4 ★★★
   try {
-    const response = await fetch('models.json' + '?t=' + new Date().getTime()); // 添加时间戳防止缓存
+    const response = await fetch('configs/models.json' + '?t=' + new Date().getTime()); // 添加时间戳防止缓存
     if (!response.ok) {
       throw new Error(`加载 models.json 失败: ${response.status} ${response.statusText}`);
     }
@@ -2876,6 +2876,8 @@ async function saveModelsToFile() {
     alert(`保存模型配置失败：${error.message}`);
   }
 }
+
+
 
 
 // --- DOMContentLoaded: 页面加载完成后的主要设置和初始化 ---

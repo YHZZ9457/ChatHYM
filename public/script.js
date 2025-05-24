@@ -26,6 +26,10 @@ let inlineChatSettingsPanel = null;
 let chatSettingsBtnInlineElement = null; // 用于 document click 事件
 let qwenThinkModeToggle = null;
 let currentQwenThinkMode = false; // 存储当前模式，默认为不开启
+let showPresetPromptsBtn = null;
+let presetPromptsListPanel = null;
+let presetPromptsUl = null;
+let loadedPresetPrompts = []; // 用于存储从 JSON 加载的预设 (如果用 JSON)
 const QWEN_THINK_MODE_STORAGE_KEY = 'qwen-think-mode-enabled';
 
 let _internalUploadedFilesData = []; // 使用带下划线的内部变量
@@ -416,7 +420,24 @@ function appendMessage(role, messageContent, modelForNote, reasoningText) {
         }
     }
     // ▲▲▲ 清理结束 ▲▲▲
-
+    
+    if (role === 'system') {
+        // ★★★ 为系统消息创建特殊的DOM结构和样式 ★★★
+        const systemPromptDiv = document.createElement('div');
+        systemPromptDiv.className = 'system-prompt-display'; // 新的CSS类
+        systemPromptDiv.innerHTML = `<strong>系统指令:</strong><div class="system-prompt-content">${escapeHtml(String(messageContent))}</div>`;
+        
+        // 决定将它添加到哪里，例如消息列表的顶部，或者一个专门的区域
+        // 为了简单，我们还是加到 messages 容器，但它的样式会不同
+        const container = document.getElementById('messages');
+        if (container) {
+            // 可能需要先移除旧的系统提示显示（如果只允许一个）
+            const oldSystemPromptDisplay = container.querySelector('.system-prompt-display');
+            if (oldSystemPromptDisplay) oldSystemPromptDisplay.remove();
+            container.insertBefore(systemPromptDiv, container.firstChild); // 插入到最前面
+        }
+        return systemPromptDiv; // 返回创建的元素
+    }
 
     // ▼▼▼ 组合最终用于 Markdown 解析的字符串 ▼▼▼
     let markdownInput = "";
@@ -1772,7 +1793,15 @@ async function send() {
             reasoningContentElement.textContent = accumulatedThinkingForDisplay;
 
             // ★★★ 为思考过程内容区域自动滚动到底部 ★★★
-            reasoningContentElement.scrollTop = reasoningContentElement.scrollHeight;
+            const scrollThresholdReasoning = 10; // 思考框的容差可以小一些
+            const isScrolledToBottomReasoning = reasoningContentElement.scrollHeight - reasoningContentElement.clientHeight <= reasoningContentElement.scrollTop + scrollThresholdReasoning;
+
+            if (isScrolledToBottomReasoning) {
+            reasoningContentElement.scrollTop = reasoningContentElement.scrollHeight; // 直接设置，避免过多平滑动画
+            // console.log("[Send Stream Scroll] .reasoning-content auto-scrolled to bottom.");
+        } else {
+            // console.log("[Send Stream Scroll] User has scrolled up .reasoning-content, not auto-scrolling.");
+        }
             // ★★★ -------------------------------- ★★★
 
             // 如果思考块之前是隐藏的 (因为内容为空)，现在有内容了就显示它
@@ -1930,38 +1959,75 @@ async function send() {
                                 }
 
                                 // --- Update UI based on sseThinkingText and sseReplyText ---
-                                if (currentConversationId === conversationIdAtRequestTime) {
-                                    if (sseThinkingText) {
+                                 if (currentConversationId === conversationIdAtRequestTime) {
+                                    let uiActuallyUpdated = false; // 标记这个 unit 是否导致了可见的UI文本更新
+
+                                    // --- 更新思考过程 UI ---
+                                    if (sseThinkingText && sseThinkingText.trim() !== "") { // 只有当 sseThinkingText 真的有内容时才处理
                                         if (reasoningContentElement) {
                                             accumulatedThinkingForDisplay += sseThinkingText;
                                             reasoningContentElement.textContent = accumulatedThinkingForDisplay;
-                                            reasoningContentElement.scrollTop = reasoningContentElement.scrollHeight;
-                                            if (reasoningBlockDiv && reasoningBlockDiv.classList.contains('reasoning-block-empty') && accumulatedThinkingForDisplay.trim() !== '') {
+
+                                            // 优化后的自动滚动逻辑 for .reasoning-content
+                                            const scrollThresholdReasoning = 10; 
+                                            const isNearBottomReasoning = reasoningContentElement.scrollHeight - reasoningContentElement.clientHeight <= reasoningContentElement.scrollTop + scrollThresholdReasoning;
+                                            if (isNearBottomReasoning) {
+                                                reasoningContentElement.scrollTop = reasoningContentElement.scrollHeight;
+                                            }
+
+                                            if (reasoningBlockDiv && reasoningBlockDiv.classList.contains('reasoning-block-empty')) {
                                                 reasoningBlockDiv.classList.remove('reasoning-block-empty');
                                             }
-                                        } else if (sseThinkingText.trim() !== "") {
+                                            uiActuallyUpdated = true;
+                                        } else {
                                             console.warn(`[send] SSE (${providerToUse}): Got thinking text but no reasoningContentElement. Text:`, sseThinkingText);
                                         }
                                     }
-                                    if (sseReplyText) {
+
+                                    // --- 更新主要回复 UI ---
+                                    if (sseReplyText && sseReplyText.trim() !== "") { // 只有当 sseReplyText 真的有内容时才处理
                                         if (assistantTextElement) {
                                             accumulatedAssistantReply += sseReplyText;
                                             assistantTextElement.innerHTML = typeof marked !== 'undefined' ? marked.parse(accumulatedAssistantReply) : accumulatedAssistantReply;
-                                        } else if (messageDiv) { // Fallback for Ollama-like dynamic creation if needed by other SSE
+                                            uiActuallyUpdated = true;
+                                        } else if (messageDiv) { // Fallback for dynamic .text creation (e.g., for Ollama if .text wasn't initially there)
                                             accumulatedAssistantReply += sseReplyText;
-                                            const existingTextDiv = messageDiv.querySelector('.text');
-                                            if (existingTextDiv) { assistantTextElement = existingTextDiv; }
-                                            else { const newTextDiv = document.createElement('div'); newTextDiv.className = 'text'; messageDiv.appendChild(newTextDiv); assistantTextElement = newTextDiv; }
+                                            let targetTextElement = messageDiv.querySelector('.text');
+                                            if (!targetTextElement) {
+                                                targetTextElement = document.createElement('div');
+                                                targetTextElement.className = 'text';
+                                                const modelNote = messageDiv.querySelector('.model-note');
+                                                if (modelNote) {
+                                                    messageDiv.insertBefore(targetTextElement, modelNote);
+                                                } else {
+                                                    messageDiv.appendChild(targetTextElement);
+                                                }
+                                                assistantTextElement = targetTextElement; // Update reference
+                                            }
                                             assistantTextElement.innerHTML = typeof marked !== 'undefined' ? marked.parse(accumulatedAssistantReply) : accumulatedAssistantReply;
-                                        } else if (sseReplyText.trim() !== "") {
+                                            uiActuallyUpdated = true;
+                                        } else {
                                              console.warn(`[send] SSE (${providerToUse}): Got reply text but no assistantTextElement or messageDiv. Text:`, sseReplyText);
                                         }
                                     }
-                                    if ((sseThinkingText && sseThinkingText.trim() !== "") || (sseReplyText && sseReplyText.trim() !== "")) {
-                                        document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+
+                                    // --- 滚动整个消息列表 (#messages) ---
+                                    if (uiActuallyUpdated) { // 只有当这个数据块导致了UI更新时才滚动
+                                        const messagesContainer = document.getElementById('messages');
+                                        if (messagesContainer) {
+                                            const scrollThresholdMessages = 30; // 主消息列表的容差可以大一些
+                                            const isNearBottomMessages = messagesContainer.scrollHeight - messagesContainer.clientHeight <= messagesContainer.scrollTop + scrollThresholdMessages;
+
+                                            if (isNearBottomMessages) {
+                                                messagesContainer.scrollTo({
+                                                    top: messagesContainer.scrollHeight,
+                                                    behavior: 'smooth'
+                                                });
+                                            }
+                                        }
                                     }
-                                }
-                            }
+                                } // end if (currentConversationId === conversationIdAtRequestTime)
+                            } //  这个括号是你原代码中 if (rawChunkText && typeof extractThinkingAndReply === 'function') 或类似条件的结束
                         } catch (e) {
                             console.warn(`[接收流] 解析单元失败 (${providerToUse}):`, unit, e);
                         }
@@ -2878,10 +2944,156 @@ async function saveModelsToFile() {
 }
 
 
+function applyPresetPrompt(preset) {
+    if (!preset || !preset.prompt) {
+        console.warn("[applyPresetPrompt] Invalid preset or no prompt in preset:", preset);
+        return;
+    }
+
+    const promptInput = document.getElementById('prompt'); // 获取聊天输入框
+    const currentConversation = getCurrentConversation(); // 确保 getCurrentConversation() 能正确工作
+
+    console.log("[applyPresetPrompt] Applying preset:", preset.name, "Type:", preset.type, "Prompt:", preset.prompt);
+
+    if (preset.type === 'user_input') {
+        if (promptInput) {
+            promptInput.value = preset.prompt; // 将预设的 prompt 填充到输入框
+            promptInput.focus();               // 自动聚焦到输入框
+            // 可选：如果你的输入框有自动调整高度的逻辑，可能需要手动触发一次
+            if (typeof autoResizeTextarea === 'function') { // 假设你有这个函数
+                // autoResizeTextarea(); // 或者直接操作 promptInput.dispatchEvent
+            }
+            promptInput.dispatchEvent(new Event('input', { bubbles: true })); // 触发input事件
+            console.log(`[applyPresetPrompt] User input field set with prompt from preset: "${preset.name}"`);
+        } else {
+            console.error("[applyPresetPrompt] CRITICAL: Prompt input element with ID 'prompt' not found.");
+            alert("错误：找不到聊天输入框。");
+        }
+    } else if (preset.type === 'system_prompt') {
+        if (currentConversation) {
+            let systemMessage = currentConversation.messages.find(m => m.role === 'system');
+            if (systemMessage) {
+                systemMessage.content = preset.prompt; // 更新现有的系统消息
+                console.log("[applyPresetPrompt] Updated existing system message.");
+            } else {
+                // 在对话消息数组的开头插入新的系统消息
+                currentConversation.messages.unshift({ role: 'system', content: preset.prompt });
+                console.log("[applyPresetPrompt] Added new system message to the start of the conversation.");
+            }
+
+            if (typeof saveConversations === 'function') {
+                saveConversations(); // 保存对话更改
+            }
+
+            alert(`系统角色已设置为："${preset.name}"。\n提示内容: "${preset.prompt.substring(0, 100)}${preset.prompt.length > 100 ? '...' : ''}"\n此设置将影响接下来的对话。`);
+
+            // 可选：你可能想在这里做一些UI提示或操作，例如：
+            // - 清空当前聊天消息区的助手回复（如果适用）
+            // - 在聊天区显示一条系统提示已更改的消息
+            // - 自动聚焦到输入框让用户开始基于新角色的提问
+            // loadConversation(currentConversation.id); // 重新加载对话会刷新消息区，但也会清空当前输入
+
+            console.log(`[applyPresetPrompt] System prompt set for conversation ID ${currentConversation.id}: "${preset.name}"`);
+        } else {
+            alert("错误：没有活动的对话来设置系统角色。\n请先开始或选择一个对话。");
+            console.error("[applyPresetPrompt] No active conversation found to set system prompt.");
+        }
+    } else {
+        console.warn("[applyPresetPrompt] Unknown preset type in preset object:", preset.type, preset);
+    }
+}
+
+function populatePresetPromptsList() {
+    if (!presetPromptsUl) { // presetPromptsUl 应该是全局获取的 <ul> 元素
+        console.error("[populatePresetPromptsList] presetPromptsUl is not defined or null.");
+        return;
+    }
+     console.log("[populatePresetPromptsList] loadedPresetPrompts at entry:", 
+                loadedPresetPrompts ? `Array with ${loadedPresetPrompts.length} items` : loadedPresetPrompts,
+                JSON.parse(JSON.stringify(loadedPresetPrompts || [])) );
+    if (!loadedPresetPrompts || loadedPresetPrompts.length === 0) { // loadedPresetPrompts 是包含预设数据的数组
+        presetPromptsUl.innerHTML = '<li>没有可用的预设。</li>';
+        console.warn("[populatePresetPromptsList] No presets loaded or preset list is empty.");
+        return;
+    }
+
+    presetPromptsUl.innerHTML = ''; // 清空旧列表
+
+    loadedPresetPrompts.forEach(preset => {
+        const li = document.createElement('li');
+        li.className = 'preset-prompt-item'; // 确保 CSS 中有这个类
+        li.textContent = preset.name; // 预设的显示名称
+        if (preset.description) {
+            li.title = preset.description; // 鼠标悬浮提示
+        }
+
+        // 为每个列表项添加点击事件监听器
+        li.addEventListener('click', () => {
+            if (typeof applyPresetPrompt === 'function') {
+                applyPresetPrompt(preset); // 调用应用预设的函数
+                if (presetPromptsListPanel) { // presetPromptsListPanel 是预设面板的 DOM 元素
+                    presetPromptsListPanel.style.display = 'none'; // 选择后关闭列表
+                }
+            } else {
+                console.error("[populatePresetPromptsList] applyPresetPrompt function is not defined.");
+            }
+        });
+        presetPromptsUl.appendChild(li);
+    });
+    console.log("[populatePresetPromptsList] Preset prompts list populated.");
+}
 
 
 // --- DOMContentLoaded: 页面加载完成后的主要设置和初始化 ---
 document.addEventListener('DOMContentLoaded', async () => {
+showPresetPromptsBtn = document.getElementById('show-preset-prompts-btn');
+presetPromptsListPanel = document.getElementById('preset-prompts-list-panel');
+presetPromptsUl = document.getElementById('preset-prompts-ul');
+
+try {
+        const response = await fetch('configs/prompts.json?t=' + new Date().getTime()); // 添加时间戳防止缓存
+        if (response.ok) {
+            const data = await response.json();
+            if (data && Array.isArray(data.prompts)) { // 确保 JSON 结构正确
+                loadedPresetPrompts = data.prompts;
+                console.log("[DOMContentLoaded] Successfully loaded presets from prompts.json:", loadedPresetPrompts);
+            } else {
+                console.error("[DOMContentLoaded] Invalid format in prompts.json. Expected { prompts: [...] }");
+                loadedPresetPrompts = []; // 加载失败则为空
+            }
+        } else {
+            console.error("Failed to load prompts.json. Status:", response.status);
+            loadedPresetPrompts = []; // 加载失败则为空
+        }
+    } catch (error) {
+        console.error("Error fetching or parsing prompts.json:", error);
+        loadedPresetPrompts = []; // 出错则为空
+    }
+
+if (showPresetPromptsBtn && presetPromptsListPanel && presetPromptsUl) {
+    populatePresetPromptsList(); // 填充列表
+
+    showPresetPromptsBtn.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const isVisible = presetPromptsListPanel.style.display === 'block'; // 或者你用来显示的 display 值
+        presetPromptsListPanel.style.display = isVisible ? 'none' : 'block';
+    });
+
+    // 点击外部关闭 (与行内聊天设置面板的逻辑类似)
+    document.addEventListener('click', (event) => {
+        if (presetPromptsListPanel.style.display === 'block') {
+            if (!presetPromptsListPanel.contains(event.target) && event.target !== showPresetPromptsBtn && !showPresetPromptsBtn.contains(event.target)) {
+                presetPromptsListPanel.style.display = 'none';
+            }
+        }
+    });
+    presetPromptsListPanel.addEventListener('click', e => e.stopPropagation()); // 防止点击面板内部关闭
+} else {
+    // 打印警告，如果关键元素未找到
+    if(!showPresetPromptsBtn) console.warn("Button 'show-preset-prompts-btn' not found.");
+    if(!presetPromptsListPanel) console.warn("Panel 'preset-prompts-list-panel' not found.");
+    if(!presetPromptsUl) console.warn("UL 'preset-prompts-ul' not found.");
+}
     
     // 初始化全局 DOM 元素引用
     filePreviewArea = document.getElementById('file-preview-area');

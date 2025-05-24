@@ -1594,3 +1594,102 @@ body:not(.dark-theme) .inline-chat-settings-panel .setting-item input[type="numb
   -ms-transform: translateX(20px);
   transform: translateX(20px);
 }
+
+/* 预设 Prompts 按钮容器 (用于定位面板) */
+.preset-prompts-container {
+    position: relative; /* 使面板可以相对于此容器定位 */
+    display: inline-flex; /* 或者 flex，使其包裹按钮 */
+    align-items: center;
+}
+
+
+/* 预设 Prompts 面板 */
+.preset-prompts-panel {
+    position: absolute;
+    bottom: calc(100% + 8px); /* 面板在按钮容器的上方，留出8px间距 */
+    /* 定位到父容器的左边缘或右边缘，或者居中 */
+    left: 0; /* 如果按钮在左边，面板也从左边开始 */
+    /* right: 0; */ /* 如果按钮在右边，面板也从右边开始 */
+    
+    width: auto;              
+    min-width: 260px;         /* 设置一个最小宽度 */
+    max-width: 320px;         /* 最大宽度 */
+
+    background: rgba(38, 40, 45, 0.97); /* 背景色，与你的 inline-chat-settings-panel 类似 */
+    backdrop-filter: blur(8px);        
+    border: 1px solid #303238;         
+    border-radius: 10px;                
+    padding: 12px 15px;                  
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3); 
+    z-index: 1070; /* 确保在顶层，与聊天设置面板同级或略高/低 */                     
+    color: #dde1e8;                     
+    font-size: 13px;                    
+    display: none; /* HTML中初始设置，JS控制显示/隐藏 */
+    max-height: 350px; /* 如果预设很多，允许滚动 */
+    overflow-y: auto;
+
+    /* 可以添加与 .inline-chat-settings-panel 类似的滚动条样式 */
+    scrollbar-width: thin;
+    scrollbar-color: #666 #333;
+}
+.preset-prompts-panel::-webkit-scrollbar { width: 6px; }
+.preset-prompts-panel::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 3px;}
+.preset-prompts-panel::-webkit-scrollbar-thumb { background-color: #555; border-radius: 3px;}
+
+
+/* 面板标题 */
+.preset-prompts-panel .preset-prompts-title { /* 注意类名 */
+    margin: 0 0 10px 0;
+    font-size: 0.95em; 
+    color: #c0c8d8; 
+    font-weight: 500;
+    border-bottom: 1px solid #383a40;
+    padding-bottom: 8px;
+    text-align: left;
+}
+
+/* 预设列表 */
+#preset-prompts-ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+/* 单个预设项 */
+.preset-prompt-item {
+    padding: 9px 9px; /* 调整内边距使条目更舒适 */
+    cursor: pointer;
+    border-radius: 5px; /* 给每个条目一点圆角 */
+    font-size: 0.95em;
+    transition: background-color 0.15s;
+    margin-bottom: 2px; /* 条目之间的垂直间距 */
+    color: #c0c8d8; /* 预设项文字颜色 */
+}
+.preset-prompt-item:last-child {
+    margin-bottom: 0;
+}
+
+.preset-prompt-item:hover {
+    background-color: #3a3f45; /* 悬浮背景色 */
+    color: #fff; /* 悬浮文字颜色 */
+}
+
+
+.system-prompt-display {
+    background-color: rgba(100, 100, 120, 0.1); /* 非常不显眼的背景 */
+    color: #888; /* 暗灰色文字 */
+    font-size: 0.8em;
+    padding: 8px 12px;
+    margin: 10px 5%; /* 上下边距，左右稍微缩进 */
+    border-radius: 4px;
+    border-left: 3px solid #555;
+    font-style: italic;
+}
+.system-prompt-display strong {
+    font-style: normal;
+    margin-right: 5px;
+}
+.system-prompt-content {
+    white-space: pre-wrap; /* 保留换行 */
+    margin-top: 4px;
+}

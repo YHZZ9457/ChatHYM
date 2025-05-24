@@ -1,0 +1,39 @@
+{
+  "prompts": [
+    {
+      "id": "translator_zh_en",
+      "name": "翻译官 (翻译为中文)",
+      "type": "user_input",
+      "prompt": "请将以下文字段落翻译为中文：\n\n",
+      "description": "将输入的其他语言翻译为中文。"
+    },
+    {
+      "id": "python_expert_system",
+      "name": "Python 编程专家 (系统角色)",
+      "type": "system_prompt",
+      "prompt": "你现在是一个资深的 Python 编程专家。请以专业、严谨但乐于助人的方式回答所有关于 Python 的问题，并尽可能提供清晰、可运行的代码示例和最佳实践建议。",
+      "description": "设置当前对话的AI为Python专家。"
+    },
+    {
+      "id": "system_literature_expert",
+      "name": "文学评论家 (系统角色)",
+      "type": "system_prompt",
+      "prompt": "你是一位资深的文学评论家，擅长分析和点评各种文学作品。请用专业、深入且有见地的方式回答所有与文学相关的问题。",
+      "description": "设置当前对话的AI为文学评论专家。"
+    },
+    {
+      "id": "code_reviewer",
+      "name": "代码审查助手",
+      "type": "user_input",
+      "prompt": "请对以下代码进行详细审查，并指出潜在的问题、优化建议和最佳实践：\n\n",
+      "description": "对输入的代码进行审查和优化建议。"
+    },
+    {
+      "id": "creative_writer",
+      "name": "创意写作助手",
+      "type": "user_input",
+      "prompt": "请根据以下主题或情节构思一段富有创意的故事或文字：\n\n",
+      "description": "帮助用户进行创意写作，提供故事或文字灵感。"
+    }
+  ]
+}

@@ -111,6 +111,18 @@
             <!-- 未来可以添加更多行内设置项，每个都是一个 .inline-setting-item -->
           </div>
         </div>
+
+        <div class="preset-prompts-container"> <!-- 新的父容器，用于定位面板 -->
+            <button id="show-preset-prompts-btn" title="选择预设提示" class="input-action-btn">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-book-text"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="M12 7h8"/><path d="M12 11h8"/><path d="M7 15h1"/><path d="M7 19h1"/></svg> <!-- 书本/文本图标示例 -->
+            </button>
+            <div id="preset-prompts-list-panel" class="preset-prompts-panel" style="display: none;">
+              <h4 class="preset-prompts-title">选择预设角色/模板</h4>
+              <ul id="preset-prompts-ul">
+                <!-- JavaScript 会在这里填充列表项 -->
+              </ul>
+            </div>
+        </div>
     <textarea id="prompt" placeholder="输入你的问题，Enter 发送 / Shift+Enter 换行"></textarea>
 
     <button id="send-btn" type="button">发送</button>

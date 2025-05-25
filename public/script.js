@@ -1347,31 +1347,7 @@ function mapMessagesForStandardOrClaude(messagesHistory, provider, currentFilesD
                         }
                     });
                 } else if (provider === 'ollama') {
-                    // Ollama (e.g., LLaVA) often takes images differently.
-                    // One common way is a top-level "images" array in the message object,
-                    // OR some models might support inline base64 within a content part.
-                    // For this example, let's assume we're trying an OpenAI-like inline approach first.
-                    // If your Ollama model needs a top-level `images` array in the *message object*,
-                    // then this function should NOT add image_url here, and the `send` function
-                    // needs to handle `bodyPayload.messages[...].images = [...]`
-                    //
-                    // Let's try an image_url like OpenAI for Ollama if it's a multimodal model that supports it.
-                    // Otherwise, Ollama image handling is done OUTSIDE this function in `send` via `bodyPayload.images`.
-                    // For now, let's assume if 'ollama' is passed here, it's for a model that might accept inline images.
-                    // If not, the `send` function's specific Ollama block handles `bodyPayload.images`.
-                    // This function's primary role for Ollama here would be text content.
-                    //
-                    // Given your `send` function's Ollama block:
-                    // bodyPayload.messages = mapMessagesForStandardOrClaude(...)
-                    // if (filesToActuallySend.length > 0) { bodyPayload.images = ... }
-                    // This implies `mapMessagesForStandardOrClaude` for Ollama should primarily format text history,
-                    // and the `images` are added separately to the top-level `bodyPayload` (not per message).
-                    // So, for 'ollama', we might not add image parts here within `currentUserContentParts`.
-                    // However, if you intend for some Ollama models to take inline images in content, you'd add it.
-                    // Let's assume for now, based on your `send` function's Ollama block,
-                    // that this function SHOULD NOT add image parts for Ollama to `currentUserContentParts`.
-                    // The images are handled by `bodyPayload.images = ...` later.
-                    // So, this `else if (provider === 'ollama')` block for images might be empty or not needed here.
+                   
                     console.log("[mapMessagesForStandardOrClaude] Ollama provider: Images will be handled by top-level 'bodyPayload.images' if applicable, not adding to content parts here.");
                 }
             }
@@ -1467,7 +1443,7 @@ async function send() {
     let isActuallyStreaming = false;
     let isCurrentlyInThinkingBlock = false;
     let shouldUseStreaming = false; // 初始化
-
+    
     
 
     console.log("================ DEBUG: send() function initiated ================");
@@ -1506,6 +1482,7 @@ async function send() {
             case 'gemini': actualProvider = 'gemini'; break;
             case 'anthropic': actualProvider = 'anthropic'; break;
             case 'ollama': actualProvider = 'ollama'; break;
+            case 'suanlema': actualProvider = 'suanlema'; break;
             default:
                 console.error(`[send] 未知的模型前缀: "${prefix}" 在模型值 "${modelValueFromOption}" 中。 Aborting.`);
                 alert(`模型 "${modelValueFromOption}" 配置错误：无法识别的提供商前缀 "${prefix}"。`);
@@ -1541,9 +1518,11 @@ async function send() {
         return;
     }
 
+    let processedPromptText = promptText.trim();
+    let displayMessageForUI = promptText.trim();
     // --- 6. 预处理 promptText (为Qwen模型附加 /think 或 /no_think 指令) ---
     //    这个 processedPromptTextForAPI 将用于存储到历史记录和传递给消息映射函数
-    let processedPromptTextForAPI = promptText.trim(); // ★★★ 在这里声明并用 trim 后的原始文本初始化 ★★★
+     let processedPromptTextForAPI = promptText.trim();
     const modelIdentifier = modelValueFromOption.toLowerCase(); // 使用 modelValueFromOption 进行判断
 
     if (modelIdentifier.includes('qwen')) { // 简单判断是否为 Qwen 模型
@@ -1571,7 +1550,7 @@ async function send() {
 
     // --- 8. 构建用于立即在UI上显示的 displayMessageForUI ---
     //    这个通常不应该包含内部指令如 /think。
-    let displayMessageForUI = promptText.trim(); // 使用原始的、未处理的文本
+    
     if (filesToActuallySend.length > 0) {
         const fileNames = filesToActuallySend.map(f => f.name).join(', ');
         displayMessageForUI = (promptText.trim() ? `${promptText.trim()}\n[已附带文件: ${fileNames}]` : `[已发送文件: ${fileNames}]`);
@@ -1643,7 +1622,7 @@ async function send() {
         if (isNaN(currentTemperature) || currentTemperature < 0 || currentTemperature > 2) {
             currentTemperature = 0.7;
         }
-        shouldUseStreaming = ['openai', 'anthropic', 'deepseek', 'siliconflow', 'ollama'].includes(providerToUse);
+        shouldUseStreaming = ['openai', 'anthropic', 'deepseek', 'siliconflow', 'ollama', 'suanlema'].includes(providerToUse);
 
         bodyPayload.model = modelNameForAPI;
         if (providerToUse !== 'gemini') bodyPayload.temperature = currentTemperature;
@@ -1682,7 +1661,10 @@ async function send() {
                                    mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, providerToUse, filesToActuallySend) : // filesToActuallySend 用于构建消息
                                    [{role: 'user', content: [{type: 'text', text: promptText || ' '}]}];
             if (providerToUse === 'anthropic') bodyPayload.max_tokens = 4096;
-        }
+        }    if (providerToUse === 'suanlema') { // ★★★ 使用 'suanlema' (actualProvider的值) ★★★
+        apiUrl = `/.netlify/functions/suanlema-proxy`; // ★★★ 你的 suanlema 代理函数路径 ★★★
+    }
+        
 
         let noMessagesToSend = false;
         // isActuallyStreaming 判断的是 *实际收到的* 响应是否为流
@@ -1940,7 +1922,9 @@ async function send() {
                                 } else if (providerToUse === 'deepseek') {
                                     sseThinkingText = chunk.choices?.[0]?.delta?.reasoning_content || '';
                                     sseReplyText = chunk.choices?.[0]?.delta?.content || '';
-                                } else if (providerToUse === 'openai' || providerToUse === 'siliconflow') {
+                                } else if (providerToUse === 'openai' || providerToUse === 'siliconflow'
+                                    || providerToUse === 'suanlema'
+                                ) {
                                     // These typically put everything in content, <think> tags handled by extractThinkingAndReply
                                     const rawContent = chunk.choices?.[0]?.delta?.content || '';
                                     if (rawContent && typeof extractThinkingAndReply === 'function') {
@@ -1956,7 +1940,7 @@ async function send() {
                                         sseReplyText = chunk.delta.text || '';
                                         // Anthropic usually doesn't use <think> tags in this way for CoT via API stream.
                                     }
-                                }
+                                } 
 
                                 // --- Update UI based on sseThinkingText and sseReplyText ---
                                  if (currentConversationId === conversationIdAtRequestTime) {

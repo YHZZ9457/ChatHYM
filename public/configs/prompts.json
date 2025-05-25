@@ -1,13 +1,6 @@
 {
   "prompts": [
-    {
-      "id": "translator_zh_en",
-      "name": "翻译官 (翻译为中文)",
-      "type": "user_input",
-      "prompt": "请将以下文字段落翻译为中文：\n\n",
-      "description": "将输入的其他语言翻译为中文。"
-    },
-    {
+        {
       "id": "python_expert_system",
       "name": "Python 编程专家 (系统角色)",
       "type": "system_prompt",
@@ -22,6 +15,13 @@
       "description": "设置当前对话的AI为文学评论专家。"
     },
     {
+      "id": "translator_zh_en",
+      "name": "翻译官 (翻译为中文)",
+      "type": "user_input",
+      "prompt": "请将以下文字段落翻译为中文：\n\n",
+      "description": "将输入的其他语言翻译为中文。"
+    },
+    {
       "id": "code_reviewer",
       "name": "代码审查助手",
       "type": "user_input",
@@ -34,6 +34,14 @@
       "type": "user_input",
       "prompt": "请根据以下主题或情节构思一段富有创意的故事或文字：\n\n",
       "description": "帮助用户进行创意写作，提供故事或文字灵感。"
-    }
+    },
+    {
+  "id": "math_problem_solver",
+  "name": "数学题解答助手",
+  "type": "user_input",
+  "prompt": "请详细解答以下数学问题，并给出每一步的计算过程：\n\n",
+  "description": "针对输入的数学问题，分步骤给出详细解答。"
+	}
+    
   ]
 }

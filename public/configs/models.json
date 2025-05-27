@@ -80,7 +80,7 @@
       ]
     },
     {
-      "groupLabel": "OpenAI",
+      "groupLabel": "OpenAI（GPT）",
       "options": [
         {
           "value": "openai::o4-mini",
@@ -124,8 +124,8 @@
           "text": "Claude 4.0 Sonnet"
         },
         {
-          "value": "anthropic::claude-3-7-sonnet-latest",
-          "text": "Claude 3.7 Sonnet"
+          "text": "Claude 3.7 Sonnet",
+          "value": "anthropic::claude-3-7-sonnet-20250219"
         },
         {
           "value": "anthropic::claude-3-5-haiku-latest",
@@ -174,8 +174,8 @@
           "text": "Slm QwQ-32B-Free"
         },
         {
-          "value": "suanlema::pro:QwQ-32B",
-          "text": "Slm QwQ-32B-Pro"
+          "text": "Slm Qwen3-30B-A3B",
+          "value": "suanlema::free:Qwen3-30B-A3B"
         },
         {
           "value": "suanlema::QwQ-32B",

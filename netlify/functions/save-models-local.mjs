@@ -5,7 +5,7 @@ import path from 'node:path';
 
 // ★★★ 使用 process.cwd() 来获取项目根目录 (在 netlify dev 中通常有效) ★★★
 const projectRoot = process.cwd();
-const modelsFilePath = path.join(projectRoot, 'models.json'); // 假设 models.json 直接在项目根目录
+const modelsFilePath = path.join(projectRoot, 'public', 'configs', 'models.json'); 
 
 // 启动时的调试日志
 console.log('--- save-models-local.mjs ---');

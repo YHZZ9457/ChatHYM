@@ -31,6 +31,10 @@ let presetPromptsListPanel = null;
 let presetPromptsUl = null;
 let loadedPresetPrompts = []; // 用于存储从 JSON 加载的预设 (如果用 JSON)
 const QWEN_THINK_MODE_STORAGE_KEY = 'qwen-think-mode-enabled';
+let maxTokensInputInline = null;
+let currentMaxTokens = null; // 存储当前设置的最大Token数，可以是数字或null (表示使用API默认)
+const MAX_TOKENS_STORAGE_KEY = 'chat-max-tokens';
+const DEFAULT_MAX_TOKENS_PLACEHOLDER = 1024; // 用于 placeholder 或回退
 
 let _internalUploadedFilesData = []; // 使用带下划线的内部变量
 Object.defineProperty(window, 'uploadedFilesData', {
@@ -333,7 +337,7 @@ function pruneEmptyNodes(container) {
   });
 }
 
-function appendMessage(role, messageContent, modelForNote, reasoningText) {
+function appendMessage(role, messageContent, modelForNote, reasoningText, conversationId, messageIndex) {
     console.log(`[AppendMessage CALLED] Role: "${role}"`, "Content received:", messageContent, "ModelNote:", modelForNote, "Reasoning provided:", typeof reasoningText);
 
     const emptyChatPlaceholder = document.getElementById('empty-chat-placeholder');
@@ -350,6 +354,8 @@ function appendMessage(role, messageContent, modelForNote, reasoningText) {
     const messageWrapperDiv = document.createElement('div');
     messageWrapperDiv.className = 'message-wrapper';
     messageWrapperDiv.classList.add(role === 'user' ? 'user-message-wrapper' : 'assistant-message-wrapper');
+    messageWrapperDiv.dataset.conversationId = conversationId;
+    messageWrapperDiv.dataset.messageIndex = messageIndex;
 
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role === 'assistant' || role === 'model' ? 'assistant' : 'user'}`;
@@ -1446,6 +1452,13 @@ async function send() {
     
     
 
+    let currentMaxTokens = parseInt(localStorage.getItem('chat-max-tokens'));
+    if (isNaN(currentMaxTokens) || currentMaxTokens < 1) {
+        currentMaxTokens = null; // 表示没有从 localStorage 读取到有效值
+        console.log("[Send] 'chat-max-tokens' not found in localStorage or invalid. currentMaxTokens is null.");
+    } else {
+        console.log(`[Send] Loaded currentMaxTokens from localStorage: ${currentMaxTokens}`);
+    }
     console.log("================ DEBUG: send() function initiated ================");
     console.log("[Send Pre-Check] Initial _internalUploadedFilesData:", JSON.parse(JSON.stringify(_internalUploadedFilesData)));
     console.log("[Send Pre-Check] Initial window.uploadedFilesData (getter):", JSON.parse(JSON.stringify(window.uploadedFilesData)));
@@ -1627,6 +1640,27 @@ async function send() {
         bodyPayload.model = modelNameForAPI;
         if (providerToUse !== 'gemini') bodyPayload.temperature = currentTemperature;
         if (shouldUseStreaming && providerToUse !== 'gemini') bodyPayload.stream = true;
+           if (providerToUse === 'anthropic') {
+            if (currentMaxTokens !== null && typeof currentMaxTokens === 'number' && currentMaxTokens >= 1) {
+                bodyPayload.max_tokens = currentMaxTokens;
+                console.log(`[Send Anthropic] Using max_tokens from localStorage: ${currentMaxTokens}`);
+            } else {
+                bodyPayload.max_tokens = 4096; // Anthropic 特有的默认值
+                console.log(`[Send Anthropic] No valid max_tokens from localStorage, using default for Anthropic: 4096`);
+            }
+        } else if (currentMaxTokens !== null && typeof currentMaxTokens === 'number' && currentMaxTokens >= 1) {
+            // 针对其他支持 max_tokens 的 provider (非 Anthropic)
+            if (providerToUse === 'openai' ||
+                providerToUse === 'ollama' ||
+                providerToUse === 'deepseek' ||
+                providerToUse === 'siliconflow' ||
+                providerToUse === 'suanlema') {
+                bodyPayload.max_tokens = currentMaxTokens;
+                console.log(`[Send ${providerToUse}] Using max_tokens from localStorage: ${currentMaxTokens}`);
+            }
+        } else {
+            console.log(`[Send ${providerToUse}] No valid max_tokens from localStorage, API will use its default (for non-Anthropic).`);
+        }
 
         if (providerToUse === 'ollama') {
             apiUrl = 'http://localhost:11434/api/chat';
@@ -1881,10 +1915,15 @@ async function send() {
                                     }
                                 }
                             } else { // SSE Providers (OpenAI, Deepseek, Anthropic, etc.)
-                                if (!unit.startsWith('data: ')) continue; // Skip non-data SSE lines
-                                const jsonData = unit.substring(6);
-                                if (jsonData.trim() === '[DONE]') continue;
-                                const chunk = JSON.parse(jsonData);
+                                // —— 修正后的 SSE parsing ——
+                                // unit 里可能既有 event: … 又有 data: …，我们要先找出 data: 行
+            const lines = unit.split('\n');
+                const dataLine = lines.find(l => l.trim().startsWith('data: '));
+            if (!dataLine) continue;                             // 没有 data: 就跳过
+            const jsonData = dataLine.trim().substring(6);       // 去掉 "data: "
+            if (jsonData === '[DONE]') continue;
+            const chunk = JSON.parse(jsonData);
+
 
                                 let sseThinkingText = "";
                                 let sseReplyText = "";
@@ -2166,25 +2205,48 @@ async function send() {
             }
         }
 
-        // Save assistant's reply (or error) to conversation history
-        const targetConversationForStorage = conversations.find(c => c.id === conversationIdAtRequestTime);
-        if (targetConversationForStorage) {
-            const assistantRoleForStorage = 'assistant';
-            if (finalAssistantReply !== '（无回复）' || (finalThinkingProcess && finalThinkingProcess.trim() !== '') || finalAssistantReply.startsWith('错误：')) {
-                targetConversationForStorage.messages.push({
-                    role: assistantRoleForStorage,
-                    content: finalAssistantReply,
-                    model: modelValueFromOption,
-                    reasoning_content: finalThinkingProcess
-                });
-                saveConversations();
-                if (currentConversationId !== conversationIdAtRequestTime && requestWasSuccessful && !finalAssistantReply.startsWith('错误：') ) {
-                    renderConversationList();
-                }
-            }
+       // Save assistant's reply (or error) to conversation history
+const targetConversationForStorage = conversations.find(c => c.id === conversationIdAtRequestTime);
+if (targetConversationForStorage) {
+    const assistantRoleForStorage = 'assistant';
+    // 针对Anthropic（Claude）模型，content必须为 content-block array
+    let contentToSave;
+    if (providerToUse === 'anthropic') {
+        // 如果已经是数组则直接用，否则转为内容块数组
+        if (Array.isArray(finalAssistantReply)) {
+            contentToSave = finalAssistantReply;
         } else {
-            console.error(`[保存错误] 无法找到原始对话 ${conversationIdAtRequestTime} 来保存助手回复。`);
+            contentToSave = [{ type: "text", text: String(finalAssistantReply) }];
         }
+    } else {
+        // 其它模型（OpenAI等）按原逻辑
+        contentToSave = finalAssistantReply;
+    }
+
+    if (
+        finalAssistantReply !== '（无回复）' ||
+        (finalThinkingProcess && finalThinkingProcess.trim() !== '') ||
+        (typeof finalAssistantReply === 'string' && finalAssistantReply.startsWith('错误：'))
+    ) {
+        targetConversationForStorage.messages.push({
+            role: assistantRoleForStorage,
+            content: contentToSave,
+            model: modelValueFromOption,
+            reasoning_content: finalThinkingProcess
+        });
+        saveConversations();
+        if (
+            currentConversationId !== conversationIdAtRequestTime &&
+            requestWasSuccessful &&
+            !(typeof finalAssistantReply === 'string' && finalAssistantReply.startsWith('错误：'))
+        ) {
+            renderConversationList();
+        }
+    }
+} else {
+    console.error(`[保存错误] 无法找到原始对话 ${conversationIdAtRequestTime} 来保存助手回复。`);
+}
+
     }
 }
 
@@ -3033,6 +3095,47 @@ document.addEventListener('DOMContentLoaded', async () => {
 showPresetPromptsBtn = document.getElementById('show-preset-prompts-btn');
 presetPromptsListPanel = document.getElementById('preset-prompts-list-panel');
 presetPromptsUl = document.getElementById('preset-prompts-ul');
+maxTokensInputInline = document.getElementById('max-tokens-input-inline');
+
+  // --- 初始化最大 Token 输入框 ---
+    if (maxTokensInputInline) {
+        // 从 LocalStorage 读取保存的值
+        const savedMaxTokens = localStorage.getItem(MAX_TOKENS_STORAGE_KEY);
+        if (savedMaxTokens !== null && !isNaN(parseInt(savedMaxTokens, 10))) {
+            currentMaxTokens = parseInt(savedMaxTokens, 10);
+            maxTokensInputInline.value = currentMaxTokens.toString();
+            console.log("DOMContentLoaded: Max Tokens initialized from localStorage to:", currentMaxTokens);
+        } else {
+            // 如果 LocalStorage 没有值或无效，currentMaxTokens 保持为 null (使用API默认)
+            // 输入框可以显示 placeholder，或者你可以设置一个默认值
+            maxTokensInputInline.placeholder = 4096;
+            console.log("DOMContentLoaded: Max Tokens not in localStorage, will use API default or placeholder.");
+        }
+
+        maxTokensInputInline.addEventListener('change', function() { // 使用 'change' 或 'input'
+            const value = this.value.trim();
+            if (value === "") { // 如果用户清空了输入框，表示使用API默认
+                currentMaxTokens = null;
+                localStorage.removeItem(MAX_TOKENS_STORAGE_KEY);
+                console.log("Max Tokens cleared, will use API default.");
+                this.placeholder = 4096
+            } else {
+                const numValue = parseInt(value, 10);
+                if (!isNaN(numValue) && numValue >= 1) {
+                    currentMaxTokens = numValue;
+                    localStorage.setItem(MAX_TOKENS_STORAGE_KEY, currentMaxTokens.toString());
+                    console.log("Max Tokens changed to:", currentMaxTokens);
+                } else {
+                    // 输入无效，可以恢复到之前的值或清空
+                    this.value = currentMaxTokens !== null ? currentMaxTokens.toString() : "";
+                    if (this.value === "") this.placeholder = `默认 (如 ${DEFAULT_MAX_TOKENS_PLACEHOLDER})`;
+                    alert("请输入有效的最大Token数 (正整数)。");
+                }
+            }
+        });
+    } else {
+        console.warn("DOMContentLoaded: Max tokens input 'max-tokens-input-inline' not found.");
+    }
 
 try {
         const response = await fetch('configs/prompts.json?t=' + new Date().getTime()); // 添加时间戳防止缓存

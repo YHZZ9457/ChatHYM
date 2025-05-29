@@ -1,9 +1,5 @@
 // --- START OF FILE script.js ---
 
-// ——— 顶部：针对 marked & MathJax 的配置 ———
-// 1. 关闭 marked 的 sanitize（保留所有反斜杠），启用 GitHub 风格
-// (此注释表明 marked.js 库的配置可能在外部进行，或者这是一个预期配置的占位说明。
-//  如果 marked.js 的 sanitize 功能被禁用，请确保输入内容是可信的，或者有其他机制来防止 XSS 攻击。)
 
 // 全局变量
 let activeModel = ''; // 存储当前加载对话时，该对话所使用的模型ID
@@ -20,7 +16,6 @@ let modelFormModal = null;
 let modelForm = null;
 let sidebarElement = null; // 如果您在 show...Area 函数中用到它
 let modelFormTitle = null;
-let temperatureSliderInline = null;
 let temperatureInputInline = null;
 let inlineChatSettingsPanel = null;
 let chatSettingsBtnInlineElement = null; // 用于 document click 事件
@@ -53,7 +48,7 @@ Object.defineProperty(window, 'uploadedFilesData', {
 
     if (Array.isArray(newValue) && newValue.length === 0 && _internalUploadedFilesData && _internalUploadedFilesData.length > 0) {
         console.error('CRITICAL_WATCH: window.uploadedFilesData is being set to an EMPTY ARRAY [] when it previously had data!');
-        debugger; // 可以在这里打断点
+        ; // 可以在这里打断点
     }
     _internalUploadedFilesData = newValue;
   }
@@ -724,7 +719,7 @@ function renderConversationList() {
 
         if (c.isNew) { // 如果点击的是新对话，清除 'isNew' 标记
             c.isNew = false;
-            // saveConversations(); // 可选：立即保存状态，或在其他操作后统一保存
+            
         }
         loadConversation(c.id);
       });
@@ -896,12 +891,11 @@ function loadConversation(id) {
         }
     }
 
-    // --- 到这里，convToLoad 应该是有效的 ---
     console.log(`[LoadConv] Successfully found conversation: "${convToLoad.title}" (ID: ${convToLoad.id})`);
 
     if (convToLoad.isNew) {
         convToLoad.isNew = false;
-        // saveConversations(); // 可以在其他地方统一保存，或根据需要立即保存
+        
     }
 
     // ★★★ 关键：在这里设置全局的 currentConversationId ★★★
@@ -1037,13 +1031,9 @@ function deleteSingleMessage(messageElement, conversationId, messageIndex) {
     console.log(`消息已从数据中删除 (对话ID: ${conversationId}, 原索引: ${messageIndex})`, deletedMessage[0]);
 
     // 2. 更新DOM
-    // 如果删除的是当前对话的消息，则重新加载整个对话以正确更新DOM和后续消息的索引。
-    // 这比手动调整所有后续消息的 data-message-index 更简单可靠。
     if (conversationId === currentConversationId) {
       loadConversation(currentConversationId);
     } else {
-      // 如果删除的不是当前对话的消息（这种情况在此UI设计中不常见，除非有其他入口点）
-      // 则仅从DOM中移除该元素，并可能需要更新相关列表视图（如对话列表的摘要）
       messageElement.remove();
       renderConversationList(); // 例如，如果对话列表显示消息摘要或计数
     }
@@ -1752,11 +1742,17 @@ async function send() {
             // 初始化UI元素，为流式输出做准备
             if (currentConversationId === conversationIdAtRequestTime) {
                 // 假设所有流式提供商如果支持思考，都需要一个占位符
-                // 如果某个provider明确不需要或有不同处理，可以在此调整initialReasoningText
                 const initialReasoningText = shouldUseStreaming ? "" : undefined; 
 
                 tempMsgElementWrapper = appendMessage(assistantRoleForDisplay, "", modelValueFromOption, initialReasoningText);
-                if (tempMsgElementWrapper) {
+                if (tempMsgElementWrapper) { // 确保 appendMessage 成功返回了元素
+                    const messagesContainer = document.getElementById('messages');
+                    console.log(`[Stream Loop Scroll FOR SSE] Forcing scroll. scrollHeight: ${messagesContainer.scrollHeight}`);
+                // 尝试1: 直接设置 scrollTop (像Ollama一样)
+                requestAnimationFrame(() => { // 仍然建议用 RAF 包装 DOM 写操作后的读操作
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                });
+                 
                     messageDiv = tempMsgElementWrapper.querySelector('.message.assistant');
                     if (messageDiv) {
                         assistantTextElement = messageDiv.querySelector('.text');
@@ -1871,8 +1867,11 @@ async function send() {
     // 只有当思考或回复部分确实有新内容输出时，才滚动主消息列表
     if (somethingWasUpdated) {
         const messagesContainer = document.getElementById('messages');
-        if (messagesContainer) {
+         if (messagesContainer) {
+        requestAnimationFrame(() => {
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            console.log("[Send Stream] Scrolled #messages to bottom (via requestAnimationFrame) AFTER creating stream placeholder.");
+        });
         }
     }
 }
@@ -1996,6 +1995,7 @@ async function send() {
                                             const isNearBottomReasoning = reasoningContentElement.scrollHeight - reasoningContentElement.clientHeight <= reasoningContentElement.scrollTop + scrollThresholdReasoning;
                                             if (isNearBottomReasoning) {
                                                 reasoningContentElement.scrollTop = reasoningContentElement.scrollHeight;
+                                                
                                             }
 
                                             if (reasoningBlockDiv && reasoningBlockDiv.classList.contains('reasoning-block-empty')) {
@@ -2035,12 +2035,17 @@ async function send() {
                                     }
 
                                     // --- 滚动整个消息列表 (#messages) ---
-                                    if (uiActuallyUpdated) { // 只有当这个数据块导致了UI更新时才滚动
+                                    if (uiActuallyUpdated) {
                                         const messagesContainer = document.getElementById('messages');
                                         if (messagesContainer) {
-                                            const scrollThresholdMessages = 30; // 主消息列表的容差可以大一些
-                                            const isNearBottomMessages = messagesContainer.scrollHeight - messagesContainer.clientHeight <= messagesContainer.scrollTop + scrollThresholdMessages;
-
+                                            requestAnimationFrame(() => {
+            console.log(`[Stream Loop Scroll FOR SSE - Unconditional] Forcing scroll. scrollHeight: ${messagesContainer.scrollHeight}`);
+            messagesContainer.scrollTo({
+                top: messagesContainer.scrollHeight,
+                behavior: 'auto'
+            });
+            console.log(`[Stream Loop Scroll FOR SSE - Unconditional] Scrolled. scrollTop after: ${messagesContainer.scrollTop}`);
+        });
                                             if (isNearBottomMessages) {
                                                 messagesContainer.scrollTo({
                                                     top: messagesContainer.scrollHeight,
@@ -2682,8 +2687,6 @@ function renderModelManagementUI() {
 
   // --- editableModelConfig.models.forEach 循环 ---
   editableModelConfig.models.forEach((group, groupIndex) => {
-    // ... (你提供的 forEach 内部的 DOM 创建和 SortableJS 初始化逻辑基本正确) ...
-    // ... (确保 escapeHtml, deleteModelGroup, openModelFormForEdit, deleteModelOption 这些函数都已正确定义并在全局可用) ...
     const groupDiv = document.createElement('div');
     groupDiv.className = 'model-group-editor';
     groupDiv.dataset.groupIndex = groupIndex;
@@ -2829,64 +2832,7 @@ function closeModelForm() {
   modelFormModal.style.display = 'none';
 }
 
-/**
- * 处理模型表单提交
- */
-modelForm = document.getElementById('model-form'); 
-modelForm.addEventListener('submit', function(event) {
-  event.preventDefault();
-  const groupLabel = document.getElementById('model-group-label').value.trim();
-  const modelText = document.getElementById('model-text').value.trim();
-  const modelValue = document.getElementById('model-value').value.trim();
 
-  const editGroupIndex = document.getElementById('edit-group-index').value;
-  const editOptionIndex = document.getElementById('edit-option-index').value;
-
-  if (!groupLabel || !modelText || !modelValue) {
-    alert('所有字段均为必填项！');
-    return;
-  }
-
-  const newOptionData = { text: modelText, value: modelValue };
-
-  if (editGroupIndex !== '' && editOptionIndex !== '') {
-    // 编辑现有模型
-    const groupIndex = parseInt(editGroupIndex);
-    const optionIndex = parseInt(editOptionIndex);
-    const targetGroupLabel = editableModelConfig.models[groupIndex].groupLabel;
-
-    if (targetGroupLabel !== groupLabel) {
-        // 用户更改了组标签，需要移动模型到新组或现有同名组
-        // 1. 从原组删除
-        editableModelConfig.models[groupIndex].options.splice(optionIndex, 1);
-        if (editableModelConfig.models[groupIndex].options.length === 0) { // 如果原组空了，删除原组
-            editableModelConfig.models.splice(groupIndex, 1);
-        }
-        // 2. 添加到新组或现有组
-        let existingGroup = editableModelConfig.models.find(g => g.groupLabel === groupLabel);
-        if (existingGroup) {
-            existingGroup.options.push(newOptionData);
-        } else {
-            editableModelConfig.models.push({ groupLabel: groupLabel, options: [newOptionData] });
-        }
-    } else {
-        // 仍在原组内编辑
-        editableModelConfig.models[groupIndex].options[optionIndex] = newOptionData;
-    }
-
-  } else {
-    // 添加新模型
-    let group = editableModelConfig.models.find(g => g.groupLabel === groupLabel);
-    if (group) {
-      group.options.push(newOptionData);
-    } else {
-      editableModelConfig.models.push({ groupLabel: groupLabel, options: [newOptionData] });
-    }
-  }
-
-  renderModelManagementUI();
-  closeModelForm();
-});
 
 /**
  * 删除指定索引的模型组
@@ -3305,6 +3251,74 @@ if (showPresetPromptsBtn && presetPromptsListPanel && presetPromptsUl) {
     }
     
     console.log("DEBUG DOMContentLoaded: DOM fully loaded and parsed.");
+    if (modelForm) { // 添加一个检查，确保 modelForm 元素存在
+        modelForm.addEventListener('submit', function(event) {
+          event.preventDefault();
+          const groupLabel = document.getElementById('model-group-label').value.trim();
+          const modelText = document.getElementById('model-text').value.trim();
+          const modelValue = document.getElementById('model-value').value.trim();
+
+          const editGroupIndex = document.getElementById('edit-group-index').value;
+          const editOptionIndex = document.getElementById('edit-option-index').value;
+
+          if (!groupLabel || !modelText || !modelValue) {
+            alert('所有字段均为必填项！');
+            return;
+          }
+
+          const newOptionData = { text: modelText, value: modelValue };
+
+          if (editGroupIndex !== '' && editOptionIndex !== '') {
+            // 编辑现有模型
+            const groupIndex = parseInt(editGroupIndex);
+            const optionIndex = parseInt(editOptionIndex);
+            const targetGroup = editableModelConfig.models[groupIndex]; // 先获取组
+
+            // 检查 targetGroup 和 targetGroup.options 是否存在，防止后续错误
+            if (!targetGroup || !targetGroup.options || !targetGroup.options[optionIndex]) {
+                console.error("编辑模型时发生错误：找不到目标组或选项。");
+                closeModelForm(); // 可能需要关闭表单并提示用户
+                return;
+            }
+            const targetGroupLabel = targetGroup.groupLabel;
+
+
+            if (targetGroupLabel !== groupLabel) {
+                // 用户更改了组标签，需要移动模型到新组或现有同名组
+                // 1. 从原组删除
+                editableModelConfig.models[groupIndex].options.splice(optionIndex, 1);
+                if (editableModelConfig.models[groupIndex].options.length === 0) { // 如果原组空了，删除原组
+                    editableModelConfig.models.splice(groupIndex, 1);
+                }
+                // 2. 添加到新组或现有组
+                let existingGroup = editableModelConfig.models.find(g => g.groupLabel === groupLabel);
+                if (existingGroup) {
+                    existingGroup.options.push(newOptionData);
+                } else {
+                    editableModelConfig.models.push({ groupLabel: groupLabel, options: [newOptionData] });
+                }
+            } else {
+                // 仍在原组内编辑
+                editableModelConfig.models[groupIndex].options[optionIndex] = newOptionData;
+            }
+
+          } else {
+            // 添加新模型
+            let group = editableModelConfig.models.find(g => g.groupLabel === groupLabel);
+            if (group) {
+              group.options.push(newOptionData);
+            } else {
+              editableModelConfig.models.push({ groupLabel: groupLabel, options: [newOptionData] });
+            }
+          }
+
+          renderModelManagementUI(); // 确保 renderModelManagementUI 定义在此作用域可访问
+          closeModelForm(); // 确保 closeModelForm 定义在此作用域可访问
+        });
+    } else {
+        console.error("DOMContentLoaded: Model form 'model-form' not found. Submit listener NOT attached.");
+    }
+    
 
     // 0. 首先从配置文件加载模型列表
     console.log("DEBUG DOMContentLoaded: Attempting to load models from config...");
@@ -3339,8 +3353,6 @@ if (showPresetPromptsBtn && presetPromptsListPanel && presetPromptsUl) {
 
     // 3. API Key 管理 (已移除前端逻辑)
     console.info("DOMContentLoaded: Frontend API Key management logic is removed. Keys should be managed via backend/environment variables.");
-    // const providerSelect = document.getElementById('api-provider'); // Retain for reference if needed
-
     
 
     // 5. Textarea (用户输入框) 自动调整高度 和 Enter 发送

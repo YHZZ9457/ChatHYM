@@ -518,31 +518,31 @@ button.danger:hover{background:#c53030!important;}
 #conversation-list::-webkit-scrollbar,
 #model-list-editor::-webkit-scrollbar,
 .messages::-webkit-scrollbar, .sidebar::-webkit-scrollbar, .settings-area::-webkit-scrollbar, .model-management-area::-webkit-scrollbar, .reasoning-content::-webkit-scrollbar, .file-preview-area::-webkit-scrollbar { /* 统一选择器 */
-  width:8px;
-  height: 8px; /* 增加水平滚动条高度 */
+  width:6px; /* 修改：从8px改为6px */
+  height: 6px; /* 修改：从8px改为6px */
 }
 .messages::-webkit-scrollbar-thumb, .sidebar::-webkit-scrollbar-thumb, .settings-area::-webkit-scrollbar-thumb, .model-management-area::-webkit-scrollbar-thumb, .reasoning-content::-webkit-scrollbar-thumb, .file-preview-area::-webkit-scrollbar-thumb {
-  background:rgba(0,0,0,0.25);
-  border-radius:var(--border-radius-full); /* 全圆角 */
+  background:rgba(0,0,0,0.3); /* 修改：从0.25改为0.3 */
+  border-radius:4px; /* 修改：从全圆角改为4px */
   border: 2px solid transparent; /* 使滑块看起来细一点 */
   background-clip: content-box;
 }
 .messages::-webkit-scrollbar-thumb:hover, .sidebar::-webkit-scrollbar-thumb:hover, .settings-area::-webkit-scrollbar-thumb:hover, .model-management-area::-webkit-scrollbar-thumb:hover, .reasoning-content::-webkit-scrollbar-thumb:hover, .file-preview-area::-webkit-scrollbar-thumb:hover {
-  background:rgba(0,0,0,0.35);
+  background:rgba(0,0,0,0.5); /* 修改：从0.35改为0.5 */
 }
 body.dark-theme .messages::-webkit-scrollbar-thumb, body.dark-theme .sidebar::-webkit-scrollbar-thumb, body.dark-theme .settings-area::-webkit-scrollbar-thumb, body.dark-theme .model-management-area::-webkit-scrollbar-thumb, body.dark-theme .reasoning-content::-webkit-scrollbar-thumb, body.dark-theme .file-preview-area::-webkit-scrollbar-thumb {
-  background:rgba(255,255,255,0.2);
+  background:rgba(255,255,255,0.3); /* 修改：从0.2改为0.3 */
 }
 body.dark-theme .messages::-webkit-scrollbar-thumb:hover, body.dark-theme .sidebar::-webkit-scrollbar-thumb:hover, body.dark-theme .settings-area::-webkit-scrollbar-thumb:hover, body.dark-theme .model-management-area::-webkit-scrollbar-thumb:hover, body.dark-theme .reasoning-content::-webkit-scrollbar-thumb:hover, body.dark-theme .file-preview-area::-webkit-scrollbar-thumb:hover {
-  background:rgba(255,255,255,0.3);
+  background:rgba(255,255,255,0.5); /* 修改：从0.3改为0.5 */
 }
 /* Firefox 滚动条 */
 .messages, .sidebar, .settings-area, .model-management-area, .reasoning-content, .file-preview-area {
   scrollbar-width: thin;
-  scrollbar-color: rgba(0,0,0,0.25) transparent; /* 滑块颜色 轨道颜色 */
+  scrollbar-color: rgba(0,0,0,0.3) transparent; /* 滑块颜色 轨道颜色 - 修改：从0.25改为0.3 */
 }
 body.dark-theme .messages, body.dark-theme .sidebar, body.dark-theme .settings-area, body.dark-theme .model-management-area, body.dark-theme .reasoning-content, body.dark-theme .file-preview-area {
-  scrollbar-color: rgba(255,255,255,0.2) transparent;
+  scrollbar-color: rgba(255,255,255,0.3) transparent; /* 修改：从0.2改为0.3 */
 }
 
 /* ===== 9. 响应式 ===== */
@@ -614,13 +614,13 @@ body.dark-theme .messages, body.dark-theme .sidebar, body.dark-theme .settings-a
   display: none !important;
 }
 
-/* 主题化滚动条 (旧的，已被新的统一滚动条样式取代或合并思路) - 此部分可考虑移除或注释，因为已有更全面的滚动条样式 */
-/* body.light-theme ::-webkit-scrollbar ... */
-/* body.dark-theme ::-webkit-scrollbar ... */
-
-/* 用户气泡保留换行 */
 .message.user .text {
-  white-space: pre-wrap !important;
+  white-space: pre-wrap ;
+}
+
+.message.assistant .text {
+    white-space: pre-wrap; /* 保留空白符序列，正常换行，保留换行符 */
+
 }
 /* loading 占位样式 */
 .message.assistant.loading {
@@ -1693,3 +1693,34 @@ body:not(.dark-theme) .inline-chat-settings-panel .setting-item input[type="numb
     white-space: pre-wrap; /* 保留换行 */
     margin-top: 4px;
 }
+
+.message table {
+border-collapse: collapse;
+width: auto; 
+margin: 1em 0;
+border: 1px solid var(--border-color); 
+}
+
+.message th,
+  .message td {
+      border: 1px solid var(--border-color);
+      padding: 8px;
+      text-align: left;
+  }
+
+  .message th {
+      background-color: var(--bg-secondary); /* 使用你的主题变量 */
+      font-weight: bold;
+  }
+
+  /* 暗色主题适配 (如果你的变量已设置好，这部分会自动生效) */
+  body.dark-theme .message table {
+      border: 1px solid var(--border-dark);
+  }
+  body.dark-theme .message th,
+  body.dark-theme .message td {
+      border: 1px solid var(--border-dark);
+  }
+  body.dark-theme .message th {
+      background-color: var(--sidebar-dark); /* 或其他合适的深色背景 */
+  }

@@ -5,7 +5,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>LocalGPT with MathJax</title>
+  <title>ChatHYM</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="icon" href="favicon.ico" type="image/x-icon">
 
@@ -25,7 +25,7 @@
 <body>
   <div class="container">
     <aside class="sidebar">
-      <div class="logo">LocalGPT v3.6</div> <!-- 版本号更新 -->
+      <div class="logo">ChatHYM v1.0</div> <!-- 版本号更新 -->
       <button id="new-conv-btn" class="new-btn">+ 新对话</button>
       <nav class="conv-nav">
         <ul id="conversation-list" class="conv-nav">
@@ -39,6 +39,7 @@
     <main class="main-area">
       <!-- Chat -->
       <section id="chat-area" class="chat-area">
+        
         <header class="chat-header">
           <h1 id="chat-title">对话</h1>
           <div class="header-model-selector">
@@ -123,7 +124,7 @@
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-book-text"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="M12 7h8"/><path d="M12 11h8"/><path d="M7 15h1"/><path d="M7 19h1"/></svg> <!-- 书本/文本图标示例 -->
             </button>
             <div id="preset-prompts-list-panel" class="preset-prompts-panel" style="display: none;">
-              <h4 class="preset-prompts-title">选择预设角色/模板</h4>
+              <h4 class="preset-prompts-title">选择预设模板</h4>
               <ul id="preset-prompts-ul">
                 <!-- JavaScript 会在这里填充列表项 -->
               </ul>
@@ -174,6 +175,23 @@
           <label>模型配置管理</label>
           <button id="show-model-management-btn" class="action-btn">管理模型</button>
         </div>
+          <div class="static-info-section"> <!-- 一个包裹容器，方便整体设置样式 -->
+          
+          <h4>关于 & 联系</h4> <!-- 小标题 -->
+          <p>
+            感谢您使用 ChatHYM ！ 喵~<br> <!-- 使用 <br> 进行换行 -->
+            如果您有任何问题或建议，请通过以下方式联系我：
+          </p>
+          <ul>
+            <li>QQ：2680159691</a></li>
+            <li>GitHub：<a href="https://github.com/yourusername/your-repo" target="_blank" rel="noopener noreferrer">项目仓库</a></li>
+          </ul>
+
+          <h4>版本信息</h4>
+          <p>
+            当前版本：v1.0 (构建日期：2025-05-30)<br>
+            基于 LocalGPT 框架。
+          </p>
       </section> <!-- settings-area 结束 -->
 
       <!-- 模型管理区域 -->

@@ -2,184 +2,269 @@
   "models": [
     {
       "groupLabel": "Google Gemini",
+      "isGroupHidden": false,
       "options": [
         {
+          "text": "Gemini 2.5 Pro",
           "value": "gemini::gemini-2.5-pro-preview-05-06",
-          "text": "Gemini 2.5 Pro"
+          "isHidden": false
         },
         {
+          "text": "Gemini 2.5 FLash",
           "value": "gemini::gemini-2.5-flash-preview-04-17",
-          "text": "Gemini 2.5 FLash"
+          "isHidden": false
         },
         {
+          "text": "Gemini 2.5 Flash-0520",
           "value": "gemini::gemini-2.5-flash-preview-05-20",
-          "text": "Gemini 2.5 Flash-0520"
+          "isHidden": false
         },
         {
+          "text": "Gemini 2.0 FLash",
           "value": "gemini::gemini-2.0-flash",
-          "text": "Gemini 2.0 FLash"
+          "isHidden": false
         }
       ]
     },
     {
       "groupLabel": "Deepseek",
+      "isGroupHidden": false,
       "options": [
         {
+          "text": "Deepseek-V3",
           "value": "deepseek::deepseek-chat",
-          "text": "Deepseek-V3"
+          "isHidden": false
         },
         {
+          "text": "Deepseek-R1",
           "value": "deepseek::deepseek-reasoner",
-          "text": "Deepseek-R1"
+          "isHidden": false
         }
       ]
     },
     {
       "groupLabel": "SiliconFlow",
+      "isGroupHidden": false,
       "options": [
         {
+          "text": "SF Qwen3-235B-A22B",
           "value": "sf::Qwen/Qwen3-235B-A22B",
-          "text": "Qwen3-235B-A22B"
+          "isHidden": false
         },
         {
+          "text": "SF Qwen3-30B-A3B",
           "value": "sf::Qwen/Qwen3-30B-A3B",
-          "text": "Qwen3-30B-A3B"
+          "isHidden": false
         },
         {
+          "text": "SF Qwen3-32B",
           "value": "sf::Qwen/Qwen3-32B",
-          "text": "Qwen3-32B"
+          "isHidden": false
         },
         {
+          "text": "SF Qwen3-14B",
           "value": "sf::Qwen/Qwen3-14B",
-          "text": "Qwen3-14B"
+          "isHidden": false
         },
         {
+          "text": "SF Qwen3-8B",
           "value": "sf::Qwen/Qwen3-8B",
-          "text": "Qwen3-8B"
+          "isHidden": false
         },
         {
+          "text": "SF QwQ-32B",
           "value": "sf::Qwen/QwQ-32B",
-          "text": "QwQ-32B"
+          "isHidden": false
         },
         {
+          "text": "SF GLM-Z1-32B",
           "value": "sf::THUDM/GLM-Z1-32B-0414",
-          "text": "GLM-Z1-32B"
+          "isHidden": true
         },
         {
+          "text": "SF GLM-4-32B",
           "value": "sf::THUDM/GLM-4-32B-0414",
-          "text": "GLM-4-32B"
+          "isHidden": true
         },
         {
+          "text": "SF GLM-Z1-9B",
           "value": "sf::THUDM/GLM-Z1-9B-0414",
-          "text": "GLM-Z1-9B"
+          "isHidden": true
         },
         {
+          "text": "SF GLM-4-9B",
           "value": "sf::THUDM/GLM-4-9B-0414",
-          "text": "GLM-4-9B"
+          "isHidden": false
         }
       ]
     },
     {
       "groupLabel": "OpenAI（GPT）",
+      "isGroupHidden": false,
       "options": [
         {
+          "text": "o4-mini",
           "value": "openai::o4-mini",
-          "text": "o4-mini"
+          "isHidden": false
         },
         {
+          "text": "o3",
           "value": "openai::o3",
-          "text": "o3"
+          "isHidden": false
         },
         {
+          "text": "GPT-4.1",
           "value": "openai::gpt-4.1",
-          "text": "GPT-4.1"
+          "isHidden": false
         },
         {
+          "text": "GPT-4.1-mini",
           "value": "openai::gpt-4.1-mini",
-          "text": "GPT-4.1-mini"
+          "isHidden": false
         },
         {
+          "text": "GPT-4.1-nano",
           "value": "openai::gpt-4.1-nano",
-          "text": "GPT-4.1-nano"
+          "isHidden": false
         },
         {
+          "text": "GPT-4o",
           "value": "openai::gpt-4o",
-          "text": "GPT-4o"
+          "isHidden": false
         },
         {
+          "text": "GPT-4o-mini",
           "value": "openai::gpt-4o-mini",
-          "text": "GPT-4o-mini"
+          "isHidden": false
         }
       ]
     },
     {
       "groupLabel": "Anthropic Claude",
+      "isGroupHidden": false,
       "options": [
         {
+          "text": "Claude 4.0 Opus",
           "value": "anthropic::claude-opus-4-20250514",
-          "text": "Claude 4.0 Opus"
+          "isHidden": false
         },
         {
+          "text": "Claude 4.0 Sonnet",
           "value": "anthropic::claude-sonnet-4-20250514",
-          "text": "Claude 4.0 Sonnet"
+          "isHidden": false
         },
         {
           "text": "Claude 3.7 Sonnet",
-          "value": "anthropic::claude-3-7-sonnet-20250219"
+          "value": "anthropic::claude-3-7-sonnet-20250219",
+          "isHidden": true
         },
         {
+          "text": "Claude 3.5 Haiku",
           "value": "anthropic::claude-3-5-haiku-latest",
-          "text": "Claude 3.5 Haiku"
+          "isHidden": false
         }
       ]
     },
     {
       "groupLabel": "Ollama (Local)",
+      "isGroupHidden": false,
       "options": [
         {
+          "text": "Ollama Qwen3-30b-a3b",
           "value": "ollama::qwen3:30b",
-          "text": "Ollama Qwen3-30b-a3b"
+          "isHidden": false
         },
         {
+          "text": "Ollama Qwen3-14B",
           "value": "ollama::qwen3:14b",
-          "text": "Ollama Qwen3-14B"
+          "isHidden": false
         },
         {
+          "text": "Ollama Qwen3-8b",
           "value": "ollama::qwen3:8b",
-          "text": "Ollama Qwen3-8b"
+          "isHidden": false
         },
         {
+          "text": "Ollama Qwen3-4B",
           "value": "ollama::qwen3:4b",
-          "text": "Ollama Qwen3-4B"
+          "isHidden": false
         },
         {
+          "text": "Ollama Qwen3-0.6B",
           "value": "ollama::qwen3:0.6b",
-          "text": "Ollama Qwen3-0.6b"
+          "isHidden": false
         },
         {
+          "text": "Ollama DSR1-8B",
           "value": "ollama::deepseek-r1:8b",
-          "text": "Deepseek R1-8B"
+          "isHidden": false
+        }
+      ]
+    },
+    {
+      "groupLabel": "OpenRouter Models",
+      "isGroupHidden": false,
+      "options": [
+        {
+          "text": "OR Deepseek-R1 8B",
+          "value": "openrouter::deepseek/deepseek-r1-0528-qwen3-8b:free",
+          "isHidden": false
+        },
+        {
+          "text": "OR Deepseek-R1",
+          "value": "openrouter::deepseek/deepseek-r1-0528",
+          "isHidden": false
+        },
+        {
+          "text": "OR GPT4o-mini",
+          "value": "openrouter::openai/gpt-4o-mini",
+          "isHidden": false
+        },
+        {
+          "text": "OR Claude 4.0 Sonnet",
+          "value": "openrouer::anthropic/claude-sonnet-4",
+          "isHidden": false
+        },
+        {
+          "text": "OR Gemini 2.5 Pro",
+          "value": "openrouter::google/gemini-2.5-pro-preview",
+          "isHidden": false
+        },
+        {
+          "text": "OR Mistal Nemo",
+          "value": "openrouter::mistralai/mistral-nemo",
+          "isHidden": false
+        },
+        {
+          "text": "OR Qwen3-235B-A22B",
+          "value": "openrouter::qwen/qwen3-235b-a22b",
+          "isHidden": false
         }
       ]
     },
     {
       "groupLabel": "Slm (Suanlema)",
+      "isGroupHidden": false,
       "options": [
         {
+          "text": "Slm Qwen3-32B",
           "value": "suanlema::Qwen3-32B",
-          "text": "Slm Qwen3-32B"
+          "isHidden": false
         },
         {
+          "text": "Slm QwQ-32B-Free",
           "value": "suanlema::free:QwQ-32B",
-          "text": "Slm QwQ-32B-Free"
+          "isHidden": false
         },
         {
           "text": "Slm Qwen3-30B-A3B",
-          "value": "suanlema::free:Qwen3-30B-A3B"
+          "value": "suanlema::free:Qwen3-30B-A3B",
+          "isHidden": false
         },
         {
+          "text": "Slm QwQ-32B",
           "value": "suanlema::QwQ-32B",
-          "text": "Slm QwQ-32B"
+          "isHidden": false
         }
       ]
     }

@@ -1,5 +1,5 @@
 // --- START OF FILE script.js ---
-
+console.log("script.js parsing started");
 
 // 全局变量
 let activeModel = ''; // 存储当前加载对话时，该对话所使用的模型ID
@@ -30,6 +30,8 @@ let maxTokensInputInline = null;
 let currentMaxTokens = null; // 存储当前设置的最大Token数，可以是数字或null (表示使用API默认)
 const MAX_TOKENS_STORAGE_KEY = 'chat-max-tokens';
 const DEFAULT_MAX_TOKENS_PLACEHOLDER = 1024; // 用于 placeholder 或回退
+window.isNearBottomMessages = window.isNearBottomMessages || function() { return true; };
+
 
 let _internalUploadedFilesData = []; // 使用带下划线的内部变量
 Object.defineProperty(window, 'uploadedFilesData', {
@@ -1438,8 +1440,7 @@ async function send() {
     let isStreamingResponse = false; // 预期的流式响应
     let isActuallyStreaming = false;
     let isCurrentlyInThinkingBlock = false;
-    let shouldUseStreaming = false; // 初始化
-    
+    let shouldUseStreaming = false; 
     
 
     let currentMaxTokens = parseInt(localStorage.getItem('chat-max-tokens'));
@@ -1486,6 +1487,7 @@ async function send() {
             case 'anthropic': actualProvider = 'anthropic'; break;
             case 'ollama': actualProvider = 'ollama'; break;
             case 'suanlema': actualProvider = 'suanlema'; break;
+            case 'openrouter': actualProvider = 'openrouter'; break;
             default:
                 console.error(`[send] 未知的模型前缀: "${prefix}" 在模型值 "${modelValueFromOption}" 中。 Aborting.`);
                 alert(`模型 "${modelValueFromOption}" 配置错误：无法识别的提供商前缀 "${prefix}"。`);
@@ -1526,17 +1528,36 @@ async function send() {
     // --- 6. 预处理 promptText (为Qwen模型附加 /think 或 /no_think 指令) ---
     //    这个 processedPromptTextForAPI 将用于存储到历史记录和传递给消息映射函数
      let processedPromptTextForAPI = promptText.trim();
-    const modelIdentifier = modelValueFromOption.toLowerCase(); // 使用 modelValueFromOption 进行判断
+   // const modelIdentifier = modelValueFromOption.toLowerCase(); // 使用 modelValueFromOption 进行判断
 
-    if (modelIdentifier.includes('qwen')) { // 简单判断是否为 Qwen 模型
-        console.log(`[Send] Qwen model detected. currentQwenThinkMode state is: ${currentQwenThinkMode}`);
-        if (currentQwenThinkMode === true) {
-            processedPromptTextForAPI += " /think"; // 在 trim 后的文本基础上附加
-        } else {
-            processedPromptTextForAPI += " /no_think";
-        }
-        console.log(`[Send] Qwen: Final processedPromptTextForAPI for history/mapping: "${processedPromptTextForAPI}"`);
+
+    let isQwen3FamilyModel = false; // 默认不是 Qwen3 系列
+if (typeof modelNameForAPI === 'string') { // 先确保 modelNameForAPI 是字符串
+    const modelNameLower = modelNameForAPI.toLowerCase();
+    // 使用我们根据你的 models.json 确定的精确匹配逻辑
+    if (
+        modelNameLower.startsWith('qwen3') ||        // Catches "qwen3:...", "Qwen3-..." from ollama, suanlema
+        modelNameLower.startsWith('qwen/qwen3') ||   // Catches "Qwen/Qwen3-..." from sf
+        modelNameLower.startsWith('free:qwen3')      // Catches "suanlema::free:Qwen3-..."
+    ) {
+        isQwen3FamilyModel = true;
     }
+}
+
+// --- 根据 isQwen3FamilyModel 来决定是否附加 /think 或 /no_think ---
+if (isQwen3FamilyModel) { // 只有当检测到是 Qwen3 家族模型时才应用开关状态 
+    console.log(`[Send] Qwen3-family model detected (${modelValueFromOption}). currentQwenThinkMode state is: ${currentQwenThinkMode}`);
+    if (currentQwenThinkMode === true) { // currentQwenThinkMode 是由开关控制的全局变量
+        processedPromptTextForAPI += " /think";
+    } else {
+        processedPromptTextForAPI += " /no_think";
+    }
+    console.log(`[Send] Qwen3-family: Final processedPromptTextForAPI for history/mapping: "${processedPromptTextForAPI}"`);
+} else {
+    // 如果不是 Qwen3 家族模型，则不处理 currentQwenThinkMode，processedPromptTextForAPI 保持不变
+    // 你可以在这里加一个日志，如果需要的话：
+    // console.log(`[Send] Non-Qwen3 family model (${modelValueFromOption}). Qwen think mode switch state is ignored.`);
+}
 
     // --- 7. 构建用于存储到 conversation.messages 的 userMessageContentForHistory ---
     let userMessageContentForHistory;
@@ -1625,7 +1646,7 @@ async function send() {
         if (isNaN(currentTemperature) || currentTemperature < 0 || currentTemperature > 2) {
             currentTemperature = 0.7;
         }
-        shouldUseStreaming = ['openai', 'anthropic', 'deepseek', 'siliconflow', 'ollama', 'suanlema'].includes(providerToUse);
+        shouldUseStreaming = ['openai', 'anthropic', 'deepseek', 'siliconflow', 'ollama', 'suanlema', 'openrouter'].includes(providerToUse);
 
         bodyPayload.model = modelNameForAPI;
         if (providerToUse !== 'gemini') bodyPayload.temperature = currentTemperature;
@@ -1673,13 +1694,29 @@ async function send() {
             } else if (systemMessageObj && systemMessageObj.content && typeof systemMessageObj.content === 'object' && systemMessageObj.content.text) {
                bodyPayload.system = systemMessageObj.content.text.trim();
             }
-        } else if (providerToUse === 'gemini') {
-            apiUrl = `/.netlify/functions/gemini-proxy`;
-            bodyPayload.contents = typeof mapMessagesForGemini === 'function' ?
-                                   mapMessagesForGemini(conversationAtRequestTime.messages, filesToActuallySend) : // filesToActuallySend 用于构建消息
-                                   [{role: 'user', parts: [{text: promptText || ' '}]}];
-            bodyPayload.generationConfig = { temperature: currentTemperature };
-        } else {
+        }  else if (providerToUse === 'openrouter') { // 新增 else if 分支
+    apiUrl = `/.netlify/functions/openrouter-proxy`; // 你的代理函数路径
+    bodyPayload.model = modelNameForAPI; // modelNameForAPI 就是 "openai/gpt-3.5-turbo" 等
+    bodyPayload.messages = typeof mapMessagesForStandardOrClaude === 'function' ?
+                           mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, 'openai', filesToActuallySend) : // OpenRouter 兼容 OpenAI 格式，所以可以用 'openai' 作为映射目标
+                           [{role: 'user', content: promptText || ' '}]; // 简化回退
+
+    // 设置通用参数
+    if (shouldUseStreaming) { // 这个条件应该为 true
+        bodyPayload.stream = true;
+        console.log(`[Send OpenRouter] Setting bodyPayload.stream = true because shouldUseStreaming is true.`);
+    } else {
+        // 如果不期望流式，可以显式设置 false 或不设置 (OpenRouter 默认为 false)
+        // bodyPayload.stream = false;
+        console.log(`[Send OpenRouter] shouldUseStreaming is false, stream parameter will not be set to true.`);
+    }
+    if (currentTemperature !== undefined) bodyPayload.temperature = currentTemperature; // 确保 currentTemperature 已定义
+    if (currentMaxTokens !== null && typeof currentMaxTokens === 'number' && currentMaxTokens >= 1) {
+        bodyPayload.max_tokens = currentMaxTokens;
+    }
+    // OpenRouter 可能不需要像 Anthropic 那样有特定的默认 max_tokens，它会遵循模型自己的默认值
+
+} else {
             apiUrl = `/.netlify/functions/${providerToUse}-proxy`;
             bodyPayload.messages = typeof mapMessagesForStandardOrClaude === 'function' ?
                                    mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, providerToUse, filesToActuallySend) : // filesToActuallySend 用于构建消息
@@ -1704,7 +1741,7 @@ async function send() {
             alert("无法构建有效的请求内容。请检查输入或文件。");
             return;
         }
-        console.log("DEBUG: bodyPayload being sent to Anthropic:", JSON.stringify(bodyPayload, null, 2));
+        console.log(`DEBUG: bodyPayload being sent for provider "${providerToUse}" to URL "${apiUrl}". Payload:`, JSON.stringify(bodyPayload, null, 2));
         const response = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(bodyPayload) });
         responseContentType = response.headers.get('content-type');
         // isStreamingResponse 现在是最初的期望
@@ -1831,12 +1868,7 @@ async function send() {
         if (assistantTextElement) {
             accumulatedAssistantReply += replyTextPortion;
             assistantTextElement.innerHTML = typeof marked !== 'undefined' ? marked.parse(accumulatedAssistantReply) : accumulatedAssistantReply;
-            
-            // ★★★ 为主要回复内容区域（如果它本身可滚动）自动滚动到底部 ★★★
-            // 注意：assistantTextElement 通常是 .text div，如果它有固定高度和 overflow，这个才有效
-            // 大部分情况下，我们是滚动整个 #messages 容器
-            // assistantTextElement.scrollTop = assistantTextElement.scrollHeight; 
-            // ▲▲▲ ---------------------------------------------------- ▲▲▲
+
 
         } else if (messageDiv) { // Ollama 或其他 provider 的动态 .text 创建 (如果需要)
             accumulatedAssistantReply += replyTextPortion;
@@ -1926,6 +1958,44 @@ async function send() {
 
                                 let sseThinkingText = "";
                                 let sseReplyText = "";
+                                const delta = chunk.choices?.[0]?.delta; // 获取 delta 对象
+
+if (delta) {
+    // 1. 优先处理 OpenRouter (或类似模型) 可能返回的 delta.reasoning 字段
+    //    这个字段包含了流式的思考过程片段。
+    if (typeof delta.reasoning === 'string') { // 检查 delta.reasoning 是否是字符串
+        sseThinkingText = delta.reasoning; // 直接赋值给 sseThinkingText
+    }
+
+    // 2. 处理 delta.content (可能是主要回复，或包含 <think> 标签的混合内容)
+    const rawContentFromDelta = delta.content || ''; // 获取 delta.content，如果不存在则为空字符串
+
+    // 只有当 rawContentFromDelta 明确包含 <think> 标签，
+    // 或者我们之前已经通过 <think> 进入了思考块 (isCurrentlyInThinkingBlock 为 true)，
+    // 才使用 extractThinkingAndReply 来进一步分离。
+    // 否则，delta.content 的内容全部视为主要回复。
+    if (rawContentFromDelta && typeof extractThinkingAndReply === 'function' &&
+        (rawContentFromDelta.includes("<think>") || isCurrentlyInThinkingBlock || rawContentFromDelta.includes("</think>"))) { // 增加对</think>的检查，以处理思考块结束的情况
+
+        let { replyTextPortion, thinkingTextPortion, newThinkingBlockState } = extractThinkingAndReply(rawContentFromDelta, "<think>", "</think>", isCurrentlyInThinkingBlock);
+        isCurrentlyInThinkingBlock = newThinkingBlockState;
+
+        if (thinkingTextPortion && !sseThinkingText) { // 只有当 sseThinkingText 还是空的时候才用从<think>提取的
+            sseThinkingText = thinkingTextPortion;
+        } else if (thinkingTextPortion && sseThinkingText) {
+            // 如果两者都有，可以选择追加，或者根据 API 行为决定哪个优先
+            // console.warn("Both delta.reasoning and <think> in delta.content provided thinking text. Appending.");
+            // sseThinkingText += thinkingTextPortion; // 示例：追加
+        }
+        sseReplyText = replyTextPortion;
+    } else {
+        // 如果 delta.content 不包含 <think> 标签，则其内容全部视为主要回复
+        sseReplyText = rawContentFromDelta;
+    }
+} else {
+    console.warn("[SSE Stream] Delta object is missing in chunk choices[0]:", chunk.choices?.[0]);
+    // 确保 sseThinkingText 和 sseReplyText 在 delta 不存在时有默认值（已经是 ""）
+}
                                 if (providerToUse === 'anthropic') {
                                     // console.log("[Anthropic Stream Chunk]:", JSON.stringify(chunk, null, 2)); // 调试：打印原始chunk
                                     if (chunk.type === 'message_start') {
@@ -1961,7 +2031,8 @@ async function send() {
                                     sseThinkingText = chunk.choices?.[0]?.delta?.reasoning_content || '';
                                     sseReplyText = chunk.choices?.[0]?.delta?.content || '';
                                 } else if (providerToUse === 'openai' || providerToUse === 'siliconflow'
-                                    || providerToUse === 'suanlema'
+                                    || providerToUse === 'suanlema'||
+                                    providerToUse === 'openrouter'
                                 ) {
                                     // These typically put everything in content, <think> tags handled by extractThinkingAndReply
                                     const rawContent = chunk.choices?.[0]?.delta?.content || '';
@@ -2117,11 +2188,20 @@ async function send() {
                 finalThinkingProcess = null;
             } else if (!isActuallyStreaming) { // OpenAI, Deepseek, SiliconFlow etc. non-streaming
                 if (data.choices?.[0]?.message) {
+                    const message = data.choices[0].message;
+    
                     finalAssistantReply = data.choices[0].message.content || '（无回复）';
-                    if (data.choices[0].message.reasoning_content) { // DeepSeek
-                        finalThinkingProcess = data.choices[0].message.reasoning_content;
-                    } else { finalThinkingProcess = null; }
-                } else { finalThinkingProcess = null; }
+                    if (typeof message.reasoning === 'string') { // 优先 OpenRouter 的 reasoning
+                        finalThinkingProcess = message.reasoning;
+                    } else if (typeof message.reasoning_content === 'string') { // 其次 DeepSeek 的
+                        finalThinkingProcess = message.reasoning_content;
+                    } else {
+                        finalThinkingProcess = null;
+                    }
+                } else {
+                    finalAssistantReply = '（API响应格式错误或无内容）';
+                    finalThinkingProcess = null;
+                }
             }
             requestWasSuccessful = true;
         }
@@ -2178,6 +2258,71 @@ async function send() {
 
                 if (existingMsgWrapper) {
                     const msgDiv = existingMsgWrapper.querySelector('.message.assistant');
+                     if (msgDiv) { // 确保 msgDiv 存在
+            const assistantTextElementToClean = msgDiv.querySelector('.text');
+            if (assistantTextElementToClean) {
+                console.log("[Finally Stream Cleanup] Attempting to clean trailing whitespace/br for:", assistantTextElementToClean);
+                let originalHTMLForDebug = assistantTextElementToClean.innerHTML; // 用于调试比较
+
+                // --- 开始方案2的清理逻辑 ---
+                let lastMeaningfulChild = null;
+                for (let i = assistantTextElementToClean.childNodes.length - 1; i >= 0; i--) {
+                    const node = assistantTextElementToClean.childNodes[i];
+                    if (node.nodeType === Node.ELEMENT_NODE && node.nodeName !== 'BR') {
+                        lastMeaningfulChild = node;
+                        break;
+                    } else if (node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== '') {
+                        lastMeaningfulChild = node;
+                        break;
+                    }
+                }
+
+                if (lastMeaningfulChild) {
+                    let nextSibling = lastMeaningfulChild.nextSibling;
+                    while (nextSibling) {
+                        const nodeToRemove = nextSibling;
+                        nextSibling = nextSibling.nextSibling;
+                        if ((nodeToRemove.nodeName === 'BR') ||
+                            (nodeToRemove.nodeType === Node.TEXT_NODE && nodeToRemove.textContent.trim() === '')) {
+                            console.log("[Finally Stream Cleanup] Removing trailing node:", nodeToRemove);
+                            assistantTextElementToClean.removeChild(nodeToRemove);
+                        } else if (nodeToRemove.nodeName === 'P' && nodeToRemove.textContent.trim() === '' && nodeToRemove.children.length === 0) {
+                            console.log("[Finally Stream Cleanup] Removing trailing empty P:", nodeToRemove);
+                            assistantTextElementToClean.removeChild(nodeToRemove);
+                        } else {
+                            break; // 遇到有意义的节点，停止
+                        }
+                    }
+                } else if (assistantTextElementToClean.childNodes.length > 0) {
+                    // 如果所有子节点都是 <br> 或空白文本节点
+                    let allAreWhitespaceOrBr = true;
+                    for (const node of Array.from(assistantTextElementToClean.childNodes)) {
+                        if (!((node.nodeName === 'BR') || (node.nodeType === Node.TEXT_NODE && node.textContent.trim() === ''))) {
+                            allAreWhitespaceOrBr = false;
+                            break;
+                        }
+                    }
+                    if (allAreWhitespaceOrBr) {
+                        console.log("[Finally Stream Cleanup] All children are whitespace or BR, removing trailing ones.");
+                        while (assistantTextElementToClean.lastChild &&
+                               ((assistantTextElementToClean.lastChild.nodeName === 'BR') ||
+                                (assistantTextElementToClean.lastChild.nodeType === Node.TEXT_NODE && assistantTextElementToClean.lastChild.textContent.trim() === ''))) {
+                            console.log("[Finally Stream Cleanup] Removing trailing node (all whitespace/br case):", assistantTextElementToClean.lastChild);
+                            assistantTextElementToClean.removeChild(assistantTextElementToClean.lastChild);
+                        }
+                    }
+                }
+                // --- 方案2的清理逻辑结束 ---
+
+                if (originalHTMLForDebug !== assistantTextElementToClean.innerHTML) {
+                    console.log("[Finally Stream Cleanup] HTML changed. New innerHTML (last 100chars):", assistantTextElementToClean.innerHTML.slice(-100));
+                } else {
+                    console.log("[Finally Stream Cleanup] HTML did not change after cleanup attempt.");
+                }
+            } else {
+                console.warn("[Finally Stream Cleanup] '.text' element not found in msgDiv.");
+            }
+        }
                     if (msgDiv && modelValueFromOption && !msgDiv.querySelector('.model-note')) {
                         const note = document.createElement('div'); note.className = 'model-note';
                         let displayModelName = modelValueFromOption;
@@ -2210,42 +2355,109 @@ async function send() {
             }
         }
 
-       // Save assistant's reply (or error) to conversation history
+            const conversationForAutoName = getCurrentConversation(); // 获取最新的当前对话对象
+    if (requestWasSuccessful && // 确保请求是成功的 (避免用错误信息命名)
+        conversationForAutoName &&
+        conversationForAutoName.id === conversationIdAtRequestTime && // 确保是当前操作的对话
+        (conversationForAutoName.title === '新对话' || !conversationForAutoName.title.replace(/\.{3}$/, '').trim()) && // 标题是默认的，或者trim后为空(除了末尾的...)
+        finalAssistantReply &&
+        typeof finalAssistantReply === 'string' && // 确保是字符串
+        finalAssistantReply !== '（无回复）' &&
+        !finalAssistantReply.startsWith('错误：')) {
+
+        let newTitleFromAssistant = finalAssistantReply.trim();
+
+        // 尝试移除常见的 Markdown 列表标记, 标题标记, 引用标记等，避免它们成为标题开头
+        newTitleFromAssistant = newTitleFromAssistant
+            .replace(/^[\s*#\-\.>\d\.\)\(]+/gm, '') // 移除行首的 *, #, -, >, 数字., 数字) 等
+            .trim(); // 再次 trim
+
+        // 截取一部分作为标题
+        const maxLength = 10;
+        let displayTitle = newTitleFromAssistant.substring(0, maxLength);
+
+        
+        // 确保标题不是太短或无意义
+        if (displayTitle.length > 1) { // 例如，至少需要超过1个字符才有意义
+            console.log(`[Auto Naming] Attempting to auto-name conversation "${conversationForAutoName.id}" from assistant reply.`);
+            conversationForAutoName.title = displayTitle;
+
+            // 更新聊天窗口顶部的标题显示
+            const chatTitleEl = document.getElementById('chat-title');
+            if (chatTitleEl && currentConversationId === conversationForAutoName.id) { // 再次确认是当前显示的对话
+                chatTitleEl.textContent = conversationForAutoName.title;
+            }
+            // 注意：saveConversations() 和 renderConversationList() 会在 finally 块的更后面统一调用
+            // 所以这里只需要修改 conversationForAutoName.title 即可。
+            // 如果你的 save 和 render 在此之前，则需要在这里单独调用。
+        } else {
+            console.log(`[Auto Naming] Assistant reply was too short or became too short after cleaning to be used as a title: "${newTitleFromAssistant}"`);
+        }
+    }
+  
 const targetConversationForStorage = conversations.find(c => c.id === conversationIdAtRequestTime);
+
 if (targetConversationForStorage) {
     const assistantRoleForStorage = 'assistant';
-    // 针对Anthropic（Claude）模型，content必须为 content-block array
-    let contentToSave;
+    let contentToSave; // 声明 contentToSave
+
+    // 1. 根据 provider 确定 contentToSave 的格式
     if (providerToUse === 'anthropic') {
-        // 如果已经是数组则直接用，否则转为内容块数组
         if (Array.isArray(finalAssistantReply)) {
             contentToSave = finalAssistantReply;
         } else {
             contentToSave = [{ type: "text", text: String(finalAssistantReply) }];
         }
     } else {
-        // 其它模型（OpenAI等）按原逻辑
+        // 对于其他所有 provider (OpenAI, Deepseek, Ollama, OpenRouter, etc.)
+        // 假设 finalAssistantReply 已经是正确的字符串格式
         contentToSave = finalAssistantReply;
     }
 
-    if (
-        finalAssistantReply !== '（无回复）' ||
+    // 2. 判断是否需要将消息添加到历史记录
+    //    (例如，有实际回复，或者有思考过程，或者是明确的错误信息)
+    const shouldPushMessage =
+        (finalAssistantReply && finalAssistantReply !== '（无回复）') ||
         (finalThinkingProcess && finalThinkingProcess.trim() !== '') ||
-        (typeof finalAssistantReply === 'string' && finalAssistantReply.startsWith('错误：'))
-    ) {
+        (typeof finalAssistantReply === 'string' && finalAssistantReply.startsWith('错误：'));
+
+    if (shouldPushMessage) {
         targetConversationForStorage.messages.push({
             role: assistantRoleForStorage,
-            content: contentToSave,
+            content: contentToSave, // 使用上面确定的 contentToSave
             model: modelValueFromOption,
-            reasoning_content: finalThinkingProcess
+            reasoning_content: finalThinkingProcess // 保存思考过程
         });
-        saveConversations();
-        if (
-            currentConversationId !== conversationIdAtRequestTime &&
-            requestWasSuccessful &&
-            !(typeof finalAssistantReply === 'string' && finalAssistantReply.startsWith('错误：'))
-        ) {
+        console.log("[Finally] Assistant message pushed to conversation history.");
+
+        // 3. 在消息 push 之后，保存对话并更新列表
+        if (typeof saveConversations === 'function') {
+            saveConversations();
+            console.log("[Finally] Conversations saved AFTER pushing assistant message.");
+        }
+
+        // 4. 更新对话列表的条件可以保持或简化
+        //    通常，只要对话被修改（新消息、标题更改），列表就应该刷新以反映最新状态，
+        //    特别是如果列表项显示了最后消息时间或摘要。
+        //    如果只是为了标题和活动状态，可以更精细控制。
+        //    一个简单的做法是，如果请求成功，就总是尝试渲染列表。
+        if (typeof renderConversationList === 'function' && requestWasSuccessful) {
+            // 检查是否是当前对话的更新，或者是一个后台对话的更新
+            // if (currentConversationId === conversationIdAtRequestTime ||
+            //     (currentConversationId !== conversationIdAtRequestTime && !(typeof finalAssistantReply === 'string' && finalAssistantReply.startsWith('错误：')) )
+            // ) {
+            //     // 上面的条件有点复杂，简化为：如果请求成功，就更新列表，因为它可能影响标题或活动状态
+            // }
             renderConversationList();
+            console.log("[Finally] Conversation list rendered AFTER saving.");
+        }
+    } else {
+        console.log("[Finally] No significant assistant reply or thinking process to push to history.");
+        // 即使没有 push 新消息，如果标题因为自动命名而改变了，也需要保存和重绘列表
+        // 这个检查可以放在自动命名逻辑之后，或者在这里再做一次判断
+        if (conversationForAutoName && conversationForAutoName.title !== '新对话' /* && 标题真的变了 */ ) {
+            if (typeof saveConversations === 'function') saveConversations();
+            if (typeof renderConversationList === 'function') renderConversationList();
         }
     }
 } else {
@@ -2531,6 +2743,91 @@ function extractThinkingAndReply(textChunk, startTag, endTag, currentlyInThinkin
 }
 
 
+function handlePostDropdownUpdate(newlySelectedValueInDropdown, previousSelectedValueBeforeUpdate) {
+    const modelSelect = document.getElementById('model');
+    if (!modelSelect) {
+        console.error("[handlePostDropdownUpdate] modelSelect element not found!");
+        return;
+    }
+
+    let finalModelForConversation = null; // 将用于更新对话记录的模型值
+
+    if (currentConversationId && typeof getCurrentConversation === 'function') {
+        const conv = getCurrentConversation();
+        if (conv && conv.model) { // 如果当前对话已经有一个模型记录
+            let currentConvModelIsStillSelectable = false;
+            for (let i = 0; i < modelSelect.options.length; i++) {
+                if (modelSelect.options[i].value === conv.model && !modelSelect.options[i].value.startsWith("error::")) {
+                    currentConvModelIsStillSelectable = true;
+                    break;
+                }
+            }
+
+            if (currentConvModelIsStillSelectable) {
+                modelSelect.value = conv.model; // 恢复当前对话的原始模型选择
+                finalModelForConversation = conv.model;
+                console.log(`[handlePostDropdownUpdate] Restored selection for current conversation: ${conv.model}`);
+            } else {
+                // 当前对话的模型已不可选 (被隐藏或删除)
+                console.warn(`[handlePostDropdownUpdate] Current conversation's model "${conv.model}" is no longer selectable.`);
+                if (modelSelect.options.length > 0 && !modelSelect.options[0].value.startsWith("error::")) {
+                    modelSelect.selectedIndex = 0; // 选择下拉框中的第一个有效模型
+                    finalModelForConversation = modelSelect.value;
+                    conv.model = finalModelForConversation; // 更新对话对象中的模型
+                    if (typeof saveConversations === 'function') saveConversations();
+                    alert(`您当前对话使用的模型 ("${previousSelectedValueBeforeUpdate}" 或 "${conv.model}") 已被隐藏/移除，已自动切换到: "${modelSelect.options[0].text}"`);
+                } else {
+                    // 没有可供选择的有效模型了
+                    conv.model = ""; // 或一个表示无效的特殊值
+                    if (typeof saveConversations === 'function') saveConversations();
+                    alert(`您当前对话使用的模型已被隐藏/移除，且没有其他可用模型！`);
+                    if(modelSelect.options.length === 0 || modelSelect.options[0].value.startsWith("error::")) { // 如果下拉框是空的或只有错误提示
+                       // 可能需要清空 modelSelect 或添加一个“无模型”的占位符选项，
+                       // populateModelDropdown 内部应该已经处理了这种情况
+                    }
+                }
+            }
+        } else if (modelSelect.options.length > 0 && !modelSelect.options[0].value.startsWith("error::")) {
+            // 对话存在但模型值无效，或者没有当前对话模型记录，选择第一个有效模型
+            modelSelect.selectedIndex = 0;
+            finalModelForConversation = modelSelect.value;
+            if (conv) { // 如果对话对象存在，更新其模型
+                conv.model = finalModelForConversation;
+                if (typeof saveConversations === 'function') saveConversations();
+            }
+            console.log(`[handlePostDropdownUpdate] No specific conversation model or previous model invalid, selected first available: ${finalModelForConversation}`);
+        }
+    } else if (modelSelect.options.length > 0 && !modelSelect.options[0].value.startsWith("error::")) {
+        // 没有当前对话，仅确保下拉框选中第一个有效模型（如果它还没有值）
+        if (!modelSelect.value || modelSelect.value.startsWith("error::")) {
+            modelSelect.selectedIndex = 0;
+        }
+        finalModelForConversation = modelSelect.value; // 记录当前选中的值，但不改变任何对话数据
+        console.log(`[handlePostDropdownUpdate] No current conversation, dropdown shows: ${finalModelForConversation}`);
+    }
+
+    // 如果在所有逻辑之后，modelSelect 仍然没有一个有效的值（例如，它只包含错误占位符）
+    if ((!modelSelect.value || modelSelect.value.startsWith("error::")) && modelSelect.options.length > 0 && !modelSelect.options[0].value.startsWith("error::")) {
+        // 这种情况理论上应该在上面的分支中被处理，但作为最后的保险
+        modelSelect.selectedIndex = 0;
+        console.warn("[handlePostDropdownUpdate] Fallback: Setting dropdown to first valid option as a last resort.");
+    } else if (modelSelect.options.length === 0 || (modelSelect.options.length === 1 && modelSelect.options[0].value.startsWith("error::"))) {
+         console.error("[handlePostDropdownUpdate] Dropdown is empty or only contains error/fallback options. No model selected.");
+         // 此时，如果 currentConversationId 存在，其 conv.model 可能需要被清空或标记为无效
+         if (currentConversationId && typeof getCurrentConversation === 'function') {
+             const conv = getCurrentConversation();
+             if (conv && conv.model !== "") { // 只有当之前有模型时才提示
+                 conv.model = "";
+                 if (typeof saveConversations === 'function') saveConversations();
+                 alert("所有模型均不可用，当前对话的模型已被清除。请在模型管理中添加或显示模型。");
+                 // 可能还需要更新聊天界面的标题或模型显示区域
+                 const chatTitleEl = document.getElementById('chat-title');
+                 if (chatTitleEl && conv) chatTitleEl.textContent = conv.title; // 保持标题，但模型没了
+             }
+         }
+    }
+}
+
 async function loadModelsFromConfig() {
    console.log("[loadModelsFromConfig] Function CALLED"); // ★★★ 日志1 ★★★
   const modelSelect = document.getElementById('model');
@@ -2553,6 +2850,13 @@ async function loadModelsFromConfig() {
     if (config && config.models && Array.isArray(config.models)) {
       modelConfigData = config; // 存储原始加载的数据
       editableModelConfig = JSON.parse(JSON.stringify(modelConfigData)); // 创建可编辑的深拷贝
+      if (editableModelConfig.models) {
+                editableModelConfig.models.forEach(group => {
+                    if (typeof group.isGroupHidden === 'undefined') {
+                        group.isGroupHidden = false; // 默认为不隐藏
+                    }
+                    });
+            }
       populateModelDropdown(editableModelConfig.models); // 使用可编辑的配置填充主下拉列表
       console.log("模型列表已成功从 models.json 加载并初始化编辑副本。");
       return true;
@@ -2574,48 +2878,91 @@ async function loadModelsFromConfig() {
  * @param {Array} modelsArray - 模型配置数组，格式同 models.json 中的 models 数组。
  */
 function populateModelDropdown(modelsArray) {
-  const modelSelect = document.getElementById('model');
-  if (!modelSelect) return;
-  modelSelect.innerHTML = ''; // 清空
+    const modelSelect = document.getElementById('model');
+    if (!modelSelect) {
+        console.error("populateModelDropdown: modelSelect element not found!");
+        return;
+    }
+    const previousSelectedValue = modelSelect.value; // 保存刷新前的选中值，以便后续恢复或判断
+    modelSelect.innerHTML = ''; // 清空
 
-  if (!modelsArray || modelsArray.length === 0) {
-      const fallbackOption = document.createElement('option');
-      fallbackOption.value = "openai::gpt-3.5-turbo";
-      fallbackOption.textContent = "GPT-3.5 Turbo (无配置)";
-      modelSelect.appendChild(fallbackOption);
-      console.warn("populateModelDropdown 收到空或无效的模型数组，已使用回退选项。");
-      return;
-  }
-
-  modelsArray.forEach(group => {
-    if (group.groupLabel && group.options && Array.isArray(group.options)) {
-      const optgroup = document.createElement('optgroup');
-      optgroup.label = group.groupLabel;
-      group.options.forEach(opt => {
-        if (opt.value && opt.text) {
-          const option = document.createElement('option');
-          option.value = opt.value;
-          option.textContent = opt.text;
-          optgroup.appendChild(option);
+    if (!modelsArray || modelsArray.length === 0) {
+        const fallbackOption = document.createElement('option');
+        fallbackOption.value = "error::no-models"; // 使用更明确的错误值
+        fallbackOption.textContent = "无可用模型 (配置为空)";
+        modelSelect.appendChild(fallbackOption);
+        console.warn("populateModelDropdown: modelsArray is empty or invalid, using fallback.");
+        // 如果之前有选中的，现在没了，也需要处理当前对话
+        if (typeof handlePostDropdownUpdate === 'function') { // 确保函数存在
+            handlePostDropdownUpdate(null, previousSelectedValue);
         }
-      });
-      modelSelect.appendChild(optgroup);
+        return;
     }
-  });
-  // 确保在填充后，如果当前对话存在，其模型被选中
-  if (currentConversationId) {
-    const conv = getCurrentConversation();
-    if (conv && conv.model && modelSelect.querySelector(`option[value="${conv.model}"]`)) {
-        modelSelect.value = conv.model;
-    } else if (modelSelect.options.length > 0) {
-        // 如果当前对话的模型不在新列表或无当前对话，默认选第一个
-        // 这也可能在createNewConversation之前被调用
-        if (conv) conv.model = modelSelect.options[0].value; // 更新对话数据
-        // modelSelect.value = modelSelect.options[0].value; // UI 会自动选第一个
+
+    let hasAnyVisibleGroupsOrOptions = false; // 标记是否添加了任何实际内容
+
+    modelsArray.forEach(group => {
+
+        if (!group.isGroupHidden && group.groupLabel && group.options && Array.isArray(group.options)) {
+            // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
+
+            // 只有当组本身可见时，才处理其下的选项
+            const visibleOptions = group.options.filter(opt => !opt.isHidden && opt.value && opt.text && opt.text.trim() !== ""); // 过滤掉隐藏的、无效的选项
+            
+            if (visibleOptions.length > 0) { // 只有当组内有可见（且有效）模型时才创建 optgroup
+                hasAnyVisibleGroupsOrOptions = true; // 标记我们至少添加了一个组
+                const optgroup = document.createElement('optgroup');
+                optgroup.label = group.groupLabel;
+                visibleOptions.forEach(opt => {
+                    const option = document.createElement('option');
+                    option.value = opt.value;
+                    option.textContent = opt.text;
+                    optgroup.appendChild(option);
+                });
+                modelSelect.appendChild(optgroup);
+            } else {
+                // console.log(`[populateModelDropdown] Group "${group.groupLabel}" has no visible/valid options. Skipping optgroup.`);
+            }
+        } else {
+            // console.log(`[populateModelDropdown] Group "${group.groupLabel}" is hidden or invalid. Skipping.`);
+        }
+    });
+
+    if (!hasAnyVisibleGroupsOrOptions) { // 如果遍历完所有组，发现没有任何可见的组或选项被添加
+        const fallbackOption = document.createElement('option');
+        fallbackOption.value = "error::no-visible-models";
+        fallbackOption.textContent = "无可见模型";
+        modelSelect.appendChild(fallbackOption);
+        console.warn("populateModelDropdown: No visible groups or options found after filtering.");
     }
-  } else if (modelSelect.options.length > 0) {
-      // modelSelect.value = modelSelect.options[0].value; // UI 会自动选第一个
-  }
+
+    // 调用辅助函数来处理选中状态和当前对话模型的同步
+    if (typeof handlePostDropdownUpdate === 'function') { // 确保函数存在
+        handlePostDropdownUpdate(modelSelect.value, previousSelectedValue);
+    } else {
+        // 如果没有 handlePostDropdownUpdate，这里需要包含一些基本的选中逻辑
+        // （但强烈建议将选中逻辑封装到 handlePostDropdownUpdate 中，如之前的回复所示）
+        console.warn("handlePostDropdownUpdate function not found. Dropdown selection might not be correctly restored for current conversation.");
+        if (currentConversationId) {
+            const conv = getCurrentConversation();
+            if (conv && conv.model) {
+                const currentModelOption = modelSelect.querySelector(`option[value="${conv.model}"]`);
+                if (currentModelOption) {
+                    modelSelect.value = conv.model;
+                } else if (modelSelect.options.length > 0 && !modelSelect.options[0].value.startsWith("error::")) {
+                    modelSelect.selectedIndex = 0;
+                    conv.model = modelSelect.value;
+                    if (typeof saveConversations === 'function') saveConversations();
+                }
+            } else if (modelSelect.options.length > 0 && !modelSelect.options[0].value.startsWith("error::") && conv) {
+                modelSelect.selectedIndex = 0;
+                conv.model = modelSelect.value;
+                if (typeof saveConversations === 'function') saveConversations();
+            }
+        } else if (modelSelect.options.length > 0 && !modelSelect.options[0].value.startsWith("error::")) {
+             modelSelect.selectedIndex = 0;
+        }
+    }
 }
 
 
@@ -2623,12 +2970,66 @@ function populateModelDropdown(modelsArray) {
 let groupSortableInstance = null;
 const optionSortableInstances = [];
 
+function handleToggleVisibilityClick(event) {
+    // console.count("handleToggleVisibilityClick called");
+    if (event.target.classList.contains('toggle-visibility-btn')) {
+        const groupIndex = parseInt(event.target.dataset.groupIndex, 10);
+        const optionIndex = parseInt(event.target.dataset.optionIndex, 10);
+
+        if (!isNaN(groupIndex) && !isNaN(optionIndex) &&
+            editableModelConfig?.models?.[groupIndex]?.options?.[optionIndex]) {
+
+            const option = editableModelConfig.models[groupIndex].options[optionIndex];
+            // 1. 切换数据模型中的状态
+            option.isHidden = !option.isHidden;
+            console.log(`Data: Option "${option.text}" in group "${editableModelConfig.models[groupIndex].groupLabel}" toggled to: ${option.isHidden ? 'HIDDEN' : 'VISIBLE'}`);
+            
+            if (typeof renderModelManagementUI === 'function') {
+                console.log("[handleToggleVisibilityClick] Calling renderModelManagementUI.");
+                renderModelManagementUI(); // 2. 重绘模型管理列表
+            } else {
+                console.error("CRITICAL: renderModelManagementUI function is not defined!");
+            }
+            // 4. 更新主聊天界面的模型下拉框 (这一步仍然重要)
+            if (typeof populateModelDropdown === 'function' && editableModelConfig?.models) {
+                populateModelDropdown(editableModelConfig.models);
+                // ... (处理当前对话模型是否受影响的逻辑，如之前讨论的)
+                if (currentConversationId && typeof loadConversation === 'function' && typeof getCurrentConversation === 'function') {
+                    const conv = getCurrentConversation();
+                    const modelSelect = document.getElementById('model');
+                    if (conv && conv.model && modelSelect) {
+                        let modelStillSelectable = false;
+                        for (let i = 0; i < modelSelect.options.length; i++) {
+                            if (modelSelect.options[i].value === conv.model) {
+                                modelStillSelectable = true;
+                                break;
+                            }
+                        }
+                        if (!modelStillSelectable && modelSelect.options.length > 0 && !modelSelect.options[0].value.startsWith("error::")) {
+                            console.log(`[handleToggleVisibilityClick] Current conversation's model (${conv.model}) is no longer visible. Reloading conversation.`);
+                            loadConversation(currentConversationId); // 或者只更新模型并保存
+                        }
+                    }
+                }
+            }
+
+
+        } else {
+            console.warn("handleToggleVisibilityClick: Invalid group/option index or config not ready.");
+        }
+    }
+}
+
+/**
+ * 处理点击模型组头部“切换组可见性”按钮的事件。
+ * @param {Event} event - 点击事件对象。
+ */
+
 /**
  * 渲染模型管理界面列表
  */
 function renderModelManagementUI() {
  
-
   // ▼▼▼ 修改后的条件判断 ▼▼▼
   if (!editableModelConfig || !modelListEditor) {
     
@@ -2689,9 +3090,18 @@ function renderModelManagementUI() {
   editableModelConfig.models.forEach((group, groupIndex) => {
     const groupDiv = document.createElement('div');
     groupDiv.className = 'model-group-editor';
+    if (group.isGroupHidden) { // ★★★ 如果组被隐藏，给整个 groupDiv 添加一个类 ★★★
+            groupDiv.classList.add('model-group-content-hidden');
+        }
+        groupDiv.dataset.groupIndex = groupIndex;
+
+        const groupHeader = document.createElement('div');
+        groupHeader.className = 'model-group-header';
     groupDiv.dataset.groupIndex = groupIndex;
 
-    const groupHeader = document.createElement('div');
+    
+
+    
     groupHeader.className = 'model-group-header';
     const groupLabelInput = document.createElement('input');
     groupLabelInput.type = 'text';
@@ -2717,12 +3127,22 @@ function renderModelManagementUI() {
     });
     groupHeader.appendChild(addOptionToGroupBtn);
 
+    const toggleGroupVisibilityBtn = document.createElement('button');
+        toggleGroupVisibilityBtn.className = 'toggle-group-visibility-btn action-btn'; // 使用现有样式或新建
+        toggleGroupVisibilityBtn.textContent = group.isGroupHidden ? '显示分组' : '隐藏分组';
+        toggleGroupVisibilityBtn.title = group.isGroupHidden ? `显示 "${group.groupLabel}" 组的模型列表` : `隐藏 "${group.groupLabel}" 组的模型列表`;
+        toggleGroupVisibilityBtn.dataset.groupIndex = groupIndex;
+
+
     const deleteGroupBtn = document.createElement('button');
     deleteGroupBtn.textContent = '删除组';
     deleteGroupBtn.className = 'danger-text';
     deleteGroupBtn.onclick = () => { if (typeof deleteModelGroup === 'function') deleteModelGroup(groupIndex); };
-    groupHeader.appendChild(deleteGroupBtn);
+
     groupDiv.appendChild(groupHeader);
+    
+    groupHeader.appendChild(toggleGroupVisibilityBtn); // 先添加 toggle 按钮
+groupHeader.appendChild(deleteGroupBtn);         // 再添加 delete 按钮
 
     const optionsUl = document.createElement('ul');
     optionsUl.className = 'model-group-options';
@@ -2732,6 +3152,10 @@ function renderModelManagementUI() {
         group.options.forEach((option, optionIndex) => {
             const optionLi = document.createElement('li');
             optionLi.className = 'model-option-editor';
+            optionLi.classList.toggle('model-option-hidden', !!option.isHidden); //确保是布尔值
+             if (option.isHidden) { // ★★★ 检查 isHidden 属性 ★★★
+                    optionLi.classList.add('model-option-hidden');
+                }
             optionLi.dataset.groupIndex = groupIndex;
             optionLi.dataset.optionIndex = optionIndex;
             // Ensure escapeHtml is defined and works, or remove it if text is trusted
@@ -2739,18 +3163,23 @@ function renderModelManagementUI() {
             const safeValue = typeof escapeHtml === 'function' ? escapeHtml(option.value || "") : (option.value || "");
 
             optionLi.innerHTML = `
-                <div class="details">
-                <strong>${safeText}</strong>
-                <span>Value: ${safeValue}</span>
-                </div>
-                <div class="actions">
-                <button onclick="if(typeof openModelFormForEdit === 'function') openModelFormForEdit(${groupIndex}, ${optionIndex});">编辑</button>
-                <button class="danger-text" onclick="if(typeof deleteModelOption === 'function') deleteModelOption(${groupIndex}, ${optionIndex});">删除</button>
-                </div>
-            `;
-            optionsUl.appendChild(optionLi);
-        });
+                    <div class="details">
+                        <strong>${safeText}</strong>
+                        <span>Value: ${safeValue}</span>
+                    </div>
+                    <div class="actions">
+                        <button class="toggle-visibility-btn" data-group-index="${groupIndex}" data-option-index="${optionIndex}">
+                            ${option.isHidden ? '显示' : '隐藏'}
+                        </button>
+                        <button onclick="if(typeof openModelFormForEdit === 'function') openModelFormForEdit(${groupIndex}, ${optionIndex});">编辑</button>
+                        <button class="danger-text" onclick="if(typeof deleteModelOption === 'function') deleteModelOption(${groupIndex}, ${optionIndex});">删除</button>
+                    </div>
+                `;
+                optionsUl.appendChild(optionLi);
+            });
+
     }
+
     groupDiv.appendChild(optionsUl);
     modelListEditor.appendChild(groupDiv);
 
@@ -2789,6 +3218,63 @@ function renderModelManagementUI() {
         });
     } catch(e) { console.error("Error initializing Sortable for group list:", e); }
   }
+}
+
+function handleToggleGroupVisibilityClick(event) {
+    // console.count("handleToggleGroupVisibilityClick called"); // 用于调试
+
+
+    const groupIndex = parseInt(event.target.dataset.groupIndex, 10);
+
+    // 确保 groupIndex 是一个有效的数字，并且对应的模型组存在
+    if (!isNaN(groupIndex) && editableModelConfig && editableModelConfig.models && editableModelConfig.models[groupIndex]) {
+        const group = editableModelConfig.models[groupIndex];
+
+        // 切换组的 isGroupHidden 状态
+        group.isGroupHidden = !group.isGroupHidden;
+
+        console.log(`Group "${group.groupLabel}" (index ${groupIndex}) visibility toggled to: ${group.isGroupHidden ? 'HIDDEN' : 'VISIBLE'}`);
+
+        if (typeof renderModelManagementUI === 'function') {
+            renderModelManagementUI();
+        } else {
+            console.error("CRITICAL: renderModelManagementUI function is not defined! UI will not update.");
+        }
+    if (typeof populateModelDropdown === 'function' && editableModelConfig?.models) {
+            console.log("[handleToggleGroupVisibilityClick] Calling populateModelDropdown to update main select.");
+            populateModelDropdown(editableModelConfig.models); // 使用最新的配置更新下拉框
+
+            // 处理当前对话模型是否受影响 (这部分逻辑很重要)
+            if (currentConversationId && typeof loadConversation === 'function' && typeof getCurrentConversation === 'function') {
+                const conv = getCurrentConversation();
+                const modelSelect = document.getElementById('model');
+                if (conv && conv.model && modelSelect) {
+                    let modelStillSelectable = false;
+                    for (let i = 0; i < modelSelect.options.length; i++) {
+                        if (modelSelect.options[i].value === conv.model) {
+                            modelStillSelectable = true;
+                            break;
+                        }
+                    }
+                    if (!modelStillSelectable) {
+                        console.log(`[handleToggleGroupVisibilityClick] Current conversation's model (${conv.model}) is no longer visible. Reloading conversation to pick a new model.`);
+                        loadConversation(currentConversationId); // loadConversation 内部会处理模型选择
+                    } else {
+                        // 如果模型仍然可选，确保下拉框选中它 (populateModelDropdown 应该已经做了，但可以再次确认)
+                        // modelSelect.value = conv.model;
+                        console.log(`[handleToggleGroupVisibilityClick] Current conversation's model (${conv.model}) is still visible.`);
+                    }
+                }
+            }
+        } else {
+            console.error("[handleToggleGroupVisibilityClick] populateModelDropdown or editableModelConfig.models not available.");
+        }
+
+
+    } else {
+        console.warn("handleToggleGroupVisibilityClick: Could not toggle group visibility. Invalid groupIndex or editableModelConfig not ready. groupIndex:", groupIndex);
+    }
+    
 }
 
 /**
@@ -2868,71 +3354,140 @@ window.deleteModelOption = function(groupIndex, optionIndex) { // 暴露到全�
  * 保存当前编辑的模型配置到下载文件，并更新主聊天界面的下拉列表
  */
 async function saveModelsToFile() {
-  if (!editableModelConfig) {
-    alert('没有模型配置可供保存。');
-    return;
-  }
-
-  // 清理空组和空选项
-  const cleanedModelConfig = {
-    models: editableModelConfig.models
-      .filter(group => (group.options && group.options.length > 0) || (group.groupLabel && group.groupLabel.trim() !== ""))
-      .map(group => ({
-        groupLabel: group.groupLabel || "",
-        options: group.options ? group.options.filter(opt => (opt.text && opt.text.trim() !== "") && (opt.value && opt.value.trim() !== "")) : []
-      }))
-      .filter(group => (group.options && group.options.length > 0) || (group.groupLabel && group.groupLabel.trim() !== ""))
-  };
-
-  console.log("[saveModelsToFile] Attempting to save to local server. Data:", JSON.parse(JSON.stringify(cleanedModelConfig)));
-
-  try {
-    const response = await fetch('/.netlify/functions/save-models-local', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(cleanedModelConfig),
-    });
-
-    const resultText = await response.text();
-    let result;
-    try {
-      result = JSON.parse(resultText);
-    } catch (e) {
-      console.error("Failed to parse JSON response from save-models-local:", resultText);
-      throw new Error(`保存操作的服务器响应无效: ${resultText.substring(0, 100)}`);
+    if (!editableModelConfig || !editableModelConfig.models) { // 增加对 models 数组的检查
+        alert('没有模型配置可供保存，或者模型列表为空。');
+        return;
     }
 
-    if (response.ok) {
-      alert(result.message || '模型配置已成功保存到本地！');
-      // 更新主聊天界面的模型下拉列表以立即反映更改
-      modelConfigData = JSON.parse(JSON.stringify(editableModelConfig));
-      populateModelDropdown(editableModelConfig.models);
+    // 构建 cleanedModelConfig，确保所有需要的字段都被保留
+    const cleanedModelConfig = {
+        models: editableModelConfig.models
+            .map(group => { // 遍历每个原始组
+                // 1. 处理组内的选项
+                const cleanedOptions = group.options
+                    ? group.options
+                        // 1a. 过滤掉无效的选项 (文本或值为空/仅空白)
+                        .filter(opt => opt.text && opt.text.trim() !== "" && opt.value && opt.value.trim() !== "")
+                        // 1b. 映射选项，确保包含 text, value, isHidden (并转换为布尔值)
+                        .map(opt => ({
+                            text: opt.text.trim(), // 同时 trim 一下
+                            value: opt.value.trim(),
+                            isHidden: !!opt.isHidden // 强制为布尔值
+                        }))
+                    : []; // 如果原始组没有 options，则为空数组
 
-      // 确保当前对话的模型在新列表中仍然有效
-      if (currentConversationId) {
-        const conv = getCurrentConversation();
-        if (conv && conv.model) {
-          const modelSelect = document.getElementById('model');
-          if (modelSelect.querySelector(`option[value="${conv.model}"]`)) {
-            modelSelect.value = conv.model;
-          } else if (modelSelect.options.length > 0) {
-            // 如果旧模型不在新列表，将对话模型更新为列表中的第一个
-            conv.model = modelSelect.options[0].value;
-            saveConversations(); // 保存对话的更改
-            modelSelect.value = conv.model; // UI同步
-            alert(`当前对话使用的模型 "${conv.model}" 在新配置中不存在，已自动切换到 "${modelSelect.options[0].text}"。`);
-          }
+                // 2. 返回清理和映射后的组对象，包含所有需要的组级别属性
+                return {
+                    groupLabel: (group.groupLabel || "未命名组").trim(),
+                    isGroupHidden: !!group.isGroupHidden, // ★★★ 确保 isGroupHidden 被包含并为布尔值 ★★★
+                    options: cleanedOptions
+                };
+            })
+            // 3. 过滤掉那些既没有有效组标签（在 trim 和提供默认值后）也没有任何有效选项的组
+            //    一个组如果被标记为 isGroupHidden: true，但它仍然有有效的 groupLabel，它应该被保存。
+            //    如果一个组没有标签，也没有选项，则移除。
+            .filter(group => {
+                const hasValidLabel = group.groupLabel !== "未命名组" && group.groupLabel !== "";
+                const hasOptions = group.options && group.options.length > 0;
+                return hasValidLabel || hasOptions; // 保留有标签的组，或有选项的组
+            })
+    };
+
+    // 可选：进一步过滤掉那些虽然有组标签，但所有选项都被隐藏了，并且组本身没有被标记为 isGroupHidden 的情况
+    // 但这可能与用户的期望冲突（用户可能希望保留一个空但可见的组以便后续添加模型）。
+    // 目前的逻辑是，只要组有标签或有选项（无论是否隐藏），就会被保存。
+    // populateModelDropdown 会根据 isGroupHidden 和 isHidden 决定显示什么。
+
+    console.log("[saveModelsToFile] Attempting to save. Cleaned Data:", JSON.parse(JSON.stringify(cleanedModelConfig)));
+
+    if (!cleanedModelConfig.models || cleanedModelConfig.models.length === 0) {
+        if (!confirm("模型列表为空或所有模型/组都无效。是否仍要保存一个空的模型配置文件？（这将清空现有配置）")) {
+            alert("保存操作已取消。");
+            return;
         }
-      }
-    } else {
-      throw new Error(result.message || `保存失败，状态码: ${response.status}`);
+        // 如果用户确认保存空配置，继续执行，但 body 会是 { models: [] }
     }
-  } catch (error) {
-    console.error("保存模型配置到本地服务器失败:", error);
-    alert(`保存模型配置失败：${error.message}`);
-  }
+
+
+    try {
+        const response = await fetch('/.netlify/functions/save-models-local', { // 或你的本地保存接口
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(cleanedModelConfig),
+        });
+
+        const resultText = await response.text();
+        let result;
+        try {
+            result = JSON.parse(resultText);
+        } catch (e) {
+            console.error("Failed to parse JSON response from save-models-local:", resultText);
+            // 即使解析失败，也要检查 response.ok
+            if (!response.ok) {
+                 throw new Error(`保存操作失败，服务器响应无效: ${resultText.substring(0, 100)} (Status: ${response.status})`);
+            }
+            // 如果 response.ok 但 JSON 解析失败，可能服务器返回了非 JSON 的成功消息
+            alert('配置已保存，但服务器响应格式非预期：' + resultText.substring(0,100));
+            // 这种情况也认为是部分成功，可以继续更新前端状态
+        }
+
+        if (response.ok) {
+            alert(result?.message || '模型配置已成功保存到本地！');
+
+            // ★★★ 使用清理和保存后的 cleanedModelConfig 来更新运行时的状态 ★★★
+            modelConfigData = JSON.parse(JSON.stringify(cleanedModelConfig)); // 更新全局的原始数据副本
+            editableModelConfig = JSON.parse(JSON.stringify(cleanedModelConfig)); // 也更新可编辑副本为清理后的状态
+
+            if (typeof populateModelDropdown === 'function') {
+                populateModelDropdown(editableModelConfig.models);
+            }
+
+            // 确保当前对话的模型在新列表中仍然有效
+            if (currentConversationId && typeof getCurrentConversation === 'function' && typeof saveConversations === 'function') {
+                const conv = getCurrentConversation();
+                if (conv && conv.model) {
+                    const modelSelect = document.getElementById('model');
+                    let currentModelStillSelectable = false;
+                    if (modelSelect) {
+                        for (let i = 0; i < modelSelect.options.length; i++) {
+                            if (modelSelect.options[i].value === conv.model) {
+                                currentModelStillSelectable = true;
+                                break;
+                            }
+                        }
+                        if (currentModelStillSelectable) {
+                            modelSelect.value = conv.model;
+                        }
+                    }
+
+                    if (!currentModelStillSelectable) {
+                        // 当前模型不可见，回退
+                        if (modelSelect && modelSelect.options.length > 0) {
+                            conv.model = modelSelect.options[0].value; // 选中第一个可用的
+                            saveConversations(); // 保存对话的更改
+                            modelSelect.value = conv.model; // UI同步
+                            alert(`当前对话使用的模型 "${conv.model}" 在新配置中不再可见或有效，已自动切换到 "${modelSelect.options[0].text}"。`);
+                        } else {
+                            // 没有可用的模型了
+                            alert(`当前对话使用的模型 "${conv.model}" 在新配置中不再可见或有效，且没有其他可用模型！请添加模型。`);
+                            // 可能需要清空对话的模型或禁用发送等
+                            conv.model = ""; // 或者一个表示无效的特殊值
+                            saveConversations();
+                            if(modelSelect) modelSelect.innerHTML = '<option value="">无可用模型</option>';
+                        }
+                    }
+                }
+            }
+        } else {
+            // result 可能已经包含了错误信息
+            throw new Error(result?.error?.message || result?.message || result?.error || `保存失败，状态码: ${response.status}`);
+        }
+    } catch (error) {
+        console.error("保存模型配置失败:", error);
+        alert(`保存模型配置失败：${error.message}`);
+    }
 }
 
 
@@ -3042,7 +3597,37 @@ showPresetPromptsBtn = document.getElementById('show-preset-prompts-btn');
 presetPromptsListPanel = document.getElementById('preset-prompts-list-panel');
 presetPromptsUl = document.getElementById('preset-prompts-ul');
 maxTokensInputInline = document.getElementById('max-tokens-input-inline');
+modelListEditor = document.getElementById('model-list-editor'); // 确保 modelListEditor 在这里被正确获取
 
+    if (modelListEditor) {
+        // 只在这里绑定一次事件监听器
+            if (modelListEditor) {
+               modelListEditor.addEventListener('click', (event) => {
+            console.count("modelListEditor click event triggered"); // 确认这个合并监听器被调用的次数
+
+            if (event.target.classList.contains('toggle-visibility-btn')) { // 处理单个模型显隐按钮
+                if (typeof handleToggleVisibilityClick === 'function') {
+                    console.log("Dispatching to handleToggleVisibilityClick");
+                    handleToggleVisibilityClick(event);
+                } else {
+                    console.error("handleToggleVisibilityClick is not defined when trying to dispatch!");
+                }
+            } else if (event.target.classList.contains('toggle-group-visibility-btn')) { // 处理整个组显隐按钮
+                if (typeof handleToggleGroupVisibilityClick === 'function') {
+                    console.log("Dispatching to handleToggleGroupVisibilityClick");
+                    handleToggleGroupVisibilityClick(event);
+                } else {
+                    console.error("handleToggleGroupVisibilityClick is not defined when trying to dispatch!");
+                }
+            }
+
+        });
+        console.log("SINGLE click listener BOUND to modelListEditor in DOMContentLoaded.");
+        console.log("Event listeners for visibility toggles BOUND ONCE to modelListEditor.");
+    }
+    } else {
+        console.error("CRITICAL: modelListEditor not found in DOMContentLoaded, cannot bind visibility toggle listener.");
+    }
   // --- 初始化最大 Token 输入框 ---
     if (maxTokensInputInline) {
         // 从 LocalStorage 读取保存的值

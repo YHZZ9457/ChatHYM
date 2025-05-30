@@ -97,14 +97,23 @@ button{font-family:inherit;cursor:pointer; background:transparent; border:none; 
   padding: 16px 0; /* 上下增加些呼吸空间 */
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
+.logo {
+    /* 基础样式保留 */
+    font-size: 1.7rem;
+    padding: 5px 20px 20px;
+    text-align: center;
+    font-weight: 600;
+    
+    /* 蓝色渐变文字效果 */
+    color: transparent;
+    background: linear-gradient(135deg, #2320eb 0%, #0077fe 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    
 
-.logo{font-size:1.6rem;
-      padding:10px 20px 20px;
-      text-align:center; 
-      color: var(--primary); 
-      font-weight: 600;
-      
-    } /* 调整logo padding, 颜色和字重 */
+
+}
+
 
 .new-btn{ /* 新建对话按钮 */
   margin:0 16px 16px; /* 底部间距增大 */
@@ -609,7 +618,6 @@ body.dark-theme .messages, body.dark-theme .sidebar, body.dark-theme .settings-a
   margin: 0 0 0.5em 0; /* 保留段落下边距，最后一个p除外 */
 }
 .message .text p:last-child { margin-bottom: 0; }
-/* 隐藏所有空的 <p> */
 .message .text p:empty {
   display: none !important;
 }
@@ -722,7 +730,6 @@ body.light-theme .message.user .text a:hover { color: #fff !important; }
 .scale-frame .scale-options button.active { /* 选中态 */
   background-color: var(--primary); /* 主色背景 */
   color: #fff; /* 白色文字 */
-  /* border-color: var(--primary-color); 原始是 primary-color，现改为背景高亮 */
 }
 .scale-frame .scale-options button:not(.active):hover { /* 未选中按钮hover */
   /* border-color: var(--primary-color); */
@@ -1603,51 +1610,100 @@ body:not(.dark-theme) .inline-chat-settings-panel .setting-item input[type="numb
 }
 
 
-/* 预设 Prompts 面板 */
+/* ===== 现有样式 (深色主题/默认) ===== */
 .preset-prompts-panel {
     position: absolute;
-    bottom: calc(100% + 8px); /* 面板在按钮容器的上方，留出8px间距 */
-    /* 定位到父容器的左边缘或右边缘，或者居中 */
-    left: 0; /* 如果按钮在左边，面板也从左边开始 */
-    /* right: 0; */ /* 如果按钮在右边，面板也从右边开始 */
-    
-    width: auto;              
-    min-width: 260px;         /* 设置一个最小宽度 */
-    max-width: 320px;         /* 最大宽度 */
+    bottom: calc(100% + 8px);
+    left: 0;
+    width: auto;
+    min-width: 260px;
+    max-width: 320px;
 
-    background: rgba(38, 40, 45, 0.97); /* 背景色，与你的 inline-chat-settings-panel 类似 */
-    backdrop-filter: blur(8px);        
-    border: 1px solid #303238;         
-    border-radius: 10px;                
-    padding: 12px 15px;                  
-    box-shadow: 0 6px 20px rgba(0,0,0,0.3); 
-    z-index: 1070; /* 确保在顶层，与聊天设置面板同级或略高/低 */                     
-    color: #dde1e8;                     
-    font-size: 13px;                    
-    display: none; /* HTML中初始设置，JS控制显示/隐藏 */
-    max-height: 350px; /* 如果预设很多，允许滚动 */
+    /* 深色主题默认背景和颜色 */
+    background: rgba(38, 40, 45, 0.97); /* 深色背景 */
+    color: #dde1e8;                     /* 深色主题文字 */
+    border: 1px solid #303238;         /* 深色边框 */
+    
+    backdrop-filter: blur(8px);
+    border-radius: 10px;
+    padding: 12px 15px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+    z-index: 1070;
+    font-size: 13px;
+    display: none; 
+    max-height: 350px;
     overflow-y: auto;
 
-    /* 可以添加与 .inline-chat-settings-panel 类似的滚动条样式 */
+    /* 深色主题滚动条 */
     scrollbar-width: thin;
-    scrollbar-color: #666 #333;
+    scrollbar-color: #666 #333; /* 滑块颜色 轨道颜色 */
 }
 .preset-prompts-panel::-webkit-scrollbar { width: 6px; }
 .preset-prompts-panel::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 3px;}
 .preset-prompts-panel::-webkit-scrollbar-thumb { background-color: #555; border-radius: 3px;}
 
-
-/* 面板标题 */
-.preset-prompts-panel .preset-prompts-title { /* 注意类名 */
+/* 面板标题 (深色主题/默认) */
+.preset-prompts-panel .preset-prompts-title {
     margin: 0 0 10px 0;
-    font-size: 0.95em; 
+    font-size: 1em;
+    /* 深色主题标题颜色 */
     color: #c0c8d8; 
     font-weight: 500;
+    /* 深色主题分隔线颜色 */
     border-bottom: 1px solid #383a40;
     padding-bottom: 8px;
     text-align: left;
 }
 
+/* 预设列表项 (深色主题/默认 - 你可能还有 .preset-prompt-item 的样式，这里只改面板和标题) */
+/* .preset-prompts-panel .preset-prompt-item { ... } */
+/* .preset-prompts-panel .preset-prompt-item:hover { ... } */
+
+
+/* ===== 新增：浅色主题适配 ===== */
+/* 使用 body:not(.dark-theme) 或者 body.light-theme 作为浅色主题的选择器前缀 */
+
+body:not(.dark-theme) .preset-prompts-panel {
+    /* 浅色主题背景和颜色 */
+    background: rgba(248, 249, 250, 0.97); /* 非常浅的灰色，或 var(--bg-secondary) */
+    color: var(--text-light);             /* 使用浅色主题的主要文字颜色 */
+    border: 1px solid var(--border-light);  /* 使用浅色主题的边框颜色 */
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.05); /* 柔和阴影 */
+    /* 如果你的 backdrop-filter 在浅色下效果不好，可以考虑移除或调整 */
+    /* backdrop-filter: none; */
+}
+
+/* 浅色主题下的面板标题 */
+body:not(.dark-theme) .preset-prompts-panel .preset-prompts-title {
+    /* 浅色主题标题颜色 */
+    color: var(--text-secondary-light); /* 或一个具体的深灰色如 #343a40 */
+    /* 浅色主题分隔线颜色 */
+    border-bottom-color: var(--border-light);
+}
+
+/* 浅色主题下的预设列表项 (如果 .preset-prompt-item 的默认颜色不适合浅色主题) */
+body:not(.dark-theme) .preset-prompts-panel .preset-prompt-item {
+    color: var(--text-light); /* 确保列表项文字在浅色背景下可读 */
+}
+
+/* 浅色主题下预设列表项的悬浮效果 */
+body:not(.dark-theme) .preset-prompts-panel .preset-prompt-item:hover {
+    background-color: rgba(var(--primary-light-rgb), 0.08); /* 主题色的浅背景 */
+    color: var(--primary-light); /* 主题色文字 */
+}
+
+/* 浅色主题下预设面板的滚动条 */
+body:not(.dark-theme) .preset-prompts-panel {
+    scrollbar-color: #bbb rgba(0,0,0,0.05); /* Firefox: 滑块颜色 轨道颜色 */
+}
+body:not(.dark-theme) .preset-prompts-panel::-webkit-scrollbar-track {
+    background: rgba(0,0,0,0.05); /* 更浅的轨道背景 */
+    border-radius: 3px;
+}
+body:not(.dark-theme) .preset-prompts-panel::-webkit-scrollbar-thumb {
+    background-color: #bbb; /* 浅灰色滑块 */
+    border-radius: 3px;
+}
 /* 预设列表 */
 #preset-prompts-ul {
     list-style: none;
@@ -1660,7 +1716,7 @@ body:not(.dark-theme) .inline-chat-settings-panel .setting-item input[type="numb
     padding: 9px 9px; /* 调整内边距使条目更舒适 */
     cursor: pointer;
     border-radius: 5px; /* 给每个条目一点圆角 */
-    font-size: 0.95em;
+    font-size: 1em;
     transition: background-color 0.15s;
     margin-bottom: 2px; /* 条目之间的垂直间距 */
     color: #c0c8d8; /* 预设项文字颜色 */
@@ -1724,3 +1780,73 @@ border: 1px solid var(--border-color);
   body.dark-theme .message th {
       background-color: var(--sidebar-dark); /* 或其他合适的深色背景 */
   }
+
+  .model-option-editor.model-option-hidden .details {
+    opacity: 0.5;
+    text-decoration: line-through; /* 可选：添加删除线 */
+    color: var(--text-secondary); /* 变灰 */
+}
+
+.model-option-editor.model-option-hidden .details strong {
+    font-weight: normal; /* 去掉加粗 */
+}
+
+/* model-management-ui.css 或 style.css */
+.model-group-editor.model-group-content-hidden .model-group-options {
+    display: none; /* 当组被隐藏时，不显示其选项列表 */
+}
+
+
+
+.toggle-group-visibility-btn {
+    /* 根据需要调整样式，可以参考 .action-btn */
+    margin-right: 8px; /* 与其他头部按钮的间距 */
+}
+
+/* style.css */
+
+/* (在你的 settings-area 相关样式附近或文件末尾添加) */
+
+.static-info-section {
+    margin-top: 32px; /* 与上面的设置项隔开一些距离 */
+    padding-top: 24px; /* 如果想在文本区域上方也加一个分隔线 */
+    border-top: 1px solid var(--border-color); /* 在文本区域上方加分隔线 */
+    color: var(--text-secondary); /* 可以让这些信息文本颜色浅一些 */
+    font-size: 0.9rem; /* 字体可以稍小 */
+    line-height: 1.7;
+}
+
+.static-info-section h4 {
+    font-size: 1.1rem; /* 小标题字号 */
+    color: var(--text-color); /* 小标题颜色深一些 */
+    margin-top: 0; /* 移除默认的上边距，因为 .static-info-section 已经有了 */
+    margin-bottom: 10px;
+    font-weight: 600; /* 加粗 */
+}
+
+.static-info-section p {
+    margin-bottom: 1em; /* 段落下边距 */
+}
+.static-info-section p:last-of-type { /* 同一小节内最后一个p的下边距可以小一些或移除 */
+    margin-bottom: 0.5em;
+}
+
+
+.static-info-section ul {
+    list-style: disc; /* 使用实心圆点 */
+    padding-left: 20px; /* 列表左侧缩进 */
+    margin-bottom: 1.5em; /* 列表下方间距 */
+}
+
+.static-info-section li {
+    margin-bottom: 0.5em; /* 列表项之间的间距 */
+}
+
+/* 确保链接颜色使用主题色 */
+.static-info-section a {
+    color: var(--primary);
+    text-decoration: none;
+}
+.static-info-section a:hover {
+    text-decoration: underline;
+}

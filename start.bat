@@ -1,11 +1,11 @@
 @echo off
 chcp 65001
-REM 检查 Ollama 是否可用
+
+REM ===== 检查 Ollama 是否可用 =====
 where ollama >nul 2>nul
 if %errorlevel% neq 0 (
-    echo [错误] 未找到 Ollama，请先安装。
-    pause
-    exit /b
+    echo [INFO] 未找到 Ollama，已自动跳过 Ollama 相关步骤。
+    goto SKIP_OLLAMA
 )
 
 REM 检查 Ollama 服务是否已运行（找 11434 端口的进程）
@@ -17,6 +17,8 @@ if %errorlevel% neq 0 (
 ) else (
     echo [Ollama] 服务已在运行。
 )
+
+:SKIP_OLLAMA
 
 
 

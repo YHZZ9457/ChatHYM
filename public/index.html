@@ -56,7 +56,11 @@
         <div id="empty-chat-placeholder" class="empty-chat-placeholder" style="display: none;">
             <p>发送一条消息开始新聊天</p> </div>
         <div class="messages" id="messages"></div>
-
+           <button id="scroll-to-bottom-btn" title="滚动到底部" style="display: none;">
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="6 9 12 15 18 9"></polyline> <!-- 向下箭头 -->
+  </svg>
+</button>
         
         <div class="input-area">
   <!-- 文件预览区域，放在输入控件行的上方 -->
@@ -133,6 +137,7 @@
     <textarea id="prompt" placeholder="输入你的问题，Enter 发送 / Shift+Enter 换行"></textarea>
 
     <button id="send-btn" type="button">发送</button>
+   
   </div>
         
       </section>
@@ -246,5 +251,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
   <script defer src="script.js"></script>
+
 </body>
 </html>

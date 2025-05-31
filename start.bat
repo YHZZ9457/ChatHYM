@@ -20,7 +20,18 @@ if %errorlevel% neq 0 (
 
 :SKIP_OLLAMA
 
-
+REM ===== 新增：检查 ChatHYM 是否已在运行（端口8888） =====
+netstat -ano | findstr :8888 >nul
+if %errorlevel% equ 0 (
+    echo.
+    echo [ERROR] ============================================
+    echo [ERROR] 检测到端口 8888 已被占用！
+    echo [ERROR] ChatHYM 可能已在运行，一次只能启动一个实例。
+    echo [ERROR] ============================================
+    echo.
+    pause
+    exit /b
+)
 
 REM === 检查 Node.js ===
 where node >nul 2>nul

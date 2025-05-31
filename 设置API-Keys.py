@@ -53,9 +53,9 @@ class ApiKeyManager:
             ('OpenAI GPT', 'OPENAI_API_KEY', '例如: sk-...'),
             ('DeepSeek', 'DEEPSEEK_API_KEY', '例如: sk-...'),
             ('Google Gemini', 'GEMINI_API_KEY', '例如: AIzaSy...'),
-            ('SiliconFlow', 'SILICONFLOW_API_KEY', '例如: sk-...'),
+            ('SiliconFlow（硅基流动）', 'SILICONFLOW_API_KEY', '例如: sk-...'),
             ('OpenRouter', 'OPENROUTER_API_KEY', '例如: sk-or-...'),
-            ('算了吧 (Suanlema)', 'SUANLEMA_API_KEY', '例如: slm_...'),
+            ('Suanlema（算了吗）', 'SUANLEMA_API_KEY', '例如: slm_...'),
         ]
         # 自动加载本地 .env
         self.env_data = {}

@@ -1,7 +1,7 @@
 // netlify/functions/suanlema-proxy.mjs
 // 这个函数依赖于 Netlify Function 运行时提供的全局 fetch。
 
-const SUANLEMA_API_KEY_ENV_NAME = 'SUANLEMA_API_KEY'; // 环境变量中存储 API Key 的名称
+const SUANLEMA_API_KEY_ENV_NAME = 'SUANLEMA_API_KEY_SECRET'; // 环境变量中存储 API Key 的名称
 const SUANLEMA_API_BASE_URL = 'https://api.suanli.cn/v1';
 const SUANLEMA_CHAT_ENDPOINT = '/chat/completions'; // SuanLeMa 的聊天API端点
 

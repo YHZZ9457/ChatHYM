@@ -29,7 +29,8 @@ const QWEN_THINK_MODE_STORAGE_KEY = 'qwen-think-mode-enabled';
 let maxTokensInputInline = null;
 let currentMaxTokens = null; // 存储当前设置的最大Token数，可以是数字或null (表示使用API默认)
 const MAX_TOKENS_STORAGE_KEY = 'chat-max-tokens';
-const DEFAULT_MAX_TOKENS_PLACEHOLDER = 1024; // 用于 placeholder 或回退
+const DEFAULT_MAX_TOKENS_PLACEHOLDER = 1024; // 用于 placeholder 或回退  
+ 
 window.isNearBottomMessages = window.isNearBottomMessages || function() { return true; };
 
 
@@ -599,6 +600,7 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
             }
         }
         note.textContent = `模型：${displayModelName}`;
+      
         messageDiv.appendChild(note);
     }
 
@@ -964,7 +966,7 @@ function loadConversation(id) {
                     msg.role,
                     msg.content,
                     msg.model || convToLoad.model,
-                    msg.reasoning_content || null
+                    msg.reasoning_content || null,
                 );
 
                 if (messageElement) {
@@ -992,6 +994,9 @@ function loadConversation(id) {
     }
 
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    if (typeof updateScrollToBottomButtonVisibility === 'function') {
+        updateScrollToBottomButtonVisibility();
+    }
     if (typeof renderConversationList === 'function') renderConversationList();
     if (typeof enableInlineTitleEdit === 'function') enableInlineTitleEdit();
 }
@@ -1437,11 +1442,11 @@ async function send() {
     let requestWasSuccessful = false;
     let response = null;
     let responseContentType = null;
-    let isStreamingResponse = false; // 预期的流式响应
+    let isStreamingResponse = false; 
     let isActuallyStreaming = false;
     let isCurrentlyInThinkingBlock = false;
     let shouldUseStreaming = false; 
-    
+    let usageFromAPI = null;
 
     let currentMaxTokens = parseInt(localStorage.getItem('chat-max-tokens'));
     if (isNaN(currentMaxTokens) || currentMaxTokens < 1) {
@@ -2247,6 +2252,7 @@ if (delta) {
                         }
                     }
                 }
+                
                 appendMessage(assistantRoleToDisplay, finalAssistantReply, modelValueFromOption, finalThinkingProcess);
             }
         } else if (requestWasSuccessful && isActuallyStreaming) { // Successful actual streaming
@@ -2259,6 +2265,49 @@ if (delta) {
                 if (existingMsgWrapper) {
                     const msgDiv = existingMsgWrapper.querySelector('.message.assistant');
                      if (msgDiv) { // 确保 msgDiv 存在
+                        let metaInfoDiv = msgDiv.querySelector('.message-meta-info');
+        if (!metaInfoDiv) { // 如果 meta 容器不存在，创建它
+            metaInfoDiv = document.createElement('div');
+            metaInfoDiv.className = 'message-meta-info';
+            // 尝试将 metaInfoDiv 插入到 .text 元素之后 (如果 .text 存在)
+            const textElement = msgDiv.querySelector('.text');
+            if (textElement && textElement.nextSibling) {
+                msgDiv.insertBefore(metaInfoDiv, textElement.nextSibling);
+            } else { // 否则，就追加到 msgDiv 的末尾 (在 .text 之后，但在其他按钮之前)
+                msgDiv.appendChild(metaInfoDiv);
+            }
+        } else {
+             metaInfoDiv.innerHTML = ''; // 如果已存在，先清空以防重复添加模型名和token
+        }
+
+        // 1. 添加模型注释 (如果还没有)
+        if (modelValueFromOption) { // 确保 modelValueFromOption 有值
+            const modelNote = document.createElement('span');
+            modelNote.className = 'model-note';
+            let displayModelName = modelValueFromOption;
+            const modelSelect = document.getElementById('model');
+            if(modelSelect) {
+                const opt = modelSelect.querySelector(`option[value="${modelValueFromOption}"]`);
+                if(opt) displayModelName = opt.textContent;
+                else { const parts = String(modelValueFromOption).split('::'); if (parts.length === 2) displayModelName = parts[1];}
+            }
+            modelNote.textContent = `模型：${displayModelName}`;
+                            // 将其添加到 model-note 旁边或之后
+                            const modelNoteElement = msgDiv.querySelector('.model-note');
+                            if (modelNoteElement && modelNoteElement.parentNode === msgDiv) {
+                            } else { // 如果没有 model-note，或者想加在其他地方
+                                // messageDiv.appendChild(tokenNote); // 简单加到末尾，CSS调整
+                                // 或者，如果 .text 元素存在，加在 .text 之后，模型注释之前
+                                const textEl = msgDiv.querySelector('.text');
+                                if (textEl && textEl.nextSibling) {
+                                     msgDiv.insertBefore(tokenNote, textEl.nextSibling);
+                                } else if (textEl) {
+                                     msgDiv.appendChild(tokenNote); // 如果.text是最后一个
+                                } else {
+                                     // 如果连.text都没有，可能需要先创建模型注释再加
+                                }
+                            }
+                        }
             const assistantTextElementToClean = msgDiv.querySelector('.text');
             if (assistantTextElementToClean) {
                 console.log("[Finally Stream Cleanup] Attempting to clean trailing whitespace/br for:", assistantTextElementToClean);
@@ -2426,7 +2475,7 @@ if (targetConversationForStorage) {
             role: assistantRoleForStorage,
             content: contentToSave, // 使用上面确定的 contentToSave
             model: modelValueFromOption,
-            reasoning_content: finalThinkingProcess // 保存思考过程
+            reasoning_content: finalThinkingProcess,// 保存思考过程
         });
         console.log("[Finally] Assistant message pushed to conversation history.");
 
@@ -2529,6 +2578,25 @@ function showChatArea() {
     // 因为切换回聊天视图时，可能需要更新列表项的 'active' 状态，
     // 或者如果之前因为 isModelManagementActive 而未正确渲染 active 状态。
     renderConversationList();
+}
+
+const messagesContainerForScrollLogic = document.getElementById('messages'); // 在 DOMContentLoaded 后获取
+const scrollToBottomBtnForLogic = document.getElementById('scroll-to-bottom-btn'); // 在 DOMContentLoaded 后获取
+
+function updateScrollToBottomButtonVisibility() {
+    if (!messagesContainerForScrollLogic || !scrollToBottomBtnForLogic) {
+        // console.warn("updateScrollToBottomButtonVisibility: Required elements not found.");
+        return;
+    }
+
+    const threshold = 50; // 可以设置一个较小的阈值，表示几乎在底部
+    // 如果可滚动区域很小（内容不足以产生滚动条），或者已经在底部附近，则隐藏按钮
+    if (messagesContainerForScrollLogic.scrollHeight - messagesContainerForScrollLogic.clientHeight <= threshold ||
+        messagesContainerForScrollLogic.scrollHeight - messagesContainerForScrollLogic.clientHeight <= messagesContainerForScrollLogic.scrollTop + threshold) {
+        scrollToBottomBtnForLogic.style.display = 'none';
+    } else {
+        scrollToBottomBtnForLogic.style.display = 'flex'; // 或者你用来显示的 display 值
+    }
 }
 
 
@@ -3277,6 +3345,7 @@ function handleToggleGroupVisibilityClick(event) {
     
 }
 
+
 /**
  * 打开模型表单进行添加或编辑
  * @param {number} [groupIndex] - 编辑时提供，组索引
@@ -3598,6 +3667,12 @@ presetPromptsListPanel = document.getElementById('preset-prompts-list-panel');
 presetPromptsUl = document.getElementById('preset-prompts-ul');
 maxTokensInputInline = document.getElementById('max-tokens-input-inline');
 modelListEditor = document.getElementById('model-list-editor'); // 确保 modelListEditor 在这里被正确获取
+
+
+// script.js 顶部
+console.log("script.js parsing started");
+
+
 
     if (modelListEditor) {
         // 只在这里绑定一次事件监听器
@@ -4081,6 +4156,20 @@ if (showPresetPromptsBtn && presetPromptsListPanel && presetPromptsUl) {
         });
     } else { console.warn("DOMContentLoaded: Clear all history button 'clear-all-history-btn' not found."); }
 
+    if (messagesContainerForScrollLogic && scrollToBottomBtnForLogic) {
+    messagesContainerForScrollLogic.addEventListener('scroll', updateScrollToBottomButtonVisibility); // 监听滚动
+
+    scrollToBottomBtnForLogic.addEventListener('click', () => {
+        messagesContainerForScrollLogic.scrollTo({
+            top: messagesContainerForScrollLogic.scrollHeight,
+            behavior: 'smooth'
+        });
+        // 点击后，因为会滚动到底部，scroll 事件会触发，按钮会自动隐藏
+    });
+    // 初始加载时也调用一次，确保基于初始内容状态正确
+    updateScrollToBottomButtonVisibility();
+}
+
     // --- 文件导入功能 ---
     const importFileInput = document.getElementById('import-file');
     if (importFileInput) {
@@ -4233,7 +4322,41 @@ if (showModelManagementBtn) {
         console.warn(`DOMContentLoaded: Inline file upload elements not fully found. Missing: ${missingInlineUploadElements.join(' and ')}.`);
     }
 
-    
+    const messagesContainerScroll = document.getElementById('messages'); // messages 容器
+const scrollToBottomBtn = document.getElementById('scroll-to-bottom-btn');
+let autoScrollEnabled = true; // 用于跟踪用户是否手动滚动了
+
+if (messagesContainerScroll && scrollToBottomBtn) {
+    messagesContainerScroll.addEventListener('scroll', () => {
+        const threshold =150; // 向上滚动超过多少像素才显示按钮
+        const isNearBottom = messagesContainerScroll.scrollHeight - messagesContainerScroll.clientHeight <= messagesContainerScroll.scrollTop + threshold;
+
+        if (isNearBottom) {
+            scrollToBottomBtn.style.display = 'none';
+            autoScrollEnabled = true; // 用户回到底部附近，恢复自动滚动
+        } else {
+            scrollToBottomBtn.style.display = 'flex'; // 显示按钮
+            // 如果用户向上滚动了，可以暂时禁用自动滚动，直到他点击按钮或自己滚回底部
+            // autoScrollEnabled = false; // 这个标志由你的流式滚动逻辑使用
+        }
+    });
+
+    scrollToBottomBtn.addEventListener('click', () => {
+        messagesContainerScroll.scrollTo({
+            top: messagesContainerScroll.scrollHeight,
+            behavior: 'smooth'
+        });
+        // 点击后，按钮会因为滚动到底部而自动隐藏 (通过 scroll 事件)
+        // autoScrollEnabled = true; // 确保恢复自动滚动
+    });
+
+    // 全局的 isNearBottomMessages 函数可以这样实现（如果你的流式滚动逻辑需要它）
+    window.isNearBottomMessages = function(containerElement = messagesContainerScroll, threshold = 30) {
+        if (!containerElement) return true; // 如果容器不存在，假装在底部
+        return containerElement.scrollHeight - containerElement.clientHeight <= containerElement.scrollTop + threshold;
+    };
+
+}
     
     console.log("DEBUG DOMContentLoaded: All initializations and event bindings complete.");
 }); // DOMContentLoaded 事件监听器结束

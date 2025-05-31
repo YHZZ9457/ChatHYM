@@ -135,7 +135,7 @@
         {
           "text": "GPT-4o-mini",
           "value": "openai::gpt-4o-mini",
-          "isHidden": false
+          "isHidden": true
         }
       ]
     },

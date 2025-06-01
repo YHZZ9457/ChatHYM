@@ -15,7 +15,7 @@
           "isHidden": false
         },
         {
-          "text": "Gemini 2.5 Flash-0520",
+          "text": "Gemini 2.5 FLash-0520",
           "value": "gemini::gemini-2.5-flash-preview-05-20",
           "isHidden": false
         },
@@ -31,12 +31,12 @@
       "isGroupHidden": false,
       "options": [
         {
-          "text": "Deepseek-V3",
+          "text": "Deepseek-V3 0324",
           "value": "deepseek::deepseek-chat",
           "isHidden": false
         },
         {
-          "text": "Deepseek-R1",
+          "text": "Deepseek-R1 0528",
           "value": "deepseek::deepseek-reasoner",
           "isHidden": false
         }
@@ -52,13 +52,23 @@
           "isHidden": false
         },
         {
-          "text": "SF Qwen3-30B-A3B",
-          "value": "sf::Qwen/Qwen3-30B-A3B",
-          "isHidden": false
+          "text": "SF Deepseek-R1 0528",
+          "value": "sf::deepseek-ai/DeepSeek-R1",
+          "isHidden": true
         },
         {
           "text": "SF Qwen3-32B",
           "value": "sf::Qwen/Qwen3-32B",
+          "isHidden": false
+        },
+        {
+          "text": "SF QwQ-32B",
+          "value": "sf::Qwen/QwQ-32B",
+          "isHidden": false
+        },
+        {
+          "text": "SF Qwen3-30B-A3B",
+          "value": "sf::Qwen/Qwen3-30B-A3B",
           "isHidden": false
         },
         {
@@ -69,11 +79,6 @@
         {
           "text": "SF Qwen3-8B",
           "value": "sf::Qwen/Qwen3-8B",
-          "isHidden": false
-        },
-        {
-          "text": "SF QwQ-32B",
-          "value": "sf::Qwen/QwQ-32B",
           "isHidden": false
         },
         {
@@ -135,7 +140,7 @@
         {
           "text": "GPT-4o-mini",
           "value": "openai::gpt-4o-mini",
-          "isHidden": true
+          "isHidden": false
         }
       ]
     },
@@ -156,7 +161,7 @@
         {
           "text": "Claude 3.7 Sonnet",
           "value": "anthropic::claude-3-7-sonnet-20250219",
-          "isHidden": true
+          "isHidden": false
         },
         {
           "text": "Claude 3.5 Haiku",
@@ -231,14 +236,19 @@
           "isHidden": false
         },
         {
-          "text": "OR Mistal Nemo",
-          "value": "openrouter::mistralai/mistral-nemo",
-          "isHidden": false
-        },
-        {
           "text": "OR Qwen3-235B-A22B",
           "value": "openrouter::qwen/qwen3-235b-a22b",
           "isHidden": false
+        },
+        {
+          "text": "OR Deepseek R1 70B",
+          "value": "openrouter::deepseek/deepseek-r1-distill-llama-70b",
+          "isHidden": false
+        },
+        {
+          "text": "OR Mistal Nemo",
+          "value": "openrouter::mistralai/mistral-nemo",
+          "isHidden": true
         }
       ]
     },

@@ -57,15 +57,10 @@ Object.defineProperty(window, 'uploadedFilesData', {
   }
 });
 
-window.uploadedFilesData = []; // 通过 setter 初始化，触发第一次 WATCH log
 
 
 // --- 辅助函数 ---
 
-/* * 根据提供者名称返回其在 Local Storage 中存储 API Key 的键名。
- * @param {string} provider - API 提供者的名称 (例如 'openai', 'deepseek').
- * @returns {string|undefined} 对应的 Local Storage 键名，如果提供者未知则返回 undefined.
- */
 function storageKeyFor(provider) {
   return {
     openai: 'openai-api-key',
@@ -604,9 +599,13 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
         messageDiv.appendChild(note);
     }
 
+       // --- 创建操作按钮容器 ---
+    const actionsContainer = document.createElement('div');
+    actionsContainer.className = 'message-actions-container'; // 应用您为按钮组设计的CSS类
+
     // --- 4. 创建并配置删除单条消息的按钮 ---
     const deleteMsgBtn = document.createElement('button');
-    deleteMsgBtn.className = 'delete-message-btn';
+    deleteMsgBtn.className = 'delete-message-btn message-action-btn'; // 使用通用类
     deleteMsgBtn.textContent = '✕';
     deleteMsgBtn.title = '删除此条消息';
     deleteMsgBtn.addEventListener('click', (e) => {
@@ -619,15 +618,56 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
             console.error('无法删除消息：缺少对话ID或消息索引。Dataset:', messageWrapperDiv.dataset);
         }
     });
+    actionsContainer.appendChild(deleteMsgBtn); // 将删除按钮添加到 actionsContainer
 
-    // --- 5. 根据角色决定按钮和气泡在包裹层中的顺序 ---
-    if (role === 'user') {
-        messageWrapperDiv.appendChild(deleteMsgBtn);
-        messageWrapperDiv.appendChild(messageDiv);
-    } else { // 'assistant' or 'model'
-        messageWrapperDiv.appendChild(messageDiv);
-        messageWrapperDiv.appendChild(deleteMsgBtn);
-    }
+    // --- 创建并配置复制整条消息的按钮 ---
+    const copyMessageBtn = document.createElement('button');
+    copyMessageBtn.className = 'copy-full-message-btn message-action-btn'; // 使用通用类
+    copyMessageBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>';
+    copyMessageBtn.title = '复制消息内容';
+    copyMessageBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        let textToCopy = "";
+        const textElement = messageDiv.querySelector('.text');
+        const reasoningContentElement = messageDiv.querySelector('.reasoning-content');
+
+        if (textElement) {
+            textToCopy += textElement.innerText.trim();
+        }
+        const includeReasoningInCopy = false;
+        if (includeReasoningInCopy && reasoningContentElement && reasoningContentElement.textContent.trim()) {
+            if (textToCopy) textToCopy += "\n\n--- 思考过程 ---\n";
+            textToCopy += reasoningContentElement.textContent.trim();
+        }
+
+        if (textToCopy) {
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const originalIcon = copyMessageBtn.innerHTML;
+                copyMessageBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-clipboard-check" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M10.854 7.146a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 1 1 .708-.708L7.5 9.793l2.646-2.647a.5.5 0 0 1 .708 0z"/><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>';
+                copyMessageBtn.title = '已复制!';
+                setTimeout(() => {
+                    copyMessageBtn.innerHTML = originalIcon;
+                    copyMessageBtn.title = '复制消息内容';
+                }, 2000);
+            }).catch(err => {
+                console.error('复制消息内容失败:', err);
+                alert('复制失败，请手动复制。');
+            });
+        } else {
+            // 如果没有文本内容可复制，也给用户一个反馈
+            const originalIcon = copyMessageBtn.innerHTML;
+            copyMessageBtn.innerHTML = '空'; // 或者一个不同的图标表示空
+            copyMessageBtn.title = '无文本内容可复制';
+             setTimeout(() => {
+                copyMessageBtn.innerHTML = originalIcon;
+                copyMessageBtn.title = '复制消息内容';
+            }, 2000);
+        }
+    });
+    actionsContainer.appendChild(copyMessageBtn);
+
+    messageWrapperDiv.appendChild(messageDiv);
+    messageWrapperDiv.appendChild(actionsContainer);
 
     // --- 6. 将整个消息包裹层添加到消息容器中 ---
     if (messageDiv.hasChildNodes() || role === 'user') {
@@ -660,6 +700,79 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
     }
 
     return messageWrapperDiv;
+}
+
+function processPreBlocksForCopyButtons(containerElement) {
+    if (!containerElement || typeof marked === 'undefined') return;
+
+    const preElements = containerElement.querySelectorAll('pre');
+    preElements.forEach((pre) => {
+        // 检查是否已经有复制按钮，避免重复添加
+        if (pre.querySelector('.copy-btn')) {
+            return; // 已有按钮，跳过
+        }
+
+        pre.style.position = 'relative'; // 确保 pre 是相对定位
+
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.textContent = '复制';
+        btn.setAttribute('aria-label', '复制此代码块');
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const codeElem = pre.querySelector('code');
+            let textToCopy = "";
+
+            if (codeElem) {
+                textToCopy = codeElem.innerText;
+            } else {
+                const clone = pre.cloneNode(true);
+                const buttonInClone = clone.querySelector('.copy-btn');
+                if (buttonInClone) buttonInClone.remove();
+                textToCopy = clone.innerText;
+            }
+            textToCopy = textToCopy.trim();
+
+            if (textToCopy === "") {
+                btn.textContent = '无内容';
+                btn.disabled = true;
+                setTimeout(() => { btn.textContent = '复制'; btn.disabled = false; }, 2000);
+                return;
+            }
+
+            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+                navigator.clipboard.writeText(textToCopy).then(() => {
+                    btn.textContent = '已复制!';
+                    setTimeout(() => { btn.textContent = '复制'; }, 2000);
+                }).catch(err => {
+                    console.error('复制失败 (navigator):', err);
+                    alert('自动复制失败。');
+                });
+            } else {
+                try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = textToCopy;
+                    textarea.style.position = 'fixed';
+                    document.body.appendChild(textarea);
+                    textarea.focus();
+                    textarea.select();
+                    const successful = document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    if (successful) {
+                        btn.textContent = '已复制!';
+                        setTimeout(() => { btn.textContent = '复制'; }, 2000);
+                    } else {
+                        throw new Error('execCommand("copy") failed.');
+                    }
+                } catch (err) {
+                    console.error('复制失败 (execCommand):', err);
+                    alert('浏览器不支持自动复制。请手动复制。');
+                }
+            }
+        });
+        pre.appendChild(btn);
+    });
 }
 
 /**

@@ -293,18 +293,21 @@ button{font-family:inherit;cursor:pointer; background:transparent; border:none; 
 
 /* 单条消息的包裹层 */
 .message-wrapper {
-  display: flex;
-  align-items: flex-start; /* 头像（如果添加）和气泡顶部对齐 */
-  gap: 8px;
-  width: fit-content;
-  max-width: 85%;
+    display: flex;
+    align-items: flex-start; /* 保持：按钮和气泡顶部对齐 */
+    gap: 8px;               /* 保持：气泡和按钮组之间的间隙 */
+    width: auto;            /* 改为 auto，或者 100% 看具体情况，避免 fit-content 干扰外部按钮定位 */
+                            /* 如果父级 .messages 是 flex column, 那么这里用 auto 可能更好 */
+    max-width: 90%;         /* 或者根据需要调整，为按钮留出空间 */
+    position: relative;     /* 使得悬浮效果更稳定 */
 }
 .user-message-wrapper {
-  align-self: flex-end;
-  /* flex-direction: row-reverse; 如果有头像且头像在右 */
+    align-self: flex-end;
+    flex-direction: row-reverse; /* DOM: 气泡, 按钮组 -> 视觉: 按钮组(左), 气泡(右) */
 }
 .assistant-message-wrapper {
-  align-self: flex-start;
+    align-self: flex-start;
+    flex-direction: row; /* DOM: 气泡, 按钮组 -> 视觉: 气泡(左), 按钮组(右) */
 }
 .message { /* 消息气泡 */
   padding: 10px 14px; /* 内边距 */
@@ -315,6 +318,8 @@ button{font-family:inherit;cursor:pointer; background:transparent; border:none; 
   word-break: break-word;
   max-width: 100%;
   position: relative; /* 用于内部元素如删除按钮 */
+   flex-grow: 1; /* 允许气泡填充可用空间 (在 message-wrapper 的 flex 布局内) */
+    min-width: 0; /* 防止气泡内容过长时撑开布局，配合 flex-grow:1 和 word-break */
 }
 .message.user { /* 用户气泡颜色 */
   background-color: var(--primary);
@@ -365,7 +370,7 @@ body.dark-theme .message pre { background: rgba(255,255,255,0.08); color: #cdd3d
 .delete-message-btn:hover {
   color: #e53e3e; /* 危险红色 */
   opacity: 1;
-  background-color: rgba(229, 62, 62, 0.1); /* 红色背景的浅色版 */
+  background-color: rgba(229, 62, 62, 0.3); /* 红色背景的浅色版 */
 }
 
 /* 输入区域整体布局调整 */
@@ -805,7 +810,7 @@ body.light-theme .message.user .text a:hover { color: #fff !important; }
   visibility: visible !important;
 }
 #conversation-list li:hover .del:hover {
-  background-color: rgba(229, 62, 62, 0.1) !important; /* 红色背景浅色版 */
+  background-color: rgba(229, 62, 62, 0.3) !important; /* 红色背景浅色版 */
 }
 /* 已归档列表折叠 */
 .archived-list {
@@ -1893,4 +1898,71 @@ border: 1px solid var(--border-color);
 .token-count-note {
     font-style: italic;
     font-weight: 300; /* Light */
+}
+
+
+.message-actions-container {
+    display: flex;
+    flex-direction: column; /* 垂直堆叠按钮 */
+    gap: 1px; /* 按钮之间的垂直间距 */
+    width: 24px; /* 按钮容器的宽度，根据您的图标大小调整 */
+    align-items: center; /* 水平居中按钮（如果按钮本身比容器窄） */
+    flex-shrink: 0; /* 防止按钮容器在空间不足时被压缩 */
+    margin-top: 0;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.15s ease-in-out, visibility 0s linear 0.15s;
+}
+.message-wrapper:hover .message-actions-container {
+    visibility: visible;
+    opacity: 1;
+    transition-delay: 0s;
+}
+
+.message-action-btn { /* 用于删除和复制按钮的通用样式 */
+    background: transparent;
+    border: none;
+    color: var(--text-secondary); /* 或 var(--text-color-secondary) */
+    cursor: pointer;
+    padding: 0;
+    font-size: 15px; /* 控制图标大小 */
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;  /* 示例大小 */
+    height: 22px; /* 示例大小 */
+    border-radius: 4px;
+    margin-top: 0;
+    transition: color 0.2s, background-color 0.2s;
+}
+
+.message-action-btn:hover {
+    color: var(--text-color); /* 或 var(--text-color-primary) */
+    background-color: rgba(0,0,0,0.05); /* 轻微背景 */
+}
+body.dark-theme .message-action-btn:hover {
+    background-color: rgba(255,255,255,0.1);
+}
+.delete-message-btn:hover { /* 特殊的删除按钮hover颜色 */
+    color: #e53e3e;
+}
+
+.message-action-btn svg {
+    width: 1em; /* 图标宽度等于字体大小 */
+    height: 1em; /* 图标高度等于字体大小 */
+    vertical-align: middle; /* 如果需要微调对齐 */
+}
+
+/* 默认隐藏按钮，悬浮在整个 message-wrapper 上时显示 */
+.message-wrapper .message-actions-container {
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.15s ease-in-out, visibility 0s linear 0.15s;
+}
+
+.message-wrapper:hover .message-actions-container {
+    visibility: visible;
+    opacity: 1;
+    transition-delay: 0s;
 }

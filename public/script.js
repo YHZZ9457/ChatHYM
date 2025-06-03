@@ -2,9 +2,44 @@
 console.log("script.js parsing started");
 
 // 全局变量
-let activeModel = ''; // 存储当前加载对话时，该对话所使用的模型ID
-let conversations = []; // 存储所有对话对象的数组
-let currentConversationId = null; // 当前正在查看或操作的对话的ID
+let activeModel = '';
+let conversations = [];
+let isScrollingProgrammatically = false;
+let userHasManuallyScrolledUp = false;
+
+// 使用 IIFE 来创建明确的作用域并控制初始化顺序
+(function() {
+  let _internalCurrentConversationId = null; // 在 IIFE 内部声明
+
+  Object.defineProperty(window, 'currentConversationId', {
+    configurable: true,
+    enumerable: true,
+    get: function() {
+      // console.log('[GET currentConversationId]', _internalCurrentConversationId);
+      return _internalCurrentConversationId; // 现在通过闭包访问 IIFE 内的 _internalCurrentConversationId
+    },
+    set: function(newValue) {
+      const oldValue = _internalCurrentConversationId; // 现在通过闭包访问
+      if (oldValue !== newValue) {
+          console.groupCollapsed(`%c[SET currentConversationId] From: ${oldValue} To: ${newValue}`, "color:red; font-weight:bold;");
+          console.log('New Value:', newValue);
+          try {
+              throw new Error("Call stack for currentConversationId setter");
+          } catch (e) {
+              console.log("Set from call stack:\n" + e.stack.split('\n').slice(2, 12).join('\n'));
+          }
+          console.groupEnd();
+      }
+      _internalCurrentConversationId = newValue; // 现在通过闭包访问
+    }
+  });
+
+  // 在 Object.defineProperty 完成后，再进行初始化
+  window.currentConversationId = null; // 这将调用上面定义的 setter
+})();
+
+// 初始化
+window.currentConversationId = null; // 触发一次初始 set (可选)
 let modelConfigData = null; // 用于存储从 models.json 加载的原始模型配置
 let editableModelConfig = null; // 用于在管理界面编辑的模型配置的深拷贝
 let isModelManagementActive = false
@@ -30,6 +65,12 @@ let maxTokensInputInline = null;
 let currentMaxTokens = null; // 存储当前设置的最大Token数，可以是数字或null (表示使用API默认)
 const MAX_TOKENS_STORAGE_KEY = 'chat-max-tokens';
 const DEFAULT_MAX_TOKENS_PLACEHOLDER = 1024; // 用于 placeholder 或回退  
+let submitActionBtn = null;
+let isGeneratingResponse = false;
+let currentAbortController = null;
+//let lastMessagesScrollTop = 0;
+
+let lastScrollTop = 0; // 用于检测滚动方向
  
 window.isNearBottomMessages = window.isNearBottomMessages || function() { return true; };
 
@@ -332,7 +373,7 @@ function pruneEmptyNodes(container) {
 
 function appendMessage(role, messageContent, modelForNote, reasoningText, conversationId, messageIndex) {
     console.log(`[AppendMessage CALLED] Role: "${role}"`, "Content received:", messageContent, "ModelNote:", modelForNote, "Reasoning provided:", typeof reasoningText);
-
+    
     const emptyChatPlaceholder = document.getElementById('empty-chat-placeholder');
     if (emptyChatPlaceholder && emptyChatPlaceholder.style.display !== 'none') {
         emptyChatPlaceholder.style.display = 'none';
@@ -355,30 +396,31 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
 
     let reasoningContentElementForMathJax = null; // 用于 MathJax
 
-    // --- 1. 处理并添加思考过程的 DOM 结构 ---
-    
-    // 并且角色是助手或模型时，才创建思考过程的 DOM 结构。
-    // 只要 reasoningText 被定义 (即使是空字符串，表示需要占位符)，并且是助手/模型角色
+// --- 1. 处理并添加思考过程的 DOM 结构 ---
     if (typeof reasoningText === 'string' && (role === 'assistant' || role === 'model')) {
         const reasoningBlockDiv = document.createElement('div');
         reasoningBlockDiv.className = 'reasoning-block';
 
-        if (reasoningText.trim() === '') {
-        reasoningBlockDiv.classList.add('reasoning-block-empty');
+        // 首先创建并添加标签 (label)
+        const label = document.createElement('div');
+        label.className = 'reasoning-label';
+        label.textContent = '思考过程:';
+        reasoningBlockDiv.appendChild(label);
+
+        // 然后创建并添加内容区 (content)
+        reasoningContentElementForMathJax = document.createElement('div');
+        reasoningContentElementForMathJax.className = 'reasoning-content';
+        reasoningContentElementForMathJax.textContent = reasoningText; // 直接用传入的 reasoningText 填充
+        reasoningBlockDiv.appendChild(reasoningContentElementForMathJax);
+
+        // 如果内容为空，添加 'empty' 类
+        if (!reasoningText || reasoningText.trim() === '') {
+            reasoningBlockDiv.classList.add('reasoning-block-empty');
+        }
+
+        // 将整个 reasoningBlockDiv 添加到 messageDiv
+        messageDiv.appendChild(reasoningBlockDiv);
     }
-
-    const label = document.createElement('div');
-    label.className = 'reasoning-label';
-    label.textContent = '思考过程:';
-    reasoningBlockDiv.appendChild(label);
-
-    reasoningContentElementForMathJax = document.createElement('div');
-    reasoningContentElementForMathJax.className = 'reasoning-content';
-    reasoningContentElementForMathJax.textContent = reasoningText;
-    reasoningBlockDiv.appendChild(reasoningContentElementForMathJax);
-
-    messageDiv.appendChild(reasoningBlockDiv);
-}
 
 
 // --- 2. 处理主要内容 (文本和文件信息) ---
@@ -471,6 +513,7 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
     // --- 创建并填充 .text div ---
     const contentDiv = document.createElement('div');
     contentDiv.className = 'text';
+    contentDiv.innerHTML = (typeof marked !== 'undefined' && markdownInput) ? marked.parse(markdownInput) : (markdownInput || ""); // 如果 markdownInput 为空，则 innerHTML 为 ""
 
     // 只有当 markdownInput (trim后) 非空，或者它是助手消息的占位符时，才进行 Markdown 解析
     // 或者如果已经有思考过程块了，也确保 .text div 被添加到 DOM（即使为空）
@@ -698,7 +741,7 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
             MathJax.typesetPromise(elementsToTypeset).catch(err => console.error("MathJax typesetting failed:", err));
         }
     }
-
+    
     return messageWrapperDiv;
 }
 
@@ -775,21 +818,26 @@ function processPreBlocksForCopyButtons(containerElement) {
     });
 }
 
-/**
- * 在消息容器中追加一个“加载中”的提示（例如“对方正在输入…”）。
- * @returns {HTMLElement} 创建的加载提示元素。
- */
 function appendLoading() {
   const container = document.getElementById('messages');
-  const div = document.createElement('div');
-  div.className = 'message assistant loading'; // 使用助手样式并添加 'loading' 类
-  const span = document.createElement('div');
-  span.className = 'text';
-  span.textContent = '对方正在输入…';
-  div.appendChild(span);
-  container.appendChild(div);
-  container.scrollTop = container.scrollHeight; // 滚动到底部
-  return div;
+  console.log("[AppendMessage] #messages container:", container);
+
+  if (!container) {
+      console.error("appendLoading: Message container '#messages' not found.");
+      return null;
+  }
+  const loadingWrapper = document.createElement('div');
+  loadingWrapper.className = 'message assistant loading'; // 应用目标样式类
+
+  const textElement = document.createElement('span'); // 使用 span 更语义化，且默认无块级样式
+  textElement.textContent = '对方正在输入…';
+  // 不要给这个 textElement 添加 'text' 类，除非你明确知道 .text 类不包含垂直间距样式
+  // 或者，如果你必须用 div.text，请确保下面的CSS中 .message.assistant.loading > .text 的规则足够强
+
+  loadingWrapper.appendChild(textElement);
+  container.appendChild(loadingWrapper);
+  container.scrollTop = container.scrollHeight;
+  return loadingWrapper;
 }
 
 /**
@@ -1546,51 +1594,67 @@ if (provider === 'ollama') {
 }
 
 async function send() {
-
-  let apiUrl;
+    // --- 1. 初始变量声明 ---
+    let apiUrl;
     const headers = { 'Content-Type': 'application/json' };
-    let bodyPayload = {};    
-    let finalAssistantReply = '（无回复）';
-    let finalThinkingProcess = null;
-    let requestWasSuccessful = false;
-    let response = null;
+    let bodyPayload = {};
+    let finalAssistantReply = '（无回复）'; // Default, potentially overwritten in finally
+    let finalThinkingProcess = null;    // Default, potentially overwritten in finally
+    let requestWasSuccessful = false;   // HTTP level success
+    let streamContentReceived = false;  // Flag if any meaningful content came through the stream
+    let isActuallyStreaming = false;    // If the response IS a stream
     let responseContentType = null;
-    let isStreamingResponse = false; 
-    let isActuallyStreaming = false;
-    let isCurrentlyInThinkingBlock = false;
-    let shouldUseStreaming = false; 
-    let usageFromAPI = null;
+    let shouldUseStreaming = false;     // If we EXPECT to use streaming
+    let loadingDiv = null;              // For appendLoading() element
+    let tempMsgElementWrapper = null;   // UI placeholder for streaming message
+    let messageDiv = null;              // .message.assistant element within placeholder
+    let assistantTextElement = null;    // .text element for main reply
+    let reasoningBlockDiv = null;       // .reasoning-block element
+    let reasoningContentElement = null; // .reasoning-content element
 
-    let currentMaxTokens = parseInt(localStorage.getItem('chat-max-tokens'));
-    if (isNaN(currentMaxTokens) || currentMaxTokens < 1) {
-        currentMaxTokens = null; // 表示没有从 localStorage 读取到有效值
-        console.log("[Send] 'chat-max-tokens' not found in localStorage or invalid. currentMaxTokens is null.");
-    } else {
-        console.log(`[Send] Loaded currentMaxTokens from localStorage: ${currentMaxTokens}`);
+    console.log("%c--- send() CALLED ---", "color:dodgerblue; font-size:14px; font-weight:bold;");
+
+    // --- 2. 获取用户输入和文件 ---
+    const promptInput = document.getElementById('prompt');
+    if (!promptInput) {
+        alert("发生内部错误：找不到输入框。");
+        console.error("[Send] CRITICAL: Prompt input element 'prompt' not found. Aborting.");
+        return;
     }
-    console.log("================ DEBUG: send() function initiated ================");
-    console.log("[Send Pre-Check] Initial _internalUploadedFilesData:", JSON.parse(JSON.stringify(_internalUploadedFilesData)));
-    console.log("[Send Pre-Check] Initial window.uploadedFilesData (getter):", JSON.parse(JSON.stringify(window.uploadedFilesData)));
-    console.log("[Send Pre-Check] Initial currentQwenThinkMode (global):", currentQwenThinkMode);
+    const promptText = promptInput.value.replace(/\n$/, '');
+    const filesToActuallySend = window.uploadedFilesData ? [...window.uploadedFilesData] : [];
 
-    // --- 步骤1: 捕获发起请求时的对话信息 ---
+    // --- 3. 输入有效性检查 ---
+    if (!promptText.trim() && filesToActuallySend.length === 0) {
+        alert("请输入问题或上传文件后再发送。");
+        console.log("[Send] Alert: No text or files to send. Aborting.");
+        return;
+    }
+
+    // --- 4. 检查是否已在生成中 ---
+    if (window.isGeneratingResponse) {
+        alert("请等待上一个回复生成完毕。");
+        console.log("[Send] Attempted to send while a request is already in progress. Aborting.");
+        return;
+    }
+
+    // --- 5. 获取对话和模型信息 ---
     const conversationAtRequestTime = getCurrentConversation();
     if (!conversationAtRequestTime) {
         alert("错误：无法获取当前对话。请先选择或创建一个对话。");
-        console.error("[send] CRITICAL: conversationAtRequestTime is null or undefined. Aborting.");
+        console.error("[Send] CRITICAL: conversationAtRequestTime is null. Aborting.");
+        return;
+    }
+    const modelValueFromOption = conversationAtRequestTime.model;
+    if (!modelValueFromOption) {
+        alert("错误：当前对话没有指定模型。");
+        console.error("[Send] CRITICAL: modelValueFromOption is null for current conversation. Aborting.");
         return;
     }
     const conversationIdAtRequestTime = conversationAtRequestTime.id;
-    const modelValueFromOption = conversationAtRequestTime.model;
+    console.log(`[Send INTERNAL CHECK] At send start: conversationIdAtRequestTime is ${conversationIdAtRequestTime}. window.currentConversationId is currently ${window.currentConversationId}`);
 
-    if (!modelValueFromOption) {
-        alert("错误：当前对话没有指定模型。请检查对话数据。");
-        console.error("[send] CRITICAL: modelValueFromOption is null or undefined for current conversation:", conversationIdAtRequestTime, "Aborting.");
-        return;
-    }
-    console.log(`[Send] Current Conversation ID: ${conversationIdAtRequestTime}, Model from option: ${modelValueFromOption}`);
-
-    // --- 2. 解析提供商和模型名称 ---
+    // --- 6. 解析提供商和模型名称 ---
     let actualProvider;
     let modelNameForAPI;
     const parts = String(modelValueFromOption).split('::');
@@ -1607,1030 +1671,797 @@ async function send() {
             case 'suanlema': actualProvider = 'suanlema'; break;
             case 'openrouter': actualProvider = 'openrouter'; break;
             default:
-                console.error(`[send] 未知的模型前缀: "${prefix}" 在模型值 "${modelValueFromOption}" 中。 Aborting.`);
                 alert(`模型 "${modelValueFromOption}" 配置错误：无法识别的提供商前缀 "${prefix}"。`);
+                console.error(`[Send] Unknown provider prefix: "${prefix}" for model "${modelValueFromOption}". Aborting.`);
                 return;
         }
     } else {
-        console.error(`[send] 模型值 "${modelValueFromOption}" 格式不正确，缺少提供商前缀。 Aborting.`);
-        alert(`模型 "${modelValueFromOption}" 配置错误：缺少提供商前缀。`);
+        alert(`模型 "${modelValueFromOption}" 配置错误：格式不正确。`);
+        console.error(`[Send] Invalid model format: "${modelValueFromOption}". Aborting.`);
         return;
     }
     const providerToUse = actualProvider;
-    console.log(`[Send] Determined Provider: ${providerToUse}, Model for API: ${modelNameForAPI}`);
 
-    // --- 3. 获取用户输入的原始 promptText ---
-    const promptInput = document.getElementById('prompt');
-    if (!promptInput) {
-        console.error("[send] CRITICAL: Prompt input element with ID 'prompt' not found. Aborting.");
-        alert("发生内部错误：找不到输入框。");
-        return;
-    }
-    const promptText = promptInput.value.replace(/\n$/, ''); // 用户在输入框输入的原始文本
+    // --- ★★★ 正式开始“生成”流程，改变状态 ★★★ ---
+    window.isGeneratingResponse = true;
+    updateSubmitButtonState(true);
+    if (promptInput) promptInput.disabled = true;
 
-    // --- 4. 获取已上传文件 (拷贝一份) ---
-    const filesToActuallySend = window.uploadedFilesData ? [...window.uploadedFilesData] : [];
-    console.log("[Send] Files to actually send (copied from window.uploadedFilesData):", JSON.parse(JSON.stringify(filesToActuallySend)));
-    console.log("[Send] window.uploadedFilesData state (AFTER COPY, BEFORE any potential clear in finally):", JSON.parse(JSON.stringify(window.uploadedFilesData)));
+    window.currentAbortController = new AbortController();
+    const signal = window.currentAbortController.signal;
 
+    console.log("================ DEBUG: send() function initiated (post-checks) ================");
+    console.log(`[Send Params] ConvID: ${conversationIdAtRequestTime}, ModelOpt: ${modelValueFromOption}, Provider: ${providerToUse}, APIModel: ${modelNameForAPI}`);
+    console.log("[Send Files] Files to send count:", filesToActuallySend.length, filesToActuallySend.map(f => f.name));
+    console.log("[Send State] QwenThinkMode (global):", window.currentQwenThinkMode);
 
-    // --- 5. 检查是否有有效输入 (原始文本或文件) ---
-    if (!promptText.trim() && filesToActuallySend.length === 0) {
-        alert("请输入问题或上传文件后再发送。");
-        console.log("[Send] Alert: No text or files to send. Aborting.");
-        return;
-    }
-
-    let processedPromptText = promptText.trim();
-    let displayMessageForUI = promptText.trim();
-    // --- 6. 预处理 promptText (为Qwen模型附加 /think 或 /no_think 指令) ---
-    //    这个 processedPromptTextForAPI 将用于存储到历史记录和传递给消息映射函数
-     let processedPromptTextForAPI = promptText.trim();
-   // const modelIdentifier = modelValueFromOption.toLowerCase(); // 使用 modelValueFromOption 进行判断
-
-
-    let isQwen3FamilyModel = false; // 默认不是 Qwen3 系列
-if (typeof modelNameForAPI === 'string') { // 先确保 modelNameForAPI 是字符串
-    const modelNameLower = modelNameForAPI.toLowerCase();
-    // 使用我们根据你的 models.json 确定的精确匹配逻辑
-    if (
-        modelNameLower.startsWith('qwen3') ||        // Catches "qwen3:...", "Qwen3-..." from ollama, suanlema
-        modelNameLower.startsWith('qwen/qwen3') ||   // Catches "Qwen/Qwen3-..." from sf
-        modelNameLower.startsWith('free:qwen3')      // Catches "suanlema::free:Qwen3-..."
-    ) {
-        isQwen3FamilyModel = true;
-    }
-}
-
-// --- 根据 isQwen3FamilyModel 来决定是否附加 /think 或 /no_think ---
-if (isQwen3FamilyModel) { // 只有当检测到是 Qwen3 家族模型时才应用开关状态 
-    console.log(`[Send] Qwen3-family model detected (${modelValueFromOption}). currentQwenThinkMode state is: ${currentQwenThinkMode}`);
-    if (currentQwenThinkMode === true) { // currentQwenThinkMode 是由开关控制的全局变量
-        processedPromptTextForAPI += " /think";
-    } else {
-        processedPromptTextForAPI += " /no_think";
-    }
-    console.log(`[Send] Qwen3-family: Final processedPromptTextForAPI for history/mapping: "${processedPromptTextForAPI}"`);
-} else {
-    // 如果不是 Qwen3 家族模型，则不处理 currentQwenThinkMode，processedPromptTextForAPI 保持不变
-    // 你可以在这里加一个日志，如果需要的话：
-    // console.log(`[Send] Non-Qwen3 family model (${modelValueFromOption}). Qwen think mode switch state is ignored.`);
-}
-
-    // --- 7. 构建用于存储到 conversation.messages 的 userMessageContentForHistory ---
-    let userMessageContentForHistory;
-    if (filesToActuallySend.length > 0) {
-        userMessageContentForHistory = {
-            text: processedPromptTextForAPI, // ★★★ 使用包含指令的文本 ★★★
-            files: filesToActuallySend.map(f => ({ name: f.name, type: f.type })) // 文件元数据
-        };
-    } else {
-        userMessageContentForHistory = processedPromptTextForAPI; // ★★★ 使用包含指令的文本 ★★★
-    }
-    console.log("[Send] userMessageContentForHistory (to be pushed to conversation.messages):", JSON.parse(JSON.stringify(userMessageContentForHistory)));
-
-
-    // --- 8. 构建用于立即在UI上显示的 displayMessageForUI ---
-    //    这个通常不应该包含内部指令如 /think。
-    
-    if (filesToActuallySend.length > 0) {
-        const fileNames = filesToActuallySend.map(f => f.name).join(', ');
-        displayMessageForUI = (promptText.trim() ? `${promptText.trim()}\n[已附带文件: ${fileNames}]` : `[已发送文件: ${fileNames}]`);
-
-        // ★★★ 如果你希望点击发送后立即清除预览，这是执行的地方 ★★★
-        console.log("[Send] Clearing uploaded files data and re-rendering preview (because files were present and processed for send).");
-        window.uploadedFilesData = []; // 清空全局状态
-        if (typeof renderFilePreview === 'function') {
-            renderFilePreview(); // 更新UI
+    // --- 预处理 promptText, 构建 UI 消息和历史消息 ---
+    let processedPromptTextForAPI = promptText.trim();
+    let isQwen3FamilyModel = false;
+    if (typeof modelNameForAPI === 'string') {
+        const modelNameLower = modelNameForAPI.toLowerCase();
+        if (modelNameLower.startsWith('qwen3') || modelNameLower.startsWith('qwen/qwen3') || modelNameLower.startsWith('free:qwen3')) {
+            isQwen3FamilyModel = true;
         }
     }
-    console.log("[Send] displayMessageForUI (for appending to chat UI):", displayMessageForUI);
-
-
-    // --- 9. 将用户消息添加到UI (使用不含指令的文本) ---
-    if (currentConversationId === conversationIdAtRequestTime) {
-        if (typeof appendMessage === 'function') {
-            appendMessage('user', displayMessageForUI, null, undefined); // reasoningText 为 undefined
-        } else { console.error("[send] appendMessage function is not defined when trying to append user message."); }
+    if (isQwen3FamilyModel) {
+        if (window.currentQwenThinkMode === true) processedPromptTextForAPI += " /think";
+        else processedPromptTextForAPI += " /no_think";
     }
 
-    // --- 10. 将包含指令的用户消息内容添加到实际的对话历史数据中 ---
+    let displayMessageForUI = promptText.trim();
+    if (isQwen3FamilyModel) displayMessageForUI = displayMessageForUI.replace(/\s*\/(think|no_think)$/, '');
+
+    let userMessageContentForHistory;
+    if (filesToActuallySend.length > 0) {
+        const fileNames = filesToActuallySend.map(f => f.name).join(', ');
+        displayMessageForUI = (displayMessageForUI ? `${displayMessageForUI}\n[已附带文件: ${fileNames}]` : `[已发送文件: ${fileNames}]`);
+        userMessageContentForHistory = { text: processedPromptTextForAPI, files: filesToActuallySend.map(f => ({ name: f.name, type: f.type })) };
+    } else {
+        userMessageContentForHistory = processedPromptTextForAPI;
+    }
+
+    // --- 用户消息添加到UI和数据模型 ---
+    if (window.currentConversationId === conversationIdAtRequestTime) {
+        console.log("[Send] Appending USER message to UI for active original conversation.");
+        appendMessage('user', displayMessageForUI, null, undefined, conversationIdAtRequestTime, conversationAtRequestTime.messages.length);
+    } else {
+        console.log("[Send] User message for a non-active conversation. Appending to data model only, UI will update on load.");
+    }
     conversationAtRequestTime.messages.push({
         role: 'user',
-        content: userMessageContentForHistory, // 这个 content 对象或字符串将被 mapMessages... 函数使用
+        content: userMessageContentForHistory,
         model: modelValueFromOption
     });
-    // 打印确认，确保 mapMessages... 函数能拿到正确的数据
-    if (conversationAtRequestTime.messages.length > 0) {
-        console.log("[Send] Last user message in conversationAtRequestTime.messages (this is input for mappers):",
-                    JSON.parse(JSON.stringify(conversationAtRequestTime.messages[conversationAtRequestTime.messages.length - 1])));
-    }
 
-    // --- 11. 后续操作：清空输入框，保存对话，显示loading等 ---
-    if (promptInput) { // 再次确认 promptInput 存在
+    // --- 清理输入框并显示加载提示 ---
+    if (promptInput) {
         promptInput.value = '';
-        if (promptInput.style.height !== (promptInput.style.minHeight || '42px')) {
-            const initialTextareaHeight = promptInput.style.minHeight || '42px';
-            promptInput.style.height = initialTextareaHeight;
+        if (typeof autoGrowTextarea === 'function') autoGrowTextarea(promptInput);
+        else {
+            const initialMinHeight = parseInt(window.getComputedStyle(promptInput).minHeight, 10) || 42;
+            promptInput.style.height = `${initialMinHeight}px`;
             promptInput.style.overflowY = 'hidden';
         }
     }
-    if (typeof saveConversations === 'function') saveConversations();
-    const loadingDiv = typeof appendLoading === 'function' ? appendLoading() : null;
 
-    
-    
+    if (window.currentConversationId === conversationIdAtRequestTime) {
+        console.log("[Send] Attempting to append LOADING indicator for conversation:", conversationIdAtRequestTime);
+        loadingDiv = appendLoading();
+        if (loadingDiv) console.log("[Send] Loading indicator appended.");
+        else console.warn("[Send] appendLoading() did not return a valid element for loading indicator.");
+    }
 
-
-    /**
- * 将对话历史和当前上传的文件映射为标准或Claude API的消息格式。
- * @param {Array<Object>} messagesHistory - 对话历史消息数组。
- * @param {string} provider - 当前的API提供商 ('openai', 'anthropic', 'deepseek', 'siliconflow', 'ollama').
- * @param {Array<Object>} currentFilesData - 当前上传的文件数据数组 (包含 name, type, base64).
- * @returns {Array<Object>} 格式化后的消息数组。
- */
-
-
-/**
- * 将对话历史和当前上传的文件映射为 Gemini API 的消息格式。
- * @param {Array<Object>} messagesHistory - 对话历史消息数组。
- * @param {Array<Object>} currentFilesData - 当前上传的文件数据数组 (包含 name, type, base64).
- * @returns {Array<Object>} 格式化后的 contents 数组 for Gemini.
- */
-
+    // --- 累积流式响应的变量 和 助手UI元素引用 (提前声明) ---
+    let accumulatedAssistantReply = "";
+    let accumulatedThinkingForDisplay = "";
+    const assistantRoleForDisplay = (providerToUse === 'gemini') ? 'model' : 'assistant';
+    window.isCurrentlyInThinkingBlock = false;
 
     try {
         let currentTemperature = parseFloat(localStorage.getItem('model-temperature'));
-        if (isNaN(currentTemperature) || currentTemperature < 0 || currentTemperature > 2) {
-            currentTemperature = 0.7;
-        }
-        shouldUseStreaming = ['openai', 'anthropic', 'deepseek', 'siliconflow', 'ollama', 'suanlema', 'openrouter'].includes(providerToUse);
+        if (isNaN(currentTemperature) || currentTemperature < 0 || currentTemperature > 2) currentTemperature = 0.7;
+        let currentMaxTokensSetting = parseInt(localStorage.getItem(MAX_TOKENS_STORAGE_KEY), 10);
+        if (isNaN(currentMaxTokensSetting) || currentMaxTokensSetting < 1) currentMaxTokensSetting = null;
 
+        shouldUseStreaming = ['openai', 'anthropic', 'deepseek', 'siliconflow', 'ollama', 'suanlema', 'openrouter', 'gemini'].includes(providerToUse);
         bodyPayload.model = modelNameForAPI;
-        if (providerToUse !== 'gemini') bodyPayload.temperature = currentTemperature;
-        if (shouldUseStreaming && providerToUse !== 'gemini') bodyPayload.stream = true;
-           if (providerToUse === 'anthropic') {
-            if (currentMaxTokens !== null && typeof currentMaxTokens === 'number' && currentMaxTokens >= 1) {
-                bodyPayload.max_tokens = currentMaxTokens;
-                console.log(`[Send Anthropic] Using max_tokens from localStorage: ${currentMaxTokens}`);
-            } else {
-                bodyPayload.max_tokens = 4096; // Anthropic 特有的默认值
-                console.log(`[Send Anthropic] No valid max_tokens from localStorage, using default for Anthropic: 4096`);
-            }
-        } else if (currentMaxTokens !== null && typeof currentMaxTokens === 'number' && currentMaxTokens >= 1) {
-            // 针对其他支持 max_tokens 的 provider (非 Anthropic)
-            if (providerToUse === 'openai' ||
-                providerToUse === 'ollama' ||
-                providerToUse === 'deepseek' ||
-                providerToUse === 'siliconflow' ||
-                providerToUse === 'suanlema') {
-                bodyPayload.max_tokens = currentMaxTokens;
-                console.log(`[Send ${providerToUse}] Using max_tokens from localStorage: ${currentMaxTokens}`);
-            }
-        } else {
-            console.log(`[Send ${providerToUse}] No valid max_tokens from localStorage, API will use its default (for non-Anthropic).`);
-        }
 
-        if (providerToUse === 'ollama') {
-            apiUrl = 'http://localhost:11434/api/chat';
-            const ollamaSettings = JSON.parse(localStorage.getItem('ollama-settings') || '{}');
-            if (ollamaSettings && ollamaSettings.apiUrl && ollamaSettings.apiUrl.trim()) apiUrl = ollamaSettings.apiUrl.trim();
-            
-            bodyPayload.messages = typeof mapMessagesForStandardOrClaude === 'function' ?
-                                   mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, 'ollama', filesToActuallySend) :
-                                   [{role: 'user', content: [{type: 'text', text: promptText || ' '}]}]; // filesToActuallySend 用于构建消息
-            bodyPayload.options = { temperature: currentTemperature };
-            if (filesToActuallySend.length > 0) {
-                const imageBase64Array = filesToActuallySend
-                    .filter(f => f.type && f.type.startsWith('image/'))
-                    .map(f => f.base64 ? f.base64.split(',')[1] : null).filter(Boolean);
-                if (imageBase64Array.length > 0) bodyPayload.images = imageBase64Array;
-            }
-            const systemMessageObj = conversationAtRequestTime.messages.find(m => m.role === 'system');
-            if (systemMessageObj && typeof systemMessageObj.content === 'string' && systemMessageObj.content.trim()) {
-               bodyPayload.system = systemMessageObj.content.trim();
-            } else if (systemMessageObj && systemMessageObj.content && typeof systemMessageObj.content === 'object' && systemMessageObj.content.text) {
-               bodyPayload.system = systemMessageObj.content.text.trim();
-            }
-        }  else if (providerToUse === 'openrouter') { // 新增 else if 分支
-    apiUrl = `/.netlify/functions/openrouter-proxy`; // 你的代理函数路径
-    bodyPayload.model = modelNameForAPI; // modelNameForAPI 就是 "openai/gpt-3.5-turbo" 等
-    bodyPayload.messages = typeof mapMessagesForStandardOrClaude === 'function' ?
-                           mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, 'openai', filesToActuallySend) : // OpenRouter 兼容 OpenAI 格式，所以可以用 'openai' 作为映射目标
-                           [{role: 'user', content: promptText || ' '}]; // 简化回退
-
-    // 设置通用参数
-    if (shouldUseStreaming) { // 这个条件应该为 true
-        bodyPayload.stream = true;
-        console.log(`[Send OpenRouter] Setting bodyPayload.stream = true because shouldUseStreaming is true.`);
-    } else {
-        // 如果不期望流式，可以显式设置 false 或不设置 (OpenRouter 默认为 false)
-        // bodyPayload.stream = false;
-        console.log(`[Send OpenRouter] shouldUseStreaming is false, stream parameter will not be set to true.`);
-    }
-    if (currentTemperature !== undefined) bodyPayload.temperature = currentTemperature; // 确保 currentTemperature 已定义
-    if (currentMaxTokens !== null && typeof currentMaxTokens === 'number' && currentMaxTokens >= 1) {
-        bodyPayload.max_tokens = currentMaxTokens;
-    }
-    // OpenRouter 可能不需要像 Anthropic 那样有特定的默认 max_tokens，它会遵循模型自己的默认值
-
-} else {
-            apiUrl = `/.netlify/functions/${providerToUse}-proxy`;
-            bodyPayload.messages = typeof mapMessagesForStandardOrClaude === 'function' ?
-                                   mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, providerToUse, filesToActuallySend) : // filesToActuallySend 用于构建消息
-                                   [{role: 'user', content: [{type: 'text', text: promptText || ' '}]}];
-            if (providerToUse === 'anthropic') bodyPayload.max_tokens = 4096;
-        }    if (providerToUse === 'suanlema') { // ★★★ 使用 'suanlema' (actualProvider的值) ★★★
-        apiUrl = `/.netlify/functions/suanlema-proxy`; // ★★★ 你的 suanlema 代理函数路径 ★★★
-    }
-        
-
-        let noMessagesToSend = false;
-        // isActuallyStreaming 判断的是 *实际收到的* 响应是否为流
-       
         if (providerToUse === 'gemini') {
-            noMessagesToSend = (!bodyPayload.contents || bodyPayload.contents.length === 0 || bodyPayload.contents.every(c => !c.parts || c.parts.length === 0));
-        } else {
-            noMessagesToSend = (!bodyPayload.messages || bodyPayload.messages.length === 0 || bodyPayload.messages.every(m => !m.content || m.content.length === 0));
+            apiUrl = `/.netlify/functions/gemini-proxy`;
+            bodyPayload.contents = mapMessagesForGemini(conversationAtRequestTime.messages, filesToActuallySend);
+            const generationConfig = { temperature: currentTemperature };
+            if (currentMaxTokensSetting) generationConfig.maxOutputTokens = currentMaxTokensSetting;
+            bodyPayload.generationConfig = generationConfig;
+            const systemMsg = conversationAtRequestTime.messages.find(m => m.role === 'system');
+            if (systemMsg && systemMsg.content) bodyPayload.system_instruction = { role: "system", parts: [{text: String(systemMsg.content)}] };
+            delete bodyPayload.messages; delete bodyPayload.stream; delete bodyPayload.temperature; delete bodyPayload.max_tokens;
+        } else if (providerToUse === 'ollama') {
+            const ollamaSettings = JSON.parse(localStorage.getItem('ollama-settings') || '{}');
+            apiUrl = (ollamaSettings && ollamaSettings.apiUrl && ollamaSettings.apiUrl.trim()) ? ollamaSettings.apiUrl.trim() : 'http://localhost:11434/api/chat';
+            bodyPayload.messages = mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, 'ollama', filesToActuallySend);
+            const imageBase64Array = filesToActuallySend.filter(f => f.type?.startsWith('image/') && f.base64).map(f => f.base64.split(',')[1]);
+            if (imageBase64Array.length > 0) {
+                 const lastUserMsgIndex = bodyPayload.messages.map(m => m.role).lastIndexOf('user');
+                 if (lastUserMsgIndex !== -1) {
+                    if (!bodyPayload.messages[lastUserMsgIndex].images) bodyPayload.messages[lastUserMsgIndex].images = [];
+                    bodyPayload.messages[lastUserMsgIndex].images.push(...imageBase64Array);
+                 }
+            }
+            bodyPayload.options = { temperature: currentTemperature };
+            if (currentMaxTokensSetting) bodyPayload.options.num_predict = currentMaxTokensSetting;
+            if (shouldUseStreaming) bodyPayload.stream = true;
+            const systemMsg = conversationAtRequestTime.messages.find(m => m.role === 'system');
+            if (systemMsg && systemMsg.content) bodyPayload.system = String(systemMsg.content).trim();
+            delete bodyPayload.temperature; delete bodyPayload.max_tokens; delete bodyPayload.contents; delete bodyPayload.generationConfig; delete bodyPayload.system_instruction;
+        } else if (providerToUse === 'openrouter' || providerToUse === 'suanlema') {
+            apiUrl = `/.netlify/functions/${providerToUse}-proxy`;
+            bodyPayload.messages = mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, 'openai', filesToActuallySend);
+            if (shouldUseStreaming) bodyPayload.stream = true;
+            bodyPayload.temperature = currentTemperature;
+            if (currentMaxTokensSetting) bodyPayload.max_tokens = currentMaxTokensSetting;
+            delete bodyPayload.contents; delete bodyPayload.generationConfig; delete bodyPayload.options; delete bodyPayload.images; delete bodyPayload.system_instruction;
+        } else { // OpenAI, Deepseek, Anthropic, SiliconFlow
+            apiUrl = `/.netlify/functions/${providerToUse}-proxy`;
+            bodyPayload.messages = mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, providerToUse, filesToActuallySend);
+            if (shouldUseStreaming) bodyPayload.stream = true;
+            bodyPayload.temperature = currentTemperature;
+            if (providerToUse === 'anthropic') {
+                bodyPayload.max_tokens = currentMaxTokensSetting || 4096;
+                const systemMsg = conversationAtRequestTime.messages.find(m => m.role === 'system');
+                if (systemMsg && systemMsg.content) bodyPayload.system = String(systemMsg.content);
+            } else {
+                if (currentMaxTokensSetting) bodyPayload.max_tokens = currentMaxTokensSetting;
+            }
+            delete bodyPayload.contents; delete bodyPayload.generationConfig; delete bodyPayload.options; delete bodyPayload.images; delete bodyPayload.system_instruction;
         }
-        // 如果没有文本消息，并且也没有文件要发送（filesToActuallySend 为空），则不发送
-        if (noMessagesToSend && filesToActuallySend.length === 0) {
-            if (loadingDiv) loadingDiv.remove();
-            alert("无法构建有效的请求内容。请检查输入或文件。");
-            return;
-        }
-        console.log(`DEBUG: bodyPayload being sent for provider "${providerToUse}" to URL "${apiUrl}". Payload:`, JSON.stringify(bodyPayload, null, 2));
-        const response = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(bodyPayload) });
+
+        console.log(`[Send] Request URL: ${apiUrl}`);
+
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(bodyPayload),
+            signal: signal
+        });
+
         responseContentType = response.headers.get('content-type');
-        // isStreamingResponse 现在是最初的期望
-        isStreamingResponse = shouldUseStreaming && response.body &&
-                             (responseContentType?.includes('text/event-stream') ||
-                             (providerToUse === 'ollama' && responseContentType?.includes('application/x-ndjson')));
-       isActuallyStreaming = shouldUseStreaming && response.body &&
-                                 ((providerToUse !== 'ollama' && responseContentType?.includes('text/event-stream')) ||
-                                 (providerToUse === 'ollama' && responseContentType?.includes('application/x-ndjson')));
+        isActuallyStreaming = shouldUseStreaming && response.body &&
+            ((providerToUse !== 'ollama' && responseContentType?.includes('text/event-stream')) ||
+             (providerToUse === 'ollama' && responseContentType?.includes('application/x-ndjson')) ||
+             (providerToUse === 'gemini' && responseContentType?.includes('application/json')));
+
         if (!response.ok) {
-            const errorText = await response.text(); let detail = errorText;
-            try { const errJson = JSON.parse(errorText); detail = errJson.error?.message || errJson.error || JSON.stringify(errJson, null, 2);
-                if (providerToUse === 'ollama' && errJson.error && typeof errJson.error === 'string') detail = `Ollama Error: ${errJson.error}`;
-            } catch (e) { /* no-op */ }
-            let rawError = `API 请求失败 (${response.status})：${detail}`;
-            if (response.status >= 400 && apiUrl.includes('/.netlify/functions/')) rawError = `代理函数 (${decodeURIComponent(apiUrl.split('/').pop())}) 调用失败 (${response.status})：${detail}。`;
-            else if (providerToUse === 'ollama' && response.status !== 200) rawError = `Ollama API 调用失败 (${response.status})：${detail}。请确保 Ollama 服务运行且模型 '${modelNameForAPI}' 已下载。`;
-            throw new Error(rawError);
+            const errorText = await response.text();
+            let detail = errorText;
+            try { const errJson = JSON.parse(errorText); detail = errJson.error?.message || errJson.error?.type || errJson.error || errJson.message || JSON.stringify(errJson); } catch(e){}
+            console.error(`[Send] API Error Response (${response.status}) from ${providerToUse}:`, detail);
+            throw new Error(`API请求失败 (${response.status}) for ${providerToUse}: ${detail.substring(0,200)}`);
         }
 
         // --- 响应处理 ---
-        
-        
-       if (isActuallyStreaming) {
-            let accumulatedAssistantReply = "";
-            let accumulatedThinkingForDisplay = "";
-            let isCurrentlyInThinkingBlock = false; // 用于 extractThinkingAndReply (主要针对非Deepseek的<think>标签)
-            const assistantRoleForDisplay = (providerToUse === 'gemini') ? 'model' : 'assistant';
-            let tempMsgElementWrapper = null;
-            let messageDiv = null;
-            let assistantTextElement = null;
-            let reasoningBlockDiv = null;
-            let reasoningContentElement = null;
+        if (isActuallyStreaming) {
+            console.log("[Send] Response IS streaming. Content-Type:", responseContentType);
+            // Remove loadingDiv if it was for the active original conversation
+            if (loadingDiv && loadingDiv.parentNode && window.currentConversationId === conversationIdAtRequestTime) {
+                loadingDiv.remove();
+                loadingDiv = null;
+            } else if (loadingDiv && loadingDiv.parentNode && window.currentConversationId !== conversationIdAtRequestTime) {
+                // If conversation changed, but loadingDiv was for original conv, remove it too.
+                loadingDiv.remove();
+                loadingDiv = null;
+            }
 
-            // 初始化UI元素，为流式输出做准备
-            if (currentConversationId === conversationIdAtRequestTime) {
-                // 假设所有流式提供商如果支持思考，都需要一个占位符
-                const initialReasoningText = shouldUseStreaming ? "" : undefined; 
+            // ALWAYS create the message structure for streaming to hold the data
+            console.log("[Send Stream UI] ALWAYS creating ASSISTANT placeholder structure for stream, for conversation:", conversationIdAtRequestTime);
+            tempMsgElementWrapper = appendMessage(
+                assistantRoleForDisplay,
+                "", // Initial empty content
+                modelValueFromOption,
+                "", // Initial empty reasoning
+                conversationIdAtRequestTime, // Use the original conversation ID
+                conversationAtRequestTime.messages.length // Use the original message index
+            );
 
-                tempMsgElementWrapper = appendMessage(assistantRoleForDisplay, "", modelValueFromOption, initialReasoningText);
-                if (tempMsgElementWrapper) { // 确保 appendMessage 成功返回了元素
-                    const messagesContainer = document.getElementById('messages');
-                    console.log(`[Stream Loop Scroll FOR SSE] Forcing scroll. scrollHeight: ${messagesContainer.scrollHeight}`);
-                // 尝试1: 直接设置 scrollTop (像Ollama一样)
-                requestAnimationFrame(() => { // 仍然建议用 RAF 包装 DOM 写操作后的读操作
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                });
-                 
-                    messageDiv = tempMsgElementWrapper.querySelector('.message.assistant');
-                    if (messageDiv) {
-                        assistantTextElement = messageDiv.querySelector('.text');
-                        if (initialReasoningText !== undefined) { // 只有当期望有思考块时才查找
-                            reasoningBlockDiv = messageDiv.querySelector('.reasoning-block');
-                            if (reasoningBlockDiv) {
-                                reasoningContentElement = reasoningBlockDiv.querySelector('.reasoning-content');
-                                if (!reasoningContentElement) {
-                                    console.warn("[send] Stream: .reasoning-block found, but .reasoning-content is missing in placeholder.");
-                                }
-                            } else {
-                                 console.warn("[send] Stream: .reasoning-block not found in placeholder, though initialReasoningText was provided.");
-                            }
-                        }
-                    }
+            if (tempMsgElementWrapper) {
+                messageDiv = tempMsgElementWrapper.querySelector('.message.assistant');
+                if (messageDiv) {
+                    assistantTextElement = messageDiv.querySelector('.text');
+                    reasoningBlockDiv = messageDiv.querySelector('.reasoning-block');
+                    if (reasoningBlockDiv) reasoningContentElement = reasoningBlockDiv.querySelector('.reasoning-content');
+
+                    if (!assistantTextElement) console.error("[Send Stream UI] CRITICAL: .text element NOT FOUND in stream placeholder!");
+                    else console.log("[Send Stream UI] .text element FOUND for streaming into (potentially off-DOM).");
+                } else {
+                    console.error("[Send Stream UI] CRITICAL: .message.assistant element NOT FOUND in stream placeholder!");
                 }
-                // 检查关键UI元素是否获取成功
-                if (!messageDiv || (!assistantTextElement && providerToUse !== 'ollama') || (initialReasoningText !== undefined && !reasoningContentElement && (providerToUse === 'deepseek' || providerToUse === 'ollama'))) {
-                    console.error("[send] Stream: Critical UI elements for streaming output were not found or created by appendMessage. Provider:", providerToUse, "MessageDiv:", !!messageDiv, "AssistantText:", !!assistantTextElement, "ReasoningContent:", !!reasoningContentElement);
-                    // 根据情况，你可能想在这里提前终止流处理，或者尝试继续但有风险
+            } else {
+                console.error("[Send Stream UI] CRITICAL: appendMessage for stream placeholder returned null!");
+            }
+
+            // If the conversation changed, appendMessage would have added it to the currently visible DOM.
+            // We must remove it from the visible DOM if it's for a non-active conversation.
+            const messagesContainer = document.getElementById('messages');
+            if (window.currentConversationId !== conversationIdAtRequestTime) {
+                if (tempMsgElementWrapper && tempMsgElementWrapper.parentNode === messagesContainer) {
+                    tempMsgElementWrapper.remove();
+                    console.log("[Send Stream UI] tempMsgElementWrapper was created and attached by appendMessage, but removed as it's for a non-active conversation.");
+                }
+            } else { // Conversation ID still matches, it should be in the DOM and visible.
+                if (messagesContainer && tempMsgElementWrapper && tempMsgElementWrapper.parentNode === messagesContainer) {
+                     requestAnimationFrame(() => { messagesContainer.scrollTop = messagesContainer.scrollHeight; });
+                     console.log("[Send Stream UI] tempMsgElementWrapper created and correctly in DOM for active conversation.");
                 }
             }
-            
+
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let buffer = '';
+            let streamProcessedAnyUnits = false;
+            window.isCurrentlyInThinkingBlock = false;
 
-            try { // 内层 try for stream reading loop
+            console.log("[Stream Loop] STARTING. assistantTextElement valid:", !!assistantTextElement, "reasoningContentElement valid:", !!reasoningContentElement);
+
+            try {
                 while (true) {
+                    if (signal.aborted) { throw new Error("STREAM_ABORTED_BY_USER"); }
+
                     const { done, value } = await reader.read();
-                    if (done) {
-                        // Ollama stream end specific processing (if buffer has content)
-                        if (providerToUse === 'ollama' && buffer.trim() !== '') {
-                            try {
-                                const chunkJson = JSON.parse(buffer.trim());
-                                let lastRawChunkText = chunkJson.message?.content || '';
-                                if (lastRawChunkText && typeof extractThinkingAndReply === 'function') {
-                                    let { replyTextPortion, thinkingTextPortion, newThinkingBlockState } = extractThinkingAndReply(
-                                        lastRawChunkText, "<think>", "</think>", isCurrentlyInThinkingBlock
-                                    );
-                                    isCurrentlyInThinkingBlock = newThinkingBlockState;
-
-                                   if (currentConversationId === conversationIdAtRequestTime) {
-    let somethingWasUpdated = false; // 标记是否有内容更新，以便决定是否滚动主消息列表
-
-    // --- 更新思考过程 UI ---
-    if (thinkingTextPortion) { // 只要提取到思考片段就尝试更新
-        if (reasoningContentElement) { // 确保元素存在
-            accumulatedThinkingForDisplay += thinkingTextPortion;
-            reasoningContentElement.textContent = accumulatedThinkingForDisplay;
-
-            // ★★★ 为思考过程内容区域自动滚动到底部 ★★★
-            const scrollThresholdReasoning = 10; // 思考框的容差可以小一些
-            const isScrolledToBottomReasoning = reasoningContentElement.scrollHeight - reasoningContentElement.clientHeight <= reasoningContentElement.scrollTop + scrollThresholdReasoning;
-
-            if (isScrolledToBottomReasoning) {
-            reasoningContentElement.scrollTop = reasoningContentElement.scrollHeight; // 直接设置，避免过多平滑动画
-            // console.log("[Send Stream Scroll] .reasoning-content auto-scrolled to bottom.");
-        } else {
-            // console.log("[Send Stream Scroll] User has scrolled up .reasoning-content, not auto-scrolling.");
-        }
-            // ★★★ -------------------------------- ★★★
-
-            // 如果思考块之前是隐藏的 (因为内容为空)，现在有内容了就显示它
-            if (reasoningBlockDiv && reasoningBlockDiv.classList.contains('reasoning-block-empty') && accumulatedThinkingForDisplay.trim() !== '') {
-                reasoningBlockDiv.classList.remove('reasoning-block-empty');
-            }
-            somethingWasUpdated = true;
-        } else if (thinkingTextPortion.trim() !== "") {
-             console.warn("[send] Stream: Got thinkingTextPortion but reasoningContentElement is not available for update and scroll. Text:", thinkingTextPortion);
-        }
-    }
-
-    // --- 更新主要回复 UI ---
-    if (replyTextPortion) {
-        if (assistantTextElement) {
-            accumulatedAssistantReply += replyTextPortion;
-            assistantTextElement.innerHTML = typeof marked !== 'undefined' ? marked.parse(accumulatedAssistantReply) : accumulatedAssistantReply;
-
-
-        } else if (messageDiv) { // Ollama 或其他 provider 的动态 .text 创建 (如果需要)
-            accumulatedAssistantReply += replyTextPortion;
-            let targetTextElement = messageDiv.querySelector('.text');
-            if (!targetTextElement) {
-                targetTextElement = document.createElement('div');
-                targetTextElement.className = 'text';
-                // 决定插入位置，例如在 model-note 之前，或直接 append
-                const modelNote = messageDiv.querySelector('.model-note');
-                if (modelNote) {
-                    messageDiv.insertBefore(targetTextElement, modelNote);
-                } else {
-                    messageDiv.appendChild(targetTextElement);
-                }
-                assistantTextElement = targetTextElement; // 更新引用
-            }
-            assistantTextElement.innerHTML = typeof marked !== 'undefined' ? marked.parse(accumulatedAssistantReply) : accumulatedAssistantReply;
-            // assistantTextElement.scrollTop = assistantTextElement.scrollHeight; // 同样，如果需要内部滚动
-        } else if (replyTextPortion.trim() !== "") {
-            console.warn("[send] Stream: Got replyTextPortion but neither assistantTextElement nor messageDiv is available.", replyTextPortion);
-        }
-        if (replyTextPortion.trim() !== "") { // 只有当 replyTextPortion 真的有内容时才标记更新
-             somethingWasUpdated = true;
-        }
-    }
-
-    // --- 滚动整个消息列表 (#messages) ---
-    // 只有当思考或回复部分确实有新内容输出时，才滚动主消息列表
-    if (somethingWasUpdated) {
-        const messagesContainer = document.getElementById('messages');
-         if (messagesContainer) {
-        requestAnimationFrame(() => {
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            console.log("[Send Stream] Scrolled #messages to bottom (via requestAnimationFrame) AFTER creating stream placeholder.");
-        });
-        }
-    }
-}
-                                }
-                            } catch(e) { /* console.warn('[接收流][Ollama] 解析流末尾残余数据失败:', buffer.trim(), e); */ }
-                        }
-                        break; // Exit while loop
-                    } // End if(done)
+                    if (done) { console.log("[Stream Loop] Stream is DONE."); break; }
+                    if (!value) { console.warn("[Stream Loop] Value is null/undefined but done is false."); continue; }
 
                     buffer += decoder.decode(value, { stream: true });
                     let processableUnits = [];
+                    let bufferConsumedThisIteration = false;
 
-                    if (providerToUse === 'ollama') {
-                        let ndjson_parts = buffer.split('\n');
-                        buffer = ndjson_parts.pop() || "";
-                        processableUnits = ndjson_parts;
-                    } else { // SSE Stream
-                        let sse_lines = buffer.split('\n\n');
-                        buffer = sse_lines.pop() || "";
-                        processableUnits = sse_lines;
+                    if (providerToUse === 'ollama' || providerToUse === 'gemini') {
+                        let parts = buffer.split('\n');
+                        if (parts.length > 1 || (parts.length === 1 && buffer.endsWith('\n'))) {
+                            buffer = parts.pop() || "";
+                            processableUnits = parts.filter(p => p.trim() !== '');
+                            if (processableUnits.length > 0) bufferConsumedThisIteration = true;
+                        }
+                    } else { // SSE
+                        let sse_events = buffer.split('\n\n');
+                        if (sse_events.length > 1 || (sse_events.length === 1 && buffer.endsWith('\n\n'))) {
+                            buffer = sse_events.pop() || "";
+                            processableUnits = sse_events.filter(p => p.trim() !== '');
+                            if (processableUnits.length > 0) bufferConsumedThisIteration = true;
+                        }
                     }
+
+                    if (processableUnits.length > 0) streamProcessedAnyUnits = true;
 
                     for (const unit of processableUnits) {
-                        if (unit.trim() === '') continue;
-                        
-                        try {
-                            if (providerToUse === 'ollama') {
-                                const chunkJson = JSON.parse(unit);
-                                let rawChunkText = chunkJson.message?.content || '';
-                                if (chunkJson.done) isCurrentlyInThinkingBlock = false; 
-                                // Ollama 一般不区分 reasoning 和 content，都通过 extractThinkingAndReply 处理
-                                if (rawChunkText && typeof extractThinkingAndReply === 'function') {
-                                    let { replyTextPortion, thinkingTextPortion, newThinkingBlockState } = extractThinkingAndReply(rawChunkText, "<think>", "</think>", isCurrentlyInThinkingBlock);
-                                    isCurrentlyInThinkingBlock = newThinkingBlockState;
-                                    // ... (在此处或下方统一处理 thinkingTextPortion 和 replyTextPortion 来更新UI) ...
-                                    if (currentConversationId === conversationIdAtRequestTime) {
-                                        if (thinkingTextPortion && reasoningContentElement) { accumulatedThinkingForDisplay += thinkingTextPortion; reasoningContentElement.textContent = accumulatedThinkingForDisplay; if (reasoningBlockDiv && reasoningBlockDiv.classList.contains('reasoning-block-empty') && accumulatedThinkingForDisplay.trim() !== '') { reasoningBlockDiv.classList.remove('reasoning-block-empty'); } }
-                                        if (replyTextPortion) { if (assistantTextElement) { accumulatedAssistantReply += replyTextPortion; assistantTextElement.innerHTML = typeof marked !== 'undefined' ? marked.parse(accumulatedAssistantReply) : accumulatedAssistantReply; } else if (messageDiv) { accumulatedAssistantReply += replyTextPortion; const existingTextDiv = messageDiv.querySelector('.text'); if (existingTextDiv) { assistantTextElement = existingTextDiv; } else { const newTextDiv = document.createElement('div'); newTextDiv.className = 'text'; messageDiv.appendChild(newTextDiv); assistantTextElement = newTextDiv; } assistantTextElement.innerHTML = typeof marked !== 'undefined' ? marked.parse(accumulatedAssistantReply) : accumulatedAssistantReply; } }
-                                        if (thinkingTextPortion || replyTextPortion) document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight;
+                        if (signal.aborted) continue;
+
+                        let replyForUnit = "";
+                        let thinkingForUnit = "";
+                        let unitProducedContent = false;
+
+                        if (providerToUse === 'siliconflow' || providerToUse === 'openai' || providerToUse === 'deepseek' || providerToUse === 'openrouter' || providerToUse === 'suanlema') {
+                            const lines = unit.split('\n');
+                            const dataLine = lines.find(l => l.trim().startsWith('data: '));
+                            if (dataLine) {
+                                const jsonData = dataLine.trim().substring(6);
+                                if (jsonData === '[DONE]') { window.isCurrentlyInThinkingBlock = false; continue; }
+                                try {
+                                    const chunk = JSON.parse(jsonData);
+                                    const delta = chunk.choices?.[0]?.delta;
+                                    if (delta) {
+                                        if (typeof delta.reasoning_content === 'string') thinkingForUnit += delta.reasoning_content;
+                                        else if (typeof delta.reasoning === 'string') thinkingForUnit += delta.reasoning;
+                                        const rawContent = delta.content || '';
+                                        if (rawContent) {
+                                            if (typeof extractThinkingAndReply === 'function' && (rawContent.includes("<think>") || window.isCurrentlyInThinkingBlock || rawContent.includes("</think>"))) {
+                                                let ex = extractThinkingAndReply(rawContent, "<think>", "</think>", window.isCurrentlyInThinkingBlock);
+                                                window.isCurrentlyInThinkingBlock = ex.newThinkingBlockState;
+                                                if (ex.thinkingTextPortion) thinkingForUnit = (thinkingForUnit || "") + ex.thinkingTextPortion;
+                                                replyForUnit = ex.replyTextPortion;
+                                            } else { replyForUnit = rawContent; }
+                                        }
+                                        if (replyForUnit || thinkingForUnit || rawContent) unitProducedContent = true;
                                     }
+                                } catch (e) { console.warn(`[Stream Unit Parse Error] (${providerToUse}):`, e, "Data:", jsonData); }
+                            }
+                        } else if (providerToUse === 'anthropic') {
+                             try {
+                                const chunk = JSON.parse(unit);
+                                if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
+                                    replyForUnit = chunk.delta.text || '';
+                                    unitProducedContent = !!replyForUnit;
+                                } else if (chunk.type === 'message_stop') {
+                                    window.isCurrentlyInThinkingBlock = false;
+                                } else if (chunk.type === 'error') {
+                                    replyForUnit = `\n[错误：Anthropic Stream - ${chunk.error?.type}: ${chunk.error?.message}]`;
+                                    unitProducedContent = true;
                                 }
-                            } else { // SSE Providers (OpenAI, Deepseek, Anthropic, etc.)
-                                // —— 修正后的 SSE parsing ——
-                                // unit 里可能既有 event: … 又有 data: …，我们要先找出 data: 行
-            const lines = unit.split('\n');
-                const dataLine = lines.find(l => l.trim().startsWith('data: '));
-            if (!dataLine) continue;                             // 没有 data: 就跳过
-            const jsonData = dataLine.trim().substring(6);       // 去掉 "data: "
-            if (jsonData === '[DONE]') continue;
-            const chunk = JSON.parse(jsonData);
-
-
-                                let sseThinkingText = "";
-                                let sseReplyText = "";
-                                const delta = chunk.choices?.[0]?.delta; // 获取 delta 对象
-
-if (delta) {
-    // 1. 优先处理 OpenRouter (或类似模型) 可能返回的 delta.reasoning 字段
-    //    这个字段包含了流式的思考过程片段。
-    if (typeof delta.reasoning === 'string') { // 检查 delta.reasoning 是否是字符串
-        sseThinkingText = delta.reasoning; // 直接赋值给 sseThinkingText
-    }
-
-    // 2. 处理 delta.content (可能是主要回复，或包含 <think> 标签的混合内容)
-    const rawContentFromDelta = delta.content || ''; // 获取 delta.content，如果不存在则为空字符串
-
-    // 只有当 rawContentFromDelta 明确包含 <think> 标签，
-    // 或者我们之前已经通过 <think> 进入了思考块 (isCurrentlyInThinkingBlock 为 true)，
-    // 才使用 extractThinkingAndReply 来进一步分离。
-    // 否则，delta.content 的内容全部视为主要回复。
-    if (rawContentFromDelta && typeof extractThinkingAndReply === 'function' &&
-        (rawContentFromDelta.includes("<think>") || isCurrentlyInThinkingBlock || rawContentFromDelta.includes("</think>"))) { // 增加对</think>的检查，以处理思考块结束的情况
-
-        let { replyTextPortion, thinkingTextPortion, newThinkingBlockState } = extractThinkingAndReply(rawContentFromDelta, "<think>", "</think>", isCurrentlyInThinkingBlock);
-        isCurrentlyInThinkingBlock = newThinkingBlockState;
-
-        if (thinkingTextPortion && !sseThinkingText) { // 只有当 sseThinkingText 还是空的时候才用从<think>提取的
-            sseThinkingText = thinkingTextPortion;
-        } else if (thinkingTextPortion && sseThinkingText) {
-            // 如果两者都有，可以选择追加，或者根据 API 行为决定哪个优先
-            // console.warn("Both delta.reasoning and <think> in delta.content provided thinking text. Appending.");
-            // sseThinkingText += thinkingTextPortion; // 示例：追加
-        }
-        sseReplyText = replyTextPortion;
-    } else {
-        // 如果 delta.content 不包含 <think> 标签，则其内容全部视为主要回复
-        sseReplyText = rawContentFromDelta;
-    }
-} else {
-    console.warn("[SSE Stream] Delta object is missing in chunk choices[0]:", chunk.choices?.[0]);
-    // 确保 sseThinkingText 和 sseReplyText 在 delta 不存在时有默认值（已经是 ""）
-}
-                                if (providerToUse === 'anthropic') {
-                                    // console.log("[Anthropic Stream Chunk]:", JSON.stringify(chunk, null, 2)); // 调试：打印原始chunk
-                                    if (chunk.type === 'message_start') {
-                                        console.log("[Anthropic Stream] Message started. ID:", chunk.message?.id);
-                                        // 你可以在这里初始化一些与消息相关的状态，如果需要
-                                        accumulatedAssistantReply = ""; // 重置累积回复
-                                        accumulatedThinkingForDisplay = ""; // Anthropic 通常不显式输出思考，但以防万一
-                                    } else if (chunk.type === 'content_block_start') {
-                                        // console.log("[Anthropic Stream] Content block started. Index:", chunk.index, "Type:", chunk.content_block?.type);
-                                    } else if (chunk.type === 'content_block_delta') {
-                                        if (chunk.delta && chunk.delta.type === 'text_delta') {
-                                            sseReplyText = chunk.delta.text || ''; // 获取文本片段
-                                        }
-                                    } else if (chunk.type === 'content_block_stop') {
-                                        // console.log("[Anthropic Stream] Content block stopped. Index:", chunk.index);
-                                    } else if (chunk.type === 'message_delta') {
-                                        // console.log("[Anthropic Stream] Message delta:", chunk.delta);
-                                        // 可以检查 chunk.delta.stop_reason 和 chunk.delta.stop_sequence
-                                    } else if (chunk.type === 'message_stop') {
-                                        console.log("[Anthropic Stream] Message stopped.");
-                                        isCurrentlyInThinkingBlock = false; // 确保重置
-                                    } else if (chunk.type === 'ping') {
-                                        // console.log("[Anthropic Stream] Ping event received.");
-                                    } else if (chunk.type === 'error') {
-                                        console.error("[Anthropic Stream] Error event received:", chunk.error);
-                                        // 你可能需要在这里处理错误，例如停止流并显示错误信息
-                                        sseReplyText = `\n[错误：Anthropic API 流错误 - ${chunk.error?.type}: ${chunk.error?.message || '未知错误'}]`;
-                                    }
-                                    // 对于 Anthropic，思考过程是隐式的，我们只处理 sseReplyText
-                                    sseThinkingText = ""; // 明确设置为空，因为它不使用 <think>
-                                
-                                } else if (providerToUse === 'deepseek') {
-                                    sseThinkingText = chunk.choices?.[0]?.delta?.reasoning_content || '';
-                                    sseReplyText = chunk.choices?.[0]?.delta?.content || '';
-                                } else if (providerToUse === 'openai' || providerToUse === 'siliconflow'
-                                    || providerToUse === 'suanlema'||
-                                    providerToUse === 'openrouter'
-                                ) {
-                                    // These typically put everything in content, <think> tags handled by extractThinkingAndReply
-                                    const rawContent = chunk.choices?.[0]?.delta?.content || '';
-                                    if (rawContent && typeof extractThinkingAndReply === 'function') {
-                                        let { replyTextPortion, thinkingTextPortion, newThinkingBlockState } = extractThinkingAndReply(rawContent, "<think>", "</think>", isCurrentlyInThinkingBlock);
-                                        isCurrentlyInThinkingBlock = newThinkingBlockState;
-                                        sseThinkingText = thinkingTextPortion;
-                                        sseReplyText = replyTextPortion;
-                                    } else {
-                                        sseReplyText = rawContent; // If no extract function or no content
-                                    }
-                                } else if (providerToUse === 'anthropic') {
-                                    if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
-                                        sseReplyText = chunk.delta.text || '';
-                                        // Anthropic usually doesn't use <think> tags in this way for CoT via API stream.
-                                    }
-                                } 
-
-                                // --- Update UI based on sseThinkingText and sseReplyText ---
-                                 if (currentConversationId === conversationIdAtRequestTime) {
-                                    let uiActuallyUpdated = false; // 标记这个 unit 是否导致了可见的UI文本更新
-
-                                    // --- 更新思考过程 UI ---
-                                    if (sseThinkingText && sseThinkingText.trim() !== "") { // 只有当 sseThinkingText 真的有内容时才处理
-                                        if (reasoningContentElement) {
-                                            accumulatedThinkingForDisplay += sseThinkingText;
-                                            reasoningContentElement.textContent = accumulatedThinkingForDisplay;
-
-                                            // 优化后的自动滚动逻辑 for .reasoning-content
-                                            const scrollThresholdReasoning = 10; 
-                                            const isNearBottomReasoning = reasoningContentElement.scrollHeight - reasoningContentElement.clientHeight <= reasoningContentElement.scrollTop + scrollThresholdReasoning;
-                                            if (isNearBottomReasoning) {
-                                                reasoningContentElement.scrollTop = reasoningContentElement.scrollHeight;
-                                                
-                                            }
-
-                                            if (reasoningBlockDiv && reasoningBlockDiv.classList.contains('reasoning-block-empty')) {
-                                                reasoningBlockDiv.classList.remove('reasoning-block-empty');
-                                            }
-                                            uiActuallyUpdated = true;
-                                        } else {
-                                            console.warn(`[send] SSE (${providerToUse}): Got thinking text but no reasoningContentElement. Text:`, sseThinkingText);
-                                        }
-                                    }
-
-                                    // --- 更新主要回复 UI ---
-                                    if (sseReplyText && sseReplyText.trim() !== "") { // 只有当 sseReplyText 真的有内容时才处理
-                                        if (assistantTextElement) {
-                                            accumulatedAssistantReply += sseReplyText;
-                                            assistantTextElement.innerHTML = typeof marked !== 'undefined' ? marked.parse(accumulatedAssistantReply) : accumulatedAssistantReply;
-                                            uiActuallyUpdated = true;
-                                        } else if (messageDiv) { // Fallback for dynamic .text creation (e.g., for Ollama if .text wasn't initially there)
-                                            accumulatedAssistantReply += sseReplyText;
-                                            let targetTextElement = messageDiv.querySelector('.text');
-                                            if (!targetTextElement) {
-                                                targetTextElement = document.createElement('div');
-                                                targetTextElement.className = 'text';
-                                                const modelNote = messageDiv.querySelector('.model-note');
-                                                if (modelNote) {
-                                                    messageDiv.insertBefore(targetTextElement, modelNote);
-                                                } else {
-                                                    messageDiv.appendChild(targetTextElement);
-                                                }
-                                                assistantTextElement = targetTextElement; // Update reference
-                                            }
-                                            assistantTextElement.innerHTML = typeof marked !== 'undefined' ? marked.parse(accumulatedAssistantReply) : accumulatedAssistantReply;
-                                            uiActuallyUpdated = true;
-                                        } else {
-                                             console.warn(`[send] SSE (${providerToUse}): Got reply text but no assistantTextElement or messageDiv. Text:`, sseReplyText);
-                                        }
-                                    }
-
-                                    // --- 滚动整个消息列表 (#messages) ---
-                                    if (uiActuallyUpdated) {
-                                        const messagesContainer = document.getElementById('messages');
-                                        if (messagesContainer) {
-                                            requestAnimationFrame(() => {
-            console.log(`[Stream Loop Scroll FOR SSE - Unconditional] Forcing scroll. scrollHeight: ${messagesContainer.scrollHeight}`);
-            messagesContainer.scrollTo({
-                top: messagesContainer.scrollHeight,
-                behavior: 'auto'
-            });
-            console.log(`[Stream Loop Scroll FOR SSE - Unconditional] Scrolled. scrollTop after: ${messagesContainer.scrollTop}`);
-        });
-                                            if (isNearBottomMessages) {
-                                                messagesContainer.scrollTo({
-                                                    top: messagesContainer.scrollHeight,
-                                                    behavior: 'smooth'
-                                                });
-                                            }
-                                        }
-                                    }
-                                } // end if (currentConversationId === conversationIdAtRequestTime)
-                            } //  这个括号是你原代码中 if (rawChunkText && typeof extractThinkingAndReply === 'function') 或类似条件的结束
-                        } catch (e) {
-                            console.warn(`[接收流] 解析单元失败 (${providerToUse}):`, unit, e);
+                            } catch (e) {
+                                if (!unit.startsWith("event: ping") && unit.trim() !== "") {
+                                    console.warn(`[Stream Unit Parse Error] (Anthropic):`, e, "Unit:", unit);
+                                }
+                            }
+                        } else if (providerToUse === 'ollama') {
+                            try {
+                                const chunkJson = JSON.parse(unit);
+                                let rawOllamaText = chunkJson.message?.content || '';
+                                if (chunkJson.done) window.isCurrentlyInThinkingBlock = false;
+                                if (rawOllamaText && typeof extractThinkingAndReply === 'function') {
+                                     let ex = extractThinkingAndReply(rawOllamaText, "<think>", "</think>", window.isCurrentlyInThinkingBlock);
+                                     window.isCurrentlyInThinkingBlock = ex.newThinkingBlockState;
+                                     thinkingForUnit = ex.thinkingTextPortion;
+                                     replyForUnit = ex.replyTextPortion;
+                                } else { replyForUnit = rawOllamaText; }
+                                if (replyForUnit || thinkingForUnit) unitProducedContent = true;
+                            } catch (e) { console.warn(`[Stream Unit Parse Error] (Ollama):`, e, "Unit:", unit); }
+                        } else if (providerToUse === 'gemini') {
+                            try {
+                                const chunkJson = JSON.parse(unit);
+                                replyForUnit = chunkJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                                if (replyForUnit) unitProducedContent = true;
+                            } catch (e) { console.warn(`[Stream Unit Parse Error] (Gemini):`, e, "Unit:", unit); }
                         }
-                    } // end for (const unit of processableUnits)
-                } // end while
 
-                // 流结束后，再次检查思考块是否应该隐藏
-                if (currentConversationId === conversationIdAtRequestTime && reasoningBlockDiv) {
-                    if (accumulatedThinkingForDisplay.trim() === '') {
-                        if (!reasoningBlockDiv.classList.contains('reasoning-block-empty')) {
-                            reasoningBlockDiv.classList.add('reasoning-block-empty');
-                        }
-                    } else {
-                         if (reasoningBlockDiv.classList.contains('reasoning-block-empty')) {
-                            reasoningBlockDiv.classList.remove('reasoning-block-empty');
+                        if (unitProducedContent) {
+                            // UI update for the stream only happens if the original conversation is still active.
+                            // processStreamChunk handles its own internal check against the conversationId it's passed.
+                            // The important part is that assistantTextElement and reasoningContentElement are valid references
+                            // to the (potentially off-DOM) tempMsgElementWrapper's children.
+                            if (assistantTextElement || reasoningContentElement) { // Check if elements to write to exist
+                                processStreamChunk(replyForUnit, providerToUse, conversationIdAtRequestTime, assistantTextElement, reasoningContentElement, reasoningBlockDiv, thinkingForUnit);
+                            } else {
+                                console.warn("[Stream Unit] UI elements (assistantTextElement or reasoningContentElement) for streaming are null, cannot update UI for this chunk, even if conversation matched.");
+                            }
+
+                            if (thinkingForUnit) accumulatedThinkingForDisplay += thinkingForUnit;
+                            if (replyForUnit) accumulatedAssistantReply += replyForUnit;
+                            if (replyForUnit || thinkingForUnit) streamContentReceived = true;
                         }
                     }
+                    if (!bufferConsumedThisIteration && buffer.length > 1024 * 5) { console.warn("[Stream Loop] Buffer might be growing too large without consumption."); }
                 }
-
-                finalAssistantReply = accumulatedAssistantReply;
-                finalThinkingProcess = accumulatedThinkingForDisplay.trim() ? accumulatedThinkingForDisplay.trim() : null;
+                console.log("[Stream Loop] EXITED. streamProcessedAnyUnits:", streamProcessedAnyUnits, "streamContentReceived:", streamContentReceived);
+                if (!streamContentReceived && accumulatedAssistantReply === "" && accumulatedThinkingForDisplay === "") {
+                     console.warn("[Stream Loop] Finished but NO content was received/accumulated.");
+                }
                 requestWasSuccessful = true;
-
-            } catch (streamError) {
-                console.error("[send] 流处理错误:", streamError);
-                let streamErrorMessage = '流处理中断';
-                if (streamError && streamError.message) {
-                    streamErrorMessage += `: ${streamError.message}`;
-                }
-                finalAssistantReply = accumulatedAssistantReply + `\n[错误：${streamErrorMessage}]`;
-                finalThinkingProcess = accumulatedThinkingForDisplay.trim() ? accumulatedThinkingForDisplay.trim() : null;
+            } catch (streamErrorInner) {
                 requestWasSuccessful = false;
-            }
-        } else { // Non-streaming response
-            const data = await response.json();
-            if (providerToUse === 'ollama') {
-                if (data.message?.content) {
-                  finalAssistantReply = data.message.content;
-                  if (finalAssistantReply.includes("<think>") && finalAssistantReply.includes("</think>")) {
-                      const thinkStartIndex = finalAssistantReply.indexOf("<think>");
-                      const thinkEndIndex = finalAssistantReply.indexOf("</think>");
-                      if (thinkStartIndex < thinkEndIndex) {
-                          finalThinkingProcess = finalAssistantReply.substring(thinkStartIndex + "<think>".length, thinkEndIndex).trim();
-                      }
-                  } else { finalThinkingProcess = null; }
-                } else if (data.error && typeof data.error === 'string') { finalAssistantReply = `Ollama 错误: ${data.error}`; finalThinkingProcess = null;
-                } else if (typeof data === 'string') { finalAssistantReply = `Ollama 错误: ${data}`; finalThinkingProcess = null;
-                } else { finalAssistantReply = 'Ollama 返回了未知格式的非流式响应。'; finalThinkingProcess = null;}
-            } else if (providerToUse === 'gemini') {
-                if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-                    finalAssistantReply = data.candidates[0].content.parts[0].text;
-                } else if (data.promptFeedback?.blockReason) {
-                    finalAssistantReply = `请求被阻止：${data.promptFeedback.blockReason}`;
-                    if (data.promptFeedback.safetyRatings) finalAssistantReply += ` (Safety Ratings: ${JSON.stringify(data.promptFeedback.safetyRatings)})`;
-                }
-                finalThinkingProcess = null;
-            } else if (providerToUse === 'anthropic' && !isActuallyStreaming) {
-                if (data.content?.[0]?.text) finalAssistantReply = data.content[0].text;
-                finalThinkingProcess = null;
-            } else if (!isActuallyStreaming) { // OpenAI, Deepseek, SiliconFlow etc. non-streaming
-                if (data.choices?.[0]?.message) {
-                    const message = data.choices[0].message;
-    
-                    finalAssistantReply = data.choices[0].message.content || '（无回复）';
-                    if (typeof message.reasoning === 'string') { // 优先 OpenRouter 的 reasoning
-                        finalThinkingProcess = message.reasoning;
-                    } else if (typeof message.reasoning_content === 'string') { // 其次 DeepSeek 的
-                        finalThinkingProcess = message.reasoning_content;
-                    } else {
-                        finalThinkingProcess = null;
-                    }
+                console.error("[Send Stream] Error during stream processing (inner catch):", streamErrorInner);
+                if (streamErrorInner.message === "STREAM_ABORTED_BY_USER") {
+                    finalAssistantReply = accumulatedAssistantReply.trim() ? accumulatedAssistantReply.trim() + '\n（用户已中止）' : '（用户已中止）';
                 } else {
-                    finalAssistantReply = '（API响应格式错误或无内容）';
-                    finalThinkingProcess = null;
+                    finalAssistantReply = accumulatedAssistantReply.trim() ? accumulatedAssistantReply.trim() + `\n[ - ${streamErrorInner.message}]` : `[错误：流处理中断 - ${streamErrorInner.message}]`;
+                }
+            } finally {
+                if (reader && typeof reader.releaseLock === 'function') reader.releaseLock();
+                console.log("[Stream Loop] FINALLY: Reader lock released.");
+            }
+        } else { // 非流式响应处理
+            console.log("[Send] Response IS NOT streaming. Content-Type:", responseContentType);
+            if (loadingDiv && loadingDiv.parentNode) { loadingDiv.remove(); loadingDiv = null; }
+            const data = await response.json().catch(async (jsonErr) => {
+                const textError = await response.text(); console.error("[Send] Non-JSON response. Raw text:", textError.substring(0,500));
+                throw new Error(`API响应非JSON格式: ${textError.substring(0,200)}`);
+            });
+
+            if (providerToUse === 'ollama') {
+                finalAssistantReply = data.message?.content || '（Ollama 回复为空）';
+                if (data.message && data.message.content && typeof extractThinkingAndReply === 'function') {
+                    let ex = extractThinkingAndReply(data.message.content, "<think>", "</think>", false);
+                    finalThinkingProcess = ex.thinkingTextPortion.trim() || null;
+                    finalAssistantReply = ex.replyTextPortion;
+                }
+            } else if (providerToUse === 'gemini') {
+                finalAssistantReply = data.candidates?.[0]?.content?.parts?.[0]?.text || '（Gemini 回复为空）';
+            } else if (providerToUse === 'anthropic') {
+                if (data.content && Array.isArray(data.content) && data.content[0]?.type === 'text') {
+                    finalAssistantReply = data.content[0].text || '（Anthropic 回复为空）';
+                } else {
+                    finalAssistantReply = JSON.stringify(data.content) || '（Anthropic 回复格式非预期）';
+                }
+            } else { // OpenAI, Deepseek, SiliconFlow, OpenRouter, Suanlema (OpenAI-like)
+                finalAssistantReply = data.choices?.[0]?.message?.content || '（回复为空）';
+                finalThinkingProcess = data.choices?.[0]?.message?.reasoning_content || data.choices?.[0]?.message?.reasoning || null;
+                if (finalThinkingProcess) finalThinkingProcess = finalThinkingProcess.trim();
+
+                if (finalAssistantReply && typeof extractThinkingAndReply === 'function' && (finalAssistantReply.includes("<think>") || finalAssistantReply.includes("</think>"))) {
+                     let ex = extractThinkingAndReply(finalAssistantReply, "<think>", "</think>", false);
+                     if (ex.thinkingTextPortion) { // Prefer explicit reasoning_content if available
+                        if (!finalThinkingProcess) finalThinkingProcess = ex.thinkingTextPortion.trim() || null;
+                     }
+                     finalAssistantReply = ex.replyTextPortion;
                 }
             }
             requestWasSuccessful = true;
+            streamContentReceived = (finalAssistantReply && finalAssistantReply !== '（无回复）' && finalAssistantReply !== '（回复为空）' && finalAssistantReply !== '（Ollama 回复为空）' && finalAssistantReply !== '（Gemini 回复为空）' && finalAssistantReply !== '（Anthropic 回复为空）') || (finalThinkingProcess && finalThinkingProcess.trim() !== '');
         }
 
-    } catch (error) { // Outermost try...catch for API call and initial processing
-        console.error(`[发送错误 Catch] 对话ID ${conversationIdAtRequestTime}:`, error);
-        finalAssistantReply = error.message.startsWith('错误：') ? error.message : `错误：${error.message}`;
-        // finalThinkingProcess might have been partially accumulated if streamError occurred
-        finalThinkingProcess = finalThinkingProcess || null;
+        if (isActuallyStreaming && requestWasSuccessful) {
+            finalAssistantReply = accumulatedAssistantReply;
+            finalThinkingProcess = accumulatedThinkingForDisplay.trim() ? accumulatedThinkingForDisplay.trim() : null;
+        }
+
+    } catch (error) { // 外层 try...catch
         requestWasSuccessful = false;
-    } finally {
-        if (loadingDiv && loadingDiv.parentNode === document.getElementById('messages')) {
-            loadingDiv.remove();
-        }
-
-        const assistantRoleToDisplay = (providerToUse === 'gemini') ? 'model' : 'assistant';
-
-        // Handle UI update for non-streamed, failed stream, or errors
-        if (!requestWasSuccessful || !isActuallyStreaming) { // isActuallyStreaming reflects *actual* stream
-            if (currentConversationId === conversationIdAtRequestTime) {
-                console.log(`[Finally] 非流式/错误路径. 调用 appendMessage (原因: ${!requestWasSuccessful ? '请求失败/错误' : '非实际流式响应'})`);
-                
-                const messagesNode = document.getElementById('messages');
-                if (messagesNode) { // Remove pre-emptively added empty assistant message if one exists
-                    const lastMessageWrapper = messagesNode.lastElementChild;
-                    if (lastMessageWrapper &&
-                        lastMessageWrapper.classList.contains('assistant-message-wrapper') &&
-                        lastMessageWrapper.querySelector('.message.assistant')) {
-                        const textElement = lastMessageWrapper.querySelector('.message.assistant .text');
-                        let isEmptyMessage = false;
-                        if (textElement) {
-                            const tempDiv = document.createElement('div'); tempDiv.innerHTML = textElement.innerHTML;
-                            if (typeof pruneEmptyNodes === 'function') pruneEmptyNodes(tempDiv);
-                            if (tempDiv.innerHTML.trim() === "") isEmptyMessage = true;
-                        } else { isEmptyMessage = true; }
-
-                        const hasReasoningInDOM = lastMessageWrapper.querySelector('.reasoning-block .reasoning-content')?.textContent.trim() !== '';
-                        const hasModelNoteInDOM = lastMessageWrapper.querySelector('.model-note') !== null;
-
-                        if (isEmptyMessage && !hasReasoningInDOM && !hasModelNoteInDOM ) {
-                            console.log("[Finally] 移除非流式/错误路径下，之前为流式append的完全空消息体。");
-                            lastMessageWrapper.remove();
-                        }
-                    }
-                }
-                
-                appendMessage(assistantRoleToDisplay, finalAssistantReply, modelValueFromOption, finalThinkingProcess);
-            }
-        } else if (requestWasSuccessful && isActuallyStreaming) { // Successful actual streaming
-            console.log("[Finally] 流式处理成功完成。");
-            if (currentConversationId === conversationIdAtRequestTime) {
-                const messagesContainer = document.getElementById('messages');
-                const allAssistantWrappers = messagesContainer.querySelectorAll('.assistant-message-wrapper');
-                const existingMsgWrapper = allAssistantWrappers.length > 0 ? allAssistantWrappers[allAssistantWrappers.length - 1] : null;
-
-                if (existingMsgWrapper) {
-                    const msgDiv = existingMsgWrapper.querySelector('.message.assistant');
-                     if (msgDiv) { // 确保 msgDiv 存在
-                        let metaInfoDiv = msgDiv.querySelector('.message-meta-info');
-        if (!metaInfoDiv) { // 如果 meta 容器不存在，创建它
-            metaInfoDiv = document.createElement('div');
-            metaInfoDiv.className = 'message-meta-info';
-            // 尝试将 metaInfoDiv 插入到 .text 元素之后 (如果 .text 存在)
-            const textElement = msgDiv.querySelector('.text');
-            if (textElement && textElement.nextSibling) {
-                msgDiv.insertBefore(metaInfoDiv, textElement.nextSibling);
-            } else { // 否则，就追加到 msgDiv 的末尾 (在 .text 之后，但在其他按钮之前)
-                msgDiv.appendChild(metaInfoDiv);
-            }
+        console.error(`[Send Outer Catch] Error: Name: ${error.name}, Message: ${error.message}`);
+        if (error.name === 'AbortError' || error.message === "STREAM_ABORTED_BY_USER") {
+            finalAssistantReply = accumulatedAssistantReply.trim() ? accumulatedAssistantReply.trim() + '\n（用户已中止）' : '（用户已中止）';
+        } else if (error.message === "REQUEST_BUILD_FAILED_EMPTY") {
+            finalAssistantReply = '（无法构建有效请求：无内容发送）';
         } else {
-             metaInfoDiv.innerHTML = ''; // 如果已存在，先清空以防重复添加模型名和token
+            finalAssistantReply = `错误：${error.message || "未知请求错误"}`;
+        }
+    } finally {
+        console.log("[Send FINALLY] Entering. RequestSuccessful:", requestWasSuccessful, "IsStream:", isActuallyStreaming, "StreamContentRecv:", streamContentReceived);
+        console.log(`  FinalReply (at start of finally): "${String(finalAssistantReply).substring(0, 100)}..."`);
+        console.log(`  FinalThinking (at start of finally): "${String(finalThinkingProcess).substring(0, 100)}..."`);
+
+        if (loadingDiv && loadingDiv.parentNode) {
+            loadingDiv.remove();
+            console.log("[Send FINALLY] Ensured loading indicator is removed.");
         }
 
-        // 1. 添加模型注释 (如果还没有)
-        if (modelValueFromOption) { // 确保 modelValueFromOption 有值
-            const modelNote = document.createElement('span');
-            modelNote.className = 'model-note';
-            let displayModelName = modelValueFromOption;
-            const modelSelect = document.getElementById('model');
-            if(modelSelect) {
-                const opt = modelSelect.querySelector(`option[value="${modelValueFromOption}"]`);
-                if(opt) displayModelName = opt.textContent;
-                else { const parts = String(modelValueFromOption).split('::'); if (parts.length === 2) displayModelName = parts[1];}
-            }
-            modelNote.textContent = `模型：${displayModelName}`;
-                            // 将其添加到 model-note 旁边或之后
-                            const modelNoteElement = msgDiv.querySelector('.model-note');
-                            if (modelNoteElement && modelNoteElement.parentNode === msgDiv) {
-                            } else { // 如果没有 model-note，或者想加在其他地方
-                                // messageDiv.appendChild(tokenNote); // 简单加到末尾，CSS调整
-                                // 或者，如果 .text 元素存在，加在 .text 之后，模型注释之前
-                                const textEl = msgDiv.querySelector('.text');
-                                if (textEl && textEl.nextSibling) {
-                                     msgDiv.insertBefore(tokenNote, textEl.nextSibling);
-                                } else if (textEl) {
-                                     msgDiv.appendChild(tokenNote); // 如果.text是最后一个
-                                } else {
-                                     // 如果连.text都没有，可能需要先创建模型注释再加
-                                }
-                            }
-                        }
-            const assistantTextElementToClean = msgDiv.querySelector('.text');
-            if (assistantTextElementToClean) {
-                console.log("[Finally Stream Cleanup] Attempting to clean trailing whitespace/br for:", assistantTextElementToClean);
-                let originalHTMLForDebug = assistantTextElementToClean.innerHTML; // 用于调试比较
+        window.isGeneratingResponse = false;
+        if (window.currentAbortController) window.currentAbortController = null;
+        updateSubmitButtonState(false);
+        if (promptInput) promptInput.disabled = false;
 
-                // --- 开始方案2的清理逻辑 ---
-                let lastMeaningfulChild = null;
-                for (let i = assistantTextElementToClean.childNodes.length - 1; i >= 0; i--) {
-                    const node = assistantTextElementToClean.childNodes[i];
-                    if (node.nodeType === Node.ELEMENT_NODE && node.nodeName !== 'BR') {
-                        lastMeaningfulChild = node;
-                        break;
-                    } else if (node.nodeType === Node.TEXT_NODE && node.textContent.trim() !== '') {
-                        lastMeaningfulChild = node;
-                        break;
-                    }
+        // --- Logic for handling the visual representation of the assistant's reply ---
+        if (isActuallyStreaming && requestWasSuccessful && streamContentReceived) {
+            // Successful stream with content. tempMsgElementWrapper should exist and be populated by stream.
+            if (tempMsgElementWrapper && assistantTextElement) { // tempMsgElementWrapper should always exist if stream was attempted
+                console.log("[Send FINALLY] Successful stream. Populating final content into existing (possibly off-DOM) wrapper.");
+                assistantTextElement.innerHTML = (typeof marked !== 'undefined' && finalAssistantReply) ? marked.parse(finalAssistantReply) : escapeHtml(finalAssistantReply || "");
+                if (typeof pruneEmptyNodes === 'function') pruneEmptyNodes(assistantTextElement);
+
+                if (reasoningContentElement) {
+                    reasoningContentElement.textContent = finalThinkingProcess || '';
+                    if (reasoningBlockDiv) reasoningBlockDiv.classList.toggle('reasoning-block-empty', !finalThinkingProcess || finalThinkingProcess.trim() === '');
                 }
 
-                if (lastMeaningfulChild) {
-                    let nextSibling = lastMeaningfulChild.nextSibling;
-                    while (nextSibling) {
-                        const nodeToRemove = nextSibling;
-                        nextSibling = nextSibling.nextSibling;
-                        if ((nodeToRemove.nodeName === 'BR') ||
-                            (nodeToRemove.nodeType === Node.TEXT_NODE && nodeToRemove.textContent.trim() === '')) {
-                            console.log("[Finally Stream Cleanup] Removing trailing node:", nodeToRemove);
-                            assistantTextElementToClean.removeChild(nodeToRemove);
-                        } else if (nodeToRemove.nodeName === 'P' && nodeToRemove.textContent.trim() === '' && nodeToRemove.children.length === 0) {
-                            console.log("[Finally Stream Cleanup] Removing trailing empty P:", nodeToRemove);
-                            assistantTextElementToClean.removeChild(nodeToRemove);
-                        } else {
-                            break; // 遇到有意义的节点，停止
-                        }
-                    }
-                } else if (assistantTextElementToClean.childNodes.length > 0) {
-                    // 如果所有子节点都是 <br> 或空白文本节点
-                    let allAreWhitespaceOrBr = true;
-                    for (const node of Array.from(assistantTextElementToClean.childNodes)) {
-                        if (!((node.nodeName === 'BR') || (node.nodeType === Node.TEXT_NODE && node.textContent.trim() === ''))) {
-                            allAreWhitespaceOrBr = false;
-                            break;
-                        }
-                    }
-                    if (allAreWhitespaceOrBr) {
-                        console.log("[Finally Stream Cleanup] All children are whitespace or BR, removing trailing ones.");
-                        while (assistantTextElementToClean.lastChild &&
-                               ((assistantTextElementToClean.lastChild.nodeName === 'BR') ||
-                                (assistantTextElementToClean.lastChild.nodeType === Node.TEXT_NODE && assistantTextElementToClean.lastChild.textContent.trim() === ''))) {
-                            console.log("[Finally Stream Cleanup] Removing trailing node (all whitespace/br case):", assistantTextElementToClean.lastChild);
-                            assistantTextElementToClean.removeChild(assistantTextElementToClean.lastChild);
-                        }
-                    }
-                }
-                // --- 方案2的清理逻辑结束 ---
-
-                if (originalHTMLForDebug !== assistantTextElementToClean.innerHTML) {
-                    console.log("[Finally Stream Cleanup] HTML changed. New innerHTML (last 100chars):", assistantTextElementToClean.innerHTML.slice(-100));
-                } else {
-                    console.log("[Finally Stream Cleanup] HTML did not change after cleanup attempt.");
-                }
-            } else {
-                console.warn("[Finally Stream Cleanup] '.text' element not found in msgDiv.");
-            }
-        }
-                    if (msgDiv && modelValueFromOption && !msgDiv.querySelector('.model-note')) {
+                const msgDivForNote = tempMsgElementWrapper.querySelector('.message.assistant');
+                if (msgDivForNote) {
+                    if (modelValueFromOption && !msgDivForNote.querySelector('.model-note')) {
                         const note = document.createElement('div'); note.className = 'model-note';
                         let displayModelName = modelValueFromOption;
                         const modelSelect = document.getElementById('model');
                         if(modelSelect) {
                             const opt = modelSelect.querySelector(`option[value="${modelValueFromOption}"]`);
-                            if(opt) displayModelName = opt.textContent;
-                            else { const parts = String(modelValueFromOption).split('::'); if (parts.length === 2) displayModelName = parts[1];}
+                            if(opt) displayModelName = opt.textContent; else { const p = String(modelValueFromOption).split('::'); if(p.length===2) displayModelName=p[1];}
                         }
                         note.textContent = `模型：${displayModelName}`;
-                        msgDiv.appendChild(note);
+                        const textEl = msgDivForNote.querySelector('.text');
+                        if (textEl && textEl.nextSibling) msgDivForNote.insertBefore(note, textEl.nextSibling); else msgDivForNote.appendChild(note);
                     }
-                    if (window.MathJax && MathJax.typesetPromise && msgDiv) {
+                    if (window.MathJax && MathJax.typesetPromise) {
                         const elementsToTypeset = [];
-                        const textElementForMathJax = msgDiv.querySelector('.text');
-                        const reasoningElementForMathJax = msgDiv.querySelector('.reasoning-block .reasoning-content');
-                        if (textElementForMathJax && textElementForMathJax.textContent.trim() !== '') elementsToTypeset.push(textElementForMathJax);
-                        if (reasoningElementForMathJax && reasoningElementForMathJax.textContent.trim() !== '') elementsToTypeset.push(reasoningElementForMathJax);
-                        if (elementsToTypeset.length > 0) {
-                            MathJax.typesetPromise(elementsToTypeset).catch(err => console.error("MathJax final typeset failed:", err));
-                        }
+                        if (assistantTextElement && assistantTextElement.innerHTML.trim() !== '') elementsToTypeset.push(assistantTextElement);
+                        if (reasoningContentElement && reasoningContentElement.textContent.trim() !== '') elementsToTypeset.push(reasoningContentElement);
+                        if (elementsToTypeset.length > 0) MathJax.typesetPromise(elementsToTypeset).catch(err => console.error("MathJax final typeset failed:", err));
                     }
                 }
+
+                const messagesContainer = document.getElementById('messages');
+                if (window.currentConversationId === conversationIdAtRequestTime) {
+                    if (messagesContainer && !tempMsgElementWrapper.parentNode) {
+                        messagesContainer.appendChild(tempMsgElementWrapper);
+                        console.log("[Send FINALLY] Appended fully populated tempMsgElementWrapper to DOM for active original conversation.");
+                    } else if (messagesContainer && tempMsgElementWrapper.parentNode === messagesContainer) {
+                        console.log("[Send FINALLY] tempMsgElementWrapper was already in DOM and updated for active original conversation.");
+                    }
+                    if (messagesContainer) requestAnimationFrame(() => { messagesContainer.scrollTop = messagesContainer.scrollHeight; });
+                } else {
+                    if (tempMsgElementWrapper.parentNode) { // It was in some DOM, remove it.
+                        tempMsgElementWrapper.remove();
+                        console.log("[Send FINALLY] Removed fully populated tempMsgElementWrapper from DOM as original conversation is not active.");
+                    }
+                }
+            } else {
+                console.warn("[Send FINALLY] Successful stream, but UI placeholder elements (tempMsgElementWrapper or assistantTextElement) missing. Appending as new message if conversation is active.");
+                if (window.currentConversationId === conversationIdAtRequestTime) {
+                    appendMessage(assistantRoleForDisplay, finalAssistantReply, modelValueFromOption, finalThinkingProcess, conversationIdAtRequestTime, conversationAtRequestTime.messages.length +1);
+                }
             }
-            // Clear uploaded files ONLY if the request was successful, was streaming, AND used files.
-            if (filesToActuallySend.length > 0) {
-                 console.log("DEBUG send() finally: Clearing uploadedFilesData and re-rendering preview because request was successful, streaming, and files were sent.");
-                 window.uploadedFilesData = []; // Clear global state
-                 if (typeof renderFilePreview === 'function') renderFilePreview(); // Update UI
+        } else { // Non-streaming, or stream failed/aborted, or successful stream with NO content
+            console.log("[Send FINALLY] Non-stream, or failed/aborted/empty stream. Finalizing message.");
+            if (tempMsgElementWrapper && tempMsgElementWrapper.parentNode) {
+                console.log("[Send FINALLY] Removing existing stream placeholder before appending definitive message for non-stream/failed scenario.");
+                tempMsgElementWrapper.remove();
+            }
+            if (window.currentConversationId === conversationIdAtRequestTime) {
+                console.log("[Send FINALLY] Appending definitive message/error to UI for active original conversation.");
+                appendMessage(assistantRoleForDisplay, finalAssistantReply, modelValueFromOption, finalThinkingProcess, conversationIdAtRequestTime, conversationAtRequestTime.messages.length +1);
+            } else {
+                 console.log("[Send FINALLY] Non-stream/failed/empty stream: Original conversation not active. Message saved to history, not appending to current UI.");
             }
         }
 
-            const conversationForAutoName = getCurrentConversation(); // 获取最新的当前对话对象
-    if (requestWasSuccessful && // 确保请求是成功的 (避免用错误信息命名)
-        conversationForAutoName &&
-        conversationForAutoName.id === conversationIdAtRequestTime && // 确保是当前操作的对话
-        (conversationForAutoName.title === '新对话' || !conversationForAutoName.title.replace(/\.{3}$/, '').trim()) && // 标题是默认的，或者trim后为空(除了末尾的...)
-        finalAssistantReply &&
-        typeof finalAssistantReply === 'string' && // 确保是字符串
-        finalAssistantReply !== '（无回复）' &&
-        !finalAssistantReply.startsWith('错误：')) {
-
-        let newTitleFromAssistant = finalAssistantReply.trim();
-
-        // 尝试移除常见的 Markdown 列表标记, 标题标记, 引用标记等，避免它们成为标题开头
-        newTitleFromAssistant = newTitleFromAssistant
-            .replace(/^[\s*#\-\.>\d\.\)\(]+/gm, '') // 移除行首的 *, #, -, >, 数字., 数字) 等
-            .trim(); // 再次 trim
-
-        // 截取一部分作为标题
-        const maxLength = 10;
-        let displayTitle = newTitleFromAssistant.substring(0, maxLength);
-
-        
-        // 确保标题不是太短或无意义
-        if (displayTitle.length > 1) { // 例如，至少需要超过1个字符才有意义
-            console.log(`[Auto Naming] Attempting to auto-name conversation "${conversationForAutoName.id}" from assistant reply.`);
-            conversationForAutoName.title = displayTitle;
-
-            // 更新聊天窗口顶部的标题显示
-            const chatTitleEl = document.getElementById('chat-title');
-            if (chatTitleEl && currentConversationId === conversationForAutoName.id) { // 再次确认是当前显示的对话
-                chatTitleEl.textContent = conversationForAutoName.title;
+        // --- 保存到数据模型 ---
+        const targetConversationForStorage = conversations.find(c => c.id === conversationIdAtRequestTime);
+        if (targetConversationForStorage) {
+            let contentToSaveForHistory = finalAssistantReply;
+            if (providerToUse === 'anthropic' && typeof finalAssistantReply === 'string') {
+                contentToSaveForHistory = [{ type: "text", text: finalAssistantReply }];
+            } else if (typeof finalAssistantReply !== 'string' && !Array.isArray(finalAssistantReply)){
+                contentToSaveForHistory = String(finalAssistantReply);
             }
-            // 注意：saveConversations() 和 renderConversationList() 会在 finally 块的更后面统一调用
-            // 所以这里只需要修改 conversationForAutoName.title 即可。
-            // 如果你的 save 和 render 在此之前，则需要在这里单独调用。
+
+            const shouldPushToHistory = (streamContentReceived || !isActuallyStreaming) &&
+                                        ((finalAssistantReply && finalAssistantReply !== '（无回复）' && !finalAssistantReply.toLowerCase().startsWith("错误：")  && !finalAssistantReply.toLowerCase().includes("（回复为空）") ) || // Check for various empty/error states
+                                         (finalThinkingProcess && finalThinkingProcess.trim() !== ''));
+
+            if (shouldPushToHistory) {
+                const lastMessageInHistory = targetConversationForStorage.messages.length > 0 ?
+                                        targetConversationForStorage.messages[targetConversationForStorage.messages.length - 1] : null;
+                let allowPush = true;
+                if (lastMessageInHistory && lastMessageInHistory.role === assistantRoleForDisplay &&
+                    JSON.stringify(lastMessageInHistory.content) === JSON.stringify(contentToSaveForHistory) &&
+                    (lastMessageInHistory.reasoning_content || null) === (finalThinkingProcess || null)) {
+                    console.warn("[Finally] Attempted to push a duplicate assistant message to history. Skipping.");
+                    allowPush = false;
+                }
+                if(allowPush) {
+                    targetConversationForStorage.messages.push({
+                        role: assistantRoleForDisplay,
+                        content: contentToSaveForHistory,
+                        model: modelValueFromOption,
+                        reasoning_content: finalThinkingProcess
+                    });
+                    console.log("[Send FINALLY] Assistant message pushed to history for conversation:", conversationIdAtRequestTime);
+                }
+            } else {
+                console.log("[Send FINALLY] No significant content to push to history, or stream had no content and was successful, for conversation:", conversationIdAtRequestTime);
+            }
         } else {
-            console.log(`[Auto Naming] Assistant reply was too short or became too short after cleaning to be used as a title: "${newTitleFromAssistant}"`);
+            console.error(`[Send FINALLY Save Error] Could not find original conversation ${conversationIdAtRequestTime} to save assistant reply.`);
         }
+
+        // --- 自动命名、保存对话、渲染列表 ---
+        const convForAutoName = conversations.find(c => c.id === conversationIdAtRequestTime); // Use the original conversation for auto-naming
+        if (requestWasSuccessful && streamContentReceived &&
+            convForAutoName && // Make sure convForAutoName is the one request was for
+            (convForAutoName.title === '新对话' || !convForAutoName.title.replace(/\.{3}$/, '').trim()) &&
+            finalAssistantReply && typeof finalAssistantReply === 'string' &&
+            finalAssistantReply.trim() !== '' && finalAssistantReply !== '（无回复）' && !finalAssistantReply.includes('（用户已中止）') && !String(finalAssistantReply).toLowerCase().startsWith('错误：')) {
+            let titleCandidate = String(finalAssistantReply).replace(/<[^>]+>/g, '').replace(/[\s*#\-–—~`\[\](){}|：:「『“”。！？,，\.>]+/gm, '').trim().substring(0, 30);
+            if (titleCandidate.length > 2) {
+                convForAutoName.title = titleCandidate + (titleCandidate.length === 30 ? "..." : "");
+                if (window.currentConversationId === conversationIdAtRequestTime && document.getElementById('chat-title')) { // Only update UI title if it's the active one
+                     document.getElementById('chat-title').textContent = convForAutoName.title;
+                }
+            }
+        }
+        if (typeof saveConversations === 'function') saveConversations();
+        if (typeof renderConversationList === 'function') renderConversationList(); // This will re-render list, highlighting current active one
+        if (window.currentConversationId === conversationIdAtRequestTime && typeof enableInlineTitleEdit === 'function') {
+            enableInlineTitleEdit();
+        }
+
+
+        // --- 清理上传文件 ---
+        const requestConsideredFullySuccessfulForFileClear = requestWasSuccessful && (streamContentReceived || !isActuallyStreaming) &&
+            finalAssistantReply && !finalAssistantReply.includes('（用户已中止）') && !String(finalAssistantReply).toLowerCase().startsWith('错误：');
+        if (requestConsideredFullySuccessfulForFileClear && filesToActuallySend && filesToActuallySend.length > 0) {
+            console.log("[Send FINALLY] Request fully successful with content, clearing uploaded files.");
+            window.uploadedFilesData = [];
+            if (typeof renderFilePreview === 'function') renderFilePreview();
+        }
+
+        // --- 最终滚动 (Only if the original conversation is still active) ---
+        const messagesContainerForScroll = document.getElementById('messages');
+        if (messagesContainerForScroll && window.currentConversationId === conversationIdAtRequestTime) {
+             requestAnimationFrame(() => { messagesContainerForScroll.scrollTop = messagesContainerForScroll.scrollHeight; });
+        }
+
+        console.log("================ DEBUG: send() function FINISHED ================ \n\n");
     }
-  
-const targetConversationForStorage = conversations.find(c => c.id === conversationIdAtRequestTime);
-
-if (targetConversationForStorage) {
-    const assistantRoleForStorage = 'assistant';
-    let contentToSave; // 声明 contentToSave
-
-    // 1. 根据 provider 确定 contentToSave 的格式
-    if (providerToUse === 'anthropic') {
-        if (Array.isArray(finalAssistantReply)) {
-            contentToSave = finalAssistantReply;
-        } else {
-            contentToSave = [{ type: "text", text: String(finalAssistantReply) }];
-        }
-    } else {
-        // 对于其他所有 provider (OpenAI, Deepseek, Ollama, OpenRouter, etc.)
-        // 假设 finalAssistantReply 已经是正确的字符串格式
-        contentToSave = finalAssistantReply;
-    }
-
-    // 2. 判断是否需要将消息添加到历史记录
-    //    (例如，有实际回复，或者有思考过程，或者是明确的错误信息)
-    const shouldPushMessage =
-        (finalAssistantReply && finalAssistantReply !== '（无回复）') ||
-        (finalThinkingProcess && finalThinkingProcess.trim() !== '') ||
-        (typeof finalAssistantReply === 'string' && finalAssistantReply.startsWith('错误：'));
-
-    if (shouldPushMessage) {
-        targetConversationForStorage.messages.push({
-            role: assistantRoleForStorage,
-            content: contentToSave, // 使用上面确定的 contentToSave
-            model: modelValueFromOption,
-            reasoning_content: finalThinkingProcess,// 保存思考过程
-        });
-        console.log("[Finally] Assistant message pushed to conversation history.");
-
-        // 3. 在消息 push 之后，保存对话并更新列表
-        if (typeof saveConversations === 'function') {
-            saveConversations();
-            console.log("[Finally] Conversations saved AFTER pushing assistant message.");
-        }
-
-        // 4. 更新对话列表的条件可以保持或简化
-        //    通常，只要对话被修改（新消息、标题更改），列表就应该刷新以反映最新状态，
-        //    特别是如果列表项显示了最后消息时间或摘要。
-        //    如果只是为了标题和活动状态，可以更精细控制。
-        //    一个简单的做法是，如果请求成功，就总是尝试渲染列表。
-        if (typeof renderConversationList === 'function' && requestWasSuccessful) {
-            // 检查是否是当前对话的更新，或者是一个后台对话的更新
-            // if (currentConversationId === conversationIdAtRequestTime ||
-            //     (currentConversationId !== conversationIdAtRequestTime && !(typeof finalAssistantReply === 'string' && finalAssistantReply.startsWith('错误：')) )
-            // ) {
-            //     // 上面的条件有点复杂，简化为：如果请求成功，就更新列表，因为它可能影响标题或活动状态
-            // }
-            renderConversationList();
-            console.log("[Finally] Conversation list rendered AFTER saving.");
-        }
-    } else {
-        console.log("[Finally] No significant assistant reply or thinking process to push to history.");
-        // 即使没有 push 新消息，如果标题因为自动命名而改变了，也需要保存和重绘列表
-        // 这个检查可以放在自动命名逻辑之后，或者在这里再做一次判断
-        if (conversationForAutoName && conversationForAutoName.title !== '新对话' /* && 标题真的变了 */ ) {
-            if (typeof saveConversations === 'function') saveConversations();
-            if (typeof renderConversationList === 'function') renderConversationList();
-        }
-    }
-} else {
-    console.error(`[保存错误] 无法找到原始对话 ${conversationIdAtRequestTime} 来保存助手回复。`);
 }
 
+
+// processStreamChunk function (as provided previously, ensure it's defined)
+function processStreamChunk(rawText, provider, conversationId, assistantTextEl, reasoningContentEl, reasoningBlockEl, explicitThinkingText = null) {
+    let canUpdateUI = (window.currentConversationId === conversationId);
+    if (!assistantTextEl && !reasoningContentEl && canUpdateUI) { // Only warn if UI update was expected
+        console.warn("[ProcessChunk] UI elements (assistantTextEl or reasoningContentEl) are null. Cannot update UI for this chunk. Provider:", provider);
+        canUpdateUI = false; // Prevent further attempts if main elements are missing
+    } else if (!assistantTextEl && !reasoningContentEl && !canUpdateUI) {
+        // If canUpdateUI was already false, no need to warn, just skip.
+    }
+
+
+    let replyTextPortion = "";
+    let thinkingTextPortion = "";
+
+    // 1. 从输入文本中分离思考和回复部分
+    if (explicitThinkingText !== null && typeof explicitThinkingText === 'string') {
+        thinkingTextPortion = explicitThinkingText;
+        replyTextPortion = (typeof rawText === 'string') ? rawText : "";
+    } else if (typeof rawText === 'string' && rawText && typeof extractThinkingAndReply === 'function' &&
+               (rawText.includes("<think>") || window.isCurrentlyInThinkingBlock || rawText.includes("</think>"))) {
+        try {
+            let extracted = extractThinkingAndReply(rawText, "<think>", "</think>", window.isCurrentlyInThinkingBlock);
+            replyTextPortion = extracted.replyTextPortion;
+            thinkingTextPortion = extracted.thinkingTextPortion;
+            window.isCurrentlyInThinkingBlock = extracted.newThinkingBlockState;
+        } catch (e) {
+            console.error("[ProcessChunk] Error in extractThinkingAndReply:", e, "Raw text:", rawText);
+            replyTextPortion = rawText;
+        }
+    } else if (typeof rawText === 'string') {
+        replyTextPortion = rawText;
+    }
+
+    let uiActuallyUpdated = false;
+
+    // 2. 更新思考过程 UI (如果可以更新UI且有内容)
+    if (canUpdateUI && thinkingTextPortion) {
+        if (reasoningContentEl && reasoningContentEl instanceof HTMLElement) {
+            reasoningContentEl.textContent += thinkingTextPortion;
+            if (reasoningBlockEl && reasoningBlockEl.classList.contains('reasoning-block-empty') && reasoningContentEl.textContent.trim() !== '') {
+                reasoningBlockEl.classList.remove('reasoning-block-empty');
+            }
+            const rce = reasoningContentEl;
+            // 思考框内部的自动滚动 (如果需要)
+            if (rce.scrollHeight > rce.clientHeight && (rce.scrollHeight - rce.clientHeight <= rce.scrollTop + 10)) { // 10px threshold
+                 rce.scrollTop = rce.scrollHeight;
+            }
+            uiActuallyUpdated = true;
+        } else if (thinkingTextPortion.trim() !== "" && canUpdateUI) { // 只有当期望更新UI时才警告
+            // console.warn(`[ProcessChunk] Provider ${provider}: Had thinking text, but reasoningContentEl is invalid. Block exists: ${!!reasoningBlockEl}`);
+        }
+    }
+
+    // 3. 更新主要回复 UI (如果可以更新UI且有内容)
+    if (canUpdateUI && replyTextPortion) {
+        if (assistantTextEl && assistantTextEl instanceof HTMLElement) {
+            const textNode = document.createTextNode(replyTextPortion);
+            assistantTextEl.appendChild(textNode);
+            uiActuallyUpdated = true;
+        } else if (replyTextPortion.trim() !== "" && canUpdateUI) { // 只有当期望更新UI时才警告
+            // console.warn(`[ProcessChunk] Provider ${provider}: Had reply text, but assistantTextEl is invalid.`);
+        }
+    }
+
+     // 4. 滚动整个消息列表 (#messages) - 仅当UI实际更新时
+    if (canUpdateUI && uiActuallyUpdated) {
+        const messagesContainer = document.getElementById('messages');
+        if (messagesContainer) {
+            setTimeout(() => {
+                if (!userHasManuallyScrolledUp) {
+                    isScrollingProgrammatically = true;
+                    messagesContainer.scrollTo({ top: messagesContainer.scrollHeight, behavior: 'auto' });
+                    requestAnimationFrame(() => {
+                        isScrollingProgrammatically = false;
+                    });
+                } else {
+                     console.log("[ProcessChunk] Auto-scroll PAUSED by user (wheel or button).");
+                }
+            }, 0);
+        }
     }
 }
 
 
 window.send = send; // 暴露到全局，供HTML调用
+
+// --- Helper function for stream processing (新增的辅助函数) ---
+/**
+ * 处理从API流接收到的单个文本块，并更新UI。
+ * @param {string} rawText - 从流中接收到的原始文本块，可能包含回复和/或用<think>标签包裹的思考内容。
+ * @param {string} provider - 当前API提供商的标识符 (用于日志)。
+ * @param {string} conversationId - 当前对话的ID (用于检查是否仍在当前对话)。
+ * @param {HTMLElement | null} assistantTextEl - 用于显示主要回复的DOM元素 (.text)。
+ * @param {HTMLElement | null} reasoningContentEl - 用于显示思考过程的DOM元素 (.reasoning-content)。
+ * @param {HTMLElement | null} reasoningBlockEl - 包含思考过程的DOM元素 (.reasoning-block)。
+ * @param {string | null} [explicitThinkingText=null] - 如果API分别提供思考和回复，则这是显式的思考文本。
+ */
+function processStreamChunk(rawText, provider, conversationId, assistantTextEl, reasoningContentEl, reasoningBlockEl, explicitThinkingText = null) {
+    let canUpdateUI = (window.currentConversationId === conversationId);
+    if (!assistantTextEl && !reasoningContentEl && canUpdateUI) {
+        // 如果 canUpdateUI 为 true 但关键元素缺失，才警告
+        console.warn("[ProcessChunk] UI elements (assistantTextEl or reasoningContentEl) are null, but UI update was expected. Cannot update UI for this chunk. Provider:", provider);
+        canUpdateUI = false; // 阻止后续尝试
+    } else if (!assistantTextEl && !reasoningContentEl && !canUpdateUI) {
+        // 如果 canUpdateUI 本来就是 false，则不警告，正常跳过
+    }
+
+
+    let replyTextPortion = "";
+    let thinkingTextPortion = "";
+
+    // 1. 从输入文本中分离思考和回复部分
+    if (explicitThinkingText !== null && typeof explicitThinkingText === 'string') {
+        thinkingTextPortion = explicitThinkingText;
+        replyTextPortion = (typeof rawText === 'string') ? rawText : "";
+    } else if (typeof rawText === 'string' && rawText && typeof extractThinkingAndReply === 'function' &&
+               (rawText.includes("<think>") || window.isCurrentlyInThinkingBlock || rawText.includes("</think>"))) {
+        try {
+            let extracted = extractThinkingAndReply(rawText, "<think>", "</think>", window.isCurrentlyInThinkingBlock);
+            replyTextPortion = extracted.replyTextPortion;
+            thinkingTextPortion = extracted.thinkingTextPortion;
+            window.isCurrentlyInThinkingBlock = extracted.newThinkingBlockState;
+        } catch (e) {
+            console.error("[ProcessChunk] Error in extractThinkingAndReply:", e, "Raw text:", rawText);
+            replyTextPortion = rawText;
+        }
+    } else if (typeof rawText === 'string') {
+        replyTextPortion = rawText;
+    }
+
+    let uiActuallyUpdated = false;
+
+    // 2. 更新思考过程 UI (如果可以更新UI且有内容)
+    if (canUpdateUI && thinkingTextPortion) {
+        if (reasoningContentEl && reasoningContentEl instanceof HTMLElement) {
+            reasoningContentEl.textContent += thinkingTextPortion;
+
+            if (reasoningBlockEl && reasoningBlockEl.classList.contains('reasoning-block-empty') && reasoningContentEl.textContent.trim() !== '') {
+                reasoningBlockEl.classList.remove('reasoning-block-empty');
+                // 当思考框从 empty 变为非 empty 时，它的 display 会从 none 变为 block (根据CSS)
+                // 这会影响布局，所以此时尤其需要考虑滚动
+            }
+            const rce = reasoningContentEl;
+            const scrollThresholdReasoning = 10;
+            if (rce.scrollHeight > rce.clientHeight && (rce.scrollHeight - rce.clientHeight <= rce.scrollTop + scrollThresholdReasoning)) {
+                rce.scrollTop = rce.scrollHeight;
+            }
+            uiActuallyUpdated = true;
+        } else if (thinkingTextPortion.trim() !== "" && canUpdateUI) {
+            console.warn(`[ProcessChunk] Provider ${provider}: Had thinking text, but reasoningContentEl is invalid. Text: "${thinkingTextPortion.substring(0,50)}..."`);
+        }
+    }
+
+    // 3. 更新主要回复 UI (如果可以更新UI且有内容)
+    if (canUpdateUI && replyTextPortion) {
+        if (assistantTextEl && assistantTextEl instanceof HTMLElement) {
+            const textNode = document.createTextNode(replyTextPortion);
+            assistantTextEl.appendChild(textNode);
+            uiActuallyUpdated = true;
+        } else if (replyTextPortion.trim() !== "" && canUpdateUI) {
+            console.warn(`[ProcessChunk] Provider ${provider}: Had reply text, but assistantTextEl is invalid. Text: "${replyTextPortion.substring(0,50)}..."`);
+        }
+    }
+
+    // 4. 滚动整个消息列表 (#messages) - 仅当UI实际更新时
+    if (canUpdateUI && uiActuallyUpdated) {
+        const messagesContainer = document.getElementById('messages');
+        if (messagesContainer) {
+            // 稍微调整滚动逻辑：
+            // 引入一个更大的容差，或者一个机制来判断用户是否主动向上滚动了很多。
+            // 为了简单起见，我们先尝试一个更宽松的条件，并使用 setTimeout 确保DOM更新。
+
+            setTimeout(() => {
+                // 只有当用户距离底部的距离没有“太远”时，我们才自动滚动。
+                // “太远”可以定义为一个固定的像素值，或者视口高度的某个比例。
+                const considerableScrollUpOffset = messagesContainer.clientHeight * 0.75; // 例如，如果用户向上滚动了超过75%的视口高度，则可能不希望自动滚
+                const distanceFromBottom = messagesContainer.scrollHeight - messagesContainer.clientHeight - messagesContainer.scrollTop;
+                const isContentLessThanOneScreen = messagesContainer.scrollHeight <= messagesContainer.clientHeight;
+
+                // 新的判断条件：
+                // 1. 内容不足一屏。
+                // 2. 或者，用户距离底部的实际距离没有超过我们设定的“显著向上滚动”的偏移量。
+                let shouldAutoScroll = isContentLessThanOneScreen || (distanceFromBottom <= considerableScrollUpOffset);
+
+                // 如果我们想让它更“粘”，可以总是滚动，除非用户真的滚得很远。
+                // 或者，如果只是想确保有思考框时也能滚动，可以先尝试更直接的滚动：
+                // shouldAutoScroll = true; // <--- 强制滚动以测试
+
+                // console.log(
+                //    `[ScrollDecision In Timeout] scrollH: ${messagesContainer.scrollHeight}, clientH: ${messagesContainer.clientHeight}, scrollT: ${messagesContainer.scrollTop}, distBottom: ${distanceFromBottom}, considerableOffset: ${considerableScrollUpOffset}, shouldScroll: ${shouldAutoScroll}`
+                // );
+
+                if (shouldAutoScroll) {
+                    messagesContainer.scrollTo({ top: messagesContainer.scrollHeight, behavior: 'auto' });
+                }
+            }, 0); // 延迟到下一个事件循环，给DOM更新和scrollHeight计算留出时间
+        }
+    }
+    // console.log(`[ProcessChunk] END. UI Updated: ${uiActuallyUpdated}, Thinking: ${!!thinkingTextPortion}, Reply: ${!!replyTextPortion}`);
+}
+
+
+
 
 /**
  * 显示设置区域，隐藏聊天区域。
@@ -2764,6 +2595,31 @@ function applyTheme(theme) {
     document.body.classList.remove('dark-theme');
   }
   localStorage.setItem('theme', theme); // 保存主题偏好到 Local Storage
+}
+
+function updateSubmitButtonState(isStopping) {
+    if (!submitActionBtn) { // ★ 检查 submitActionBtn 是否有效
+        console.error("updateSubmitButtonState: submitActionBtn is not defined or null!");
+        return;
+    }
+
+    const textSpan = submitActionBtn.querySelector('span');
+
+    if (isStopping) {
+        submitActionBtn.classList.add('is-stopping'); // ★ 确保这个类被添加
+        if (textSpan) textSpan.textContent = '停止';
+        else submitActionBtn.textContent = '停止';
+        submitActionBtn.disabled = false; // 停止按钮应该总是可用的
+        console.log("[UI Update] Button state changed to: STOPPING"); // 添加日志
+    } else {
+        submitActionBtn.classList.remove('is-stopping'); // ★ 确保这个类被移除
+        if (textSpan) textSpan.textContent = '发送';
+        else submitActionBtn.textContent = '发送';
+        // 根据输入框内容决定发送按钮是否禁用 (如果需要)
+        // const promptInput = document.getElementById('prompt');
+        // submitActionBtn.disabled = !promptInput || promptInput.value.trim() === '';
+        console.log("[UI Update] Button state changed to: SEND"); // 添加日志
+    }
 }
 
 /**
@@ -2923,6 +2779,30 @@ function extractThinkingAndReply(textChunk, startTag, endTag, currentlyInThinkin
     return { replyTextPortion, thinkingTextPortion, newThinkingBlockState };
 }
 
+function handleSubmitActionClick() {
+    console.log("[handleSubmitActionClick] CALLED. isGeneratingResponse: " + window.isGeneratingResponse);
+
+    if (window.isGeneratingResponse) { // 如果正在生成，则用户意图是“停止”
+        if (window.currentAbortController) {
+            console.log("[handleSubmitActionClick] Attempting to STOP. Calling currentAbortController.abort()");
+            window.currentAbortController.abort();
+            // UI状态的更新（按钮变回“发送”，输入框启用）将由 send() 的 finally 块处理
+        } else {
+            console.warn("[handleSubmitActionClick] In stopping state, but currentAbortController is null! Forcing UI reset.");
+            window.isGeneratingResponse = false; // 强制重置
+            updateSubmitButtonState(false);
+            const promptInput = document.getElementById('prompt');
+            if (promptInput) promptInput.disabled = false;
+        }
+    } else { // 如果没有在生成，则用户意图是“发送”
+        console.log("[handleSubmitActionClick] Attempting to SEND.");
+        if (typeof send === 'function') {
+            send();
+        } else {
+            console.error("send function is not defined in handleSubmitActionClick!");
+        }
+    }
+}
 
 function handlePostDropdownUpdate(newlySelectedValueInDropdown, previousSelectedValueBeforeUpdate) {
     const modelSelect = document.getElementById('model');
@@ -3782,9 +3662,7 @@ maxTokensInputInline = document.getElementById('max-tokens-input-inline');
 modelListEditor = document.getElementById('model-list-editor'); // 确保 modelListEditor 在这里被正确获取
 
 
-// script.js 顶部
-console.log("script.js parsing started");
-
+console.log("%cDOMContentLoaded: Script fully loaded and parsed.", "color: blue;"); // 日志A
 
 
     if (modelListEditor) {
@@ -4193,15 +4071,36 @@ if (showPresetPromptsBtn && presetPromptsListPanel && presetPromptsUl) {
 
     // --- 7. 主要按钮和控件的事件监听器 (Single binding point for each) ---
 
-    const sendBtn = document.getElementById('send-btn');
-    if (sendBtn) {
-        sendBtn.addEventListener('click', e => {
-            e.preventDefault();
-            if (typeof send === 'function') send();
-            else console.error("DOMContentLoaded: send function not defined for sendBtn click.");
-        });
-    } else { console.warn("DOMContentLoaded: Send button 'send-btn' not found."); }
-
+    submitActionBtn = document.getElementById('submit-action-btn');
+     console.log("%cDOMContentLoaded: Value of submitActionBtn after getElementById:", "color: blue;", submitActionBtn); // 日志B
+        if (submitActionBtn) {
+        console.log("%cDOMContentLoaded: Found submit-action-btn element.", "color: blue;"); // 日志C
+        submitActionBtn.addEventListener('click', handleSubmitActionClick);
+        console.log("%cDOMContentLoaded: Event listener ADDED to submit-action-btn.", "color: blue;"); // 日志D
+    } else {
+        console.error("%cDOMContentLoaded: CRITICAL - submit-action-btn NOT FOUND.", "color: red; font-weight: bold;"); // 日志E
+    }
+     if (!submitActionBtn) {
+        console.error("CRITICAL: submitActionBtn not found in DOMContentLoaded!");
+    } else {
+        // 确保事件监听器在这里正确绑定
+        submitActionBtn.addEventListener('click', handleSubmitActionClick);
+    }
+    
+    
+    
+    fileInputInline = document.getElementById('file-input-inline');
+    if (fileInputInline) {
+        console.log("DEBUG DOMContentLoaded: Checking typeof handleFileSelection:", typeof handleFileSelection);
+        if (typeof handleFileSelection === 'function') {
+            fileInputInline.addEventListener('change', handleFileSelection);
+            console.log("DEBUG DOMContentLoaded: 'change' event listener for fileInputInline BOUND SUCCESSFULLY.");
+        } else {
+            console.error("CRITICAL DOMContentLoaded: handleFileSelection IS NOT A FUNCTION for fileInputInline!");
+        }
+    } else {
+        console.warn("DOMContentLoaded: fileInputInline not found.");
+    }
     const newConvBtn = document.getElementById('new-conv-btn');
     if (newConvBtn) {
         newConvBtn.addEventListener('click', () => {
@@ -4408,7 +4307,6 @@ if (showModelManagementBtn) {
     // --- 行内文件上传按钮和聊天设置按钮的事件监听器 (CONSOLIDATED AND SINGLE BINDING) ---
     const uploadFileBtnInline = document.getElementById('upload-file-btn-inline');
     console.log("!!! uploadFileBtnInline CLICKED, triggering fileInputInline.click() !!!");
-    const fileInputInline = document.getElementById('file-input-inline');
     const chatSettingsBtnInline = document.getElementById('chat-settings-btn-inline');
     console.log("uploadFileBtnInline element:", uploadFileBtnInline);
     console.log("fileInputInline element:", fileInputInline);
@@ -4435,43 +4333,67 @@ if (showModelManagementBtn) {
         console.warn(`DOMContentLoaded: Inline file upload elements not fully found. Missing: ${missingInlineUploadElements.join(' and ')}.`);
     }
 
-    const messagesContainerScroll = document.getElementById('messages'); // messages 容器
-const scrollToBottomBtn = document.getElementById('scroll-to-bottom-btn');
-let autoScrollEnabled = true; // 用于跟踪用户是否手动滚动了
+    const messagesContainer = document.getElementById('messages');
+    const scrollToBottomBtn = document.getElementById('scroll-to-bottom-btn');
+    const buttonVisibilityThreshold = 150;
 
-if (messagesContainerScroll && scrollToBottomBtn) {
-    messagesContainerScroll.addEventListener('scroll', () => {
-        const threshold =150; // 向上滚动超过多少像素才显示按钮
-        const isNearBottom = messagesContainerScroll.scrollHeight - messagesContainerScroll.clientHeight <= messagesContainerScroll.scrollTop + threshold;
+    if (messagesContainer && scrollToBottomBtn) {
+        messagesContainer.addEventListener('wheel', (event) => {
+            // 不再关心 isScrollingProgrammatically，因为 wheel 是用户主动的
+            if (event.deltaY < 0) { // 向上滚动
+                if (!userHasManuallyScrolledUp) {
+                    console.log("[Wheel Event - UP] User scrolled up. PAUSING auto-scroll. Setting userHasManuallyScrolledUp = true.");
+                    userHasManuallyScrolledUp = true;
+                }
+            }
+            // 注意：这里完全不处理向下滚动恢复，恢复完全依赖按钮
+        }, { passive: true });
 
-        if (isNearBottom) {
-            scrollToBottomBtn.style.display = 'none';
-            autoScrollEnabled = true; // 用户回到底部附近，恢复自动滚动
-        } else {
-            scrollToBottomBtn.style.display = 'flex'; // 显示按钮
-            // 如果用户向上滚动了，可以暂时禁用自动滚动，直到他点击按钮或自己滚回底部
-            // autoScrollEnabled = false; // 这个标志由你的流式滚动逻辑使用
-        }
-    });
+        messagesContainer.addEventListener('scroll', () => {
+            // 只负责按钮显隐
+            const currentScrollTop = messagesContainer.scrollTop;
+            const scrollHeight = messagesContainer.scrollHeight;
+            const clientHeight = messagesContainer.clientHeight;
+            const distanceFromBottomForButton = scrollHeight - clientHeight - currentScrollTop;
 
-    scrollToBottomBtn.addEventListener('click', () => {
-        messagesContainerScroll.scrollTo({
-            top: messagesContainerScroll.scrollHeight,
-            behavior: 'smooth'
+            if (distanceFromBottomForButton > buttonVisibilityThreshold && scrollHeight > clientHeight) {
+                scrollToBottomBtn.style.display = 'flex';
+            } else {
+                scrollToBottomBtn.style.display = 'none';
+            }
+            // 不再在这里修改 userHasManuallyScrolledUp
         });
-        // 点击后，按钮会因为滚动到底部而自动隐藏 (通过 scroll 事件)
-        // autoScrollEnabled = true; // 确保恢复自动滚动
-    });
 
-    // 全局的 isNearBottomMessages 函数可以这样实现（如果你的流式滚动逻辑需要它）
-    window.isNearBottomMessages = function(containerElement = messagesContainerScroll, threshold = 30) {
-        if (!containerElement) return true; // 如果容器不存在，假装在底部
-        return containerElement.scrollHeight - containerElement.clientHeight <= containerElement.scrollTop + threshold;
-    };
+        scrollToBottomBtn.addEventListener('click', () => {
+            console.log("[ScrollToBottom Btn Click] Resuming auto-scroll and scrolling.");
+            isScrollingProgrammatically = true;
+            userHasManuallyScrolledUp = false; // ★★★ 核心恢复点 ★★★
+            messagesContainer.scrollTo({
+                top: messagesContainer.scrollHeight,
+                behavior: 'auto' // 改为 auto，更快，减少 smooth 动画期间的复杂性
+            });
+            // 立即或用 rAF 清除，因为 'auto' 滚动很快
+            requestAnimationFrame(() => {
+                isScrollingProgrammatically = false;
+            });
+        });
 
-}
-    
-    console.log("DEBUG DOMContentLoaded: All initializations and event bindings complete.");
+        // 初始化... (与之前类似，但 userHasManuallyScrolledUp 的初始判断可以更简单)
+        const initialDistanceFromBottom = messagesContainer.scrollHeight - messagesContainer.clientHeight - messagesContainer.scrollTop;
+        if (initialDistanceFromBottom > buttonVisibilityThreshold && messagesContainer.scrollHeight > messagesContainer.clientHeight) {
+            scrollToBottomBtn.style.display = 'flex';
+        } else {
+            scrollToBottomBtn.style.display = 'none';
+        }
+        if (initialDistanceFromBottom > 5 && messagesContainer.scrollHeight > messagesContainer.clientHeight) {
+            userHasManuallyScrolledUp = true;
+        } else {
+            userHasManuallyScrolledUp = false;
+        }
+        console.log(`[Initial Load] userHasManuallyScrolledUp: ${userHasManuallyScrolledUp}`);
+    }
+    // ...
+    console.log("%cDEBUG DOMContentLoaded: All initializations and event bindings complete.", "color: blue;");
 }); // DOMContentLoaded 事件监听器结束
 
 // --- END OF FILE script.js ---

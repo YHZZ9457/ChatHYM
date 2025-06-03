@@ -212,7 +212,7 @@
       "options": [
         {
           "text": "OR Deepseek-R1 8B",
-          "value": "openrouter::deepseek/deepseek-r1-0528-qwen3-8b:free",
+          "value": "openrouter::deepseek/deepseek-r1-0528-qwen3-8b",
           "isHidden": false
         },
         {

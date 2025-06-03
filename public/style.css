@@ -316,11 +316,23 @@ button{font-family:inherit;cursor:pointer; background:transparent; border:none; 
   font-size: 0.95rem;
   box-shadow: var(--shadow-sm); /* 使用变量 */
   word-break: break-word;
+  align-items: flex-start;
   max-width: 100%;
   position: relative; /* 用于内部元素如删除按钮 */
-   flex-grow: 1; /* 允许气泡填充可用空间 (在 message-wrapper 的 flex 布局内) */
-    min-width: 0; /* 防止气泡内容过长时撑开布局，配合 flex-grow:1 和 word-break */
+    flex-grow: 0 !important;
+    flex-shrink: 0 !important; /* 通常也一起设置，防止被压缩 */
+    flex-basis: auto !important; /* 确保其基础尺寸由内容或height决定 */
 }
+.messages::after {
+  content: "";      /* 伪元素必须有 content */
+  display: block;   /* 使其表现为块级元素，虽然在flex item中影响不大 */
+  flex-grow: 1;     /* ★★★ 这是核心：这个伪元素将占据所有剩余的垂直空间 ★★★ */
+}
+
+.messages:has(> .empty-chat-placeholder:not([style*="display: none"]))::after {
+    flex-grow: 0 !important; /* 或者 flex-basis: 0; flex-shrink: 0; */
+}
+
 .message.user { /* 用户气泡颜色 */
   background-color: var(--primary);
   color: white;
@@ -452,33 +464,51 @@ body.dark-theme .input-area textarea#prompt:focus {
     background-color: var(--sidebar-dark); /* 深色主题焦点时比输入背景略亮 */
 }
 
-/* 发送按钮的样式 */
-.input-area button#send-btn {
-  padding: 0 18px; /* 调整内边距 */
-  height: 42px;    /* 与其他元素高度一致 */
-  background:var(--primary);
-  color:#fff;
-  border:none;
-  border-radius:var(--border-radius-md); /* 使用变量 */
-  font-size:0.95rem;
-  font-weight: 500; /* 加一点字重 */
-  flex-shrink: 0;
-  white-space: nowrap;
-  display: inline-flex;
+/* 通用提交/操作按钮样式 (原 #send-btn 样式可以迁移到这里) */
+#submit-action-btn {
+  padding: 0 18px; /* 水平内边距，让文字居中且有空间 */
+  height: 42px;    /* 与输入框和其他按钮高度一致 */
+  background: var(--primary); /* 默认发送状态的背景色 */
+  color: #fff;
+  border: none;
+  border-radius: var(--border-radius-md);
+  font-size: 0.95rem; /* 字体大小 */
+  font-weight: 500;
+  flex-shrink: 0; /* 防止在 flex 布局中被压缩 */
+  white-space: nowrap; /* 防止文字换行 */
+  display: inline-flex; /* 用于垂直居中文本 */
   align-items: center;
   justify-content: center;
-  transition: background-color 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease; /* 添加 color 和 opacity 过渡 */
+  min-width: 70px; /* 给按钮一个最小宽度，避免文字过少时太窄 */
+  text-align: center;
 }
-.input-area button#send-btn:hover {
-  background:rgba(var(--primary-rgb),0.85);
-  box-shadow: var(--shadow-md);
+
+#submit-action-btn:hover {
+  background: rgba(var(--primary-rgb), 0.85); /* 发送状态 hover */
 }
-.input-area button#send-btn:disabled { /* 发送按钮禁用状态 */
+
+#submit-action-btn:disabled {
     background-color: var(--border-color);
     color: var(--text-secondary);
     cursor: not-allowed;
-    box-shadow: none;
+    opacity: 0.7; /* 禁用时稍微透明 */
+}
+
+/* 停止状态的特定样式 */
+#submit-action-btn.is-stopping {
+  background-color: #e53e3e; /* 红色背景 */
+  color: #fff;
+}
+
+#submit-action-btn.is-stopping:hover {
+  background-color: #c53030; /* 红色背景 hover */
+}
+
+/* 按钮内的 span (如果使用) */
+#submit-action-btn span {
+    /* 如果需要特别调整文字样式，可以在这里添加 */
 }
 
 
@@ -616,7 +646,6 @@ body.dark-theme .messages, body.dark-theme .sidebar, body.dark-theme .settings-a
 }
 /* —— 补丁结束 —— */
 
-/* ===== 覆盖：删除按钮样式 - 已在头部按钮区处理 ===== */
 
 /* 清除助手机泡内 <p> 的默认 margin */
 .message .text p {
@@ -635,14 +664,55 @@ body.dark-theme .messages, body.dark-theme .sidebar, body.dark-theme .settings-a
     white-space: pre-wrap; /* 保留空白符序列，正常换行，保留换行符 */
 
 }
-/* loading 占位样式 */
+/* loading 占位样式 - 强制高度版本 */
 .message.assistant.loading {
   opacity: 0.6;
   font-style: italic;
-  display: inline-block;
-  width: auto;
-  max-width: fit-content;
+
+  /* --- Flexbox 用于内部居中 --- */
+  display: flex;
+  align-items: center;       /* 垂直居中内部的 .text 元素 */
+  justify-content: flex-start; /* 文本靠左 */
+
+  height: 44px;              /* 示例值，例如：您测量出的单行消息是 44px */
+  box-sizing: border-box;    /* 确保 padding 和 border 包含在 height 内 */
+
+  /* --- 内边距：只需要水平方向的，因为垂直方向由 height 和 align-items 控制 --- */
+  padding-top: 0;
+  padding-bottom: 0;
+  padding-left: 14px;        /* 与 .message 保持一致 */
+  padding-right: 14px;       /* 与 .message 保持一致 */
+
+  /* --- 宽度由内容决定 --- */
+  width: fit-content;
+
+  /* --- 其他视觉样式 --- */
+  background-color: var(--input-bg);
+  color: var(--text-color);
+  border-radius: var(--border-radius-lg);
+  box-shadow: var(--shadow-sm);
   align-self: flex-start;
+
+  /* 确保字体大小用于计算内部文本的自然行高，但不直接决定容器高度 */
+  font-size: 0.95rem;   /* 与 .message 的 font-size 一致 */
+  /* line-height: 1.6; */ /* 当设置了固定height和align-items后，这个可以不设置或设为normal */
+  line-height: normal;  /* 或者尝试 normal，让文本自然占据高度 */
+}
+
+/* 确保浅色主题也应用正确的背景和边框 */
+body.light-theme .message.assistant.loading {
+  background: #f0f2f5;
+  /* border: 1px solid rgba(0,0,0,0.08); */ /* 如果需要 */
+}
+
+/* 加载提示内部的 .text 元素 */
+.message.assistant.loading > .text {
+    padding: 0 !important;
+    margin: 0 !important;
+    white-space: nowrap;
+    line-height: normal; /* 或者与父级一致，如果父级设置了特定 line-height */
+    /* font-size: inherit; 默认继承父级字体大小 */
+    /* display: block; */ /* 确保它表现为块元素以便正确居中（尽管在flex子项中影响不大） */
 }
 
 /* 聊天框中所有链接显示为蓝色，并加下划线 */

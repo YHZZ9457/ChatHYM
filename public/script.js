@@ -1685,7 +1685,7 @@ async function send() {
     // --- ★★★ 正式开始“生成”流程，改变状态 ★★★ ---
     window.isGeneratingResponse = true;
     updateSubmitButtonState(true);
-    if (promptInput) promptInput.disabled = true;
+    
 
     window.currentAbortController = new AbortController();
     const signal = window.currentAbortController.signal;
@@ -1705,9 +1705,13 @@ async function send() {
         }
     }
     if (isQwen3FamilyModel) {
-        if (window.currentQwenThinkMode === true) processedPromptTextForAPI += " /think";
-        else processedPromptTextForAPI += " /no_think";
+    console.log(`[Send Qwen Logic] Current value of currentQwenThinkMode is: ${currentQwenThinkMode}`); // 添加日志确认
+    if (currentQwenThinkMode === true) {
+        processedPromptTextForAPI += " /think";
+    } else {
+        processedPromptTextForAPI += " /no_think";
     }
+}
 
     let displayMessageForUI = promptText.trim();
     if (isQwen3FamilyModel) displayMessageForUI = displayMessageForUI.replace(/\s*\/(think|no_think)$/, '');
@@ -1965,21 +1969,67 @@ async function send() {
                                 } catch (e) { console.warn(`[Stream Unit Parse Error] (${providerToUse}):`, e, "Data:", jsonData); }
                             }
                         } else if (providerToUse === 'anthropic') {
-                             try {
-                                const chunk = JSON.parse(unit);
-                                if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
-                                    replyForUnit = chunk.delta.text || '';
-                                    unitProducedContent = !!replyForUnit;
-                                } else if (chunk.type === 'message_stop') {
-                                    window.isCurrentlyInThinkingBlock = false;
-                                } else if (chunk.type === 'error') {
-                                    replyForUnit = `\n[错误：Anthropic Stream - ${chunk.error?.type}: ${chunk.error?.message}]`;
-                                    unitProducedContent = true;
+                            const lines = unit.split('\n');
+                            let eventType = '';
+                            let jsonDataString = ''; // 用于存储从 'data:' 行提取的 JSON 字符串
+
+                            for (const line of lines) {
+                                if (line.startsWith('event:')) {
+                                    eventType = line.substring('event:'.length).trim();
+                                } else if (line.startsWith('data:')) {
+                                    jsonDataString = line.substring('data:'.length).trim();
                                 }
-                            } catch (e) {
-                                if (!unit.startsWith("event: ping") && unit.trim() !== "") {
-                                    console.warn(`[Stream Unit Parse Error] (Anthropic):`, e, "Unit:", unit);
+                            }
+
+                            if (jsonDataString) { // 确保我们确实获取到了 data 行的 JSON 内容
+                                try {
+                                    const chunk = JSON.parse(jsonDataString); // ★★★ 只解析提取出来的 jsonDataString ★★★
+                                    // console.log("[Anthropic Stream DEBUG] EventType:", eventType, "Parsed Chunk:", JSON.parse(JSON.stringify(chunk)));
+
+                                    if (chunk.type === 'content_block_delta' && chunk.delta?.type === 'text_delta') {
+                                        replyForUnit = chunk.delta.text || '';
+                                        if (replyForUnit) { // 只要有文本，就标记为内容已产生
+                                            unitProducedContent = true;
+                                        }
+                                    } else if (chunk.type === 'message_start') {
+                                        // console.log("[Anthropic] Message started, ID:", chunk.message?.id);
+                                        // (可选) 可以在这里处理开始事件，例如记录 input_tokens
+                                        // if (chunk.message?.usage?.input_tokens) { /* ... */ }
+                                    } else if (chunk.type === 'message_delta') {
+                                        // console.log("[Anthropic] Message delta, usage:", chunk.usage, "Stop reason:", chunk.delta?.stop_reason);
+                                        if (chunk.delta?.stop_reason) {
+                                            window.isCurrentlyInThinkingBlock = false; // 如果有思考块逻辑
+                                        }
+                                    } else if (chunk.type === 'message_stop') {
+                                        // console.log("[Anthropic] Message stopped.");
+                                        window.isCurrentlyInThinkingBlock = false;
+                                        // (可选) 可以在这里处理结束事件，例如记录 output_tokens
+                                        // const finalUsage = processableUnits.reduce(...) // (如果需要从所有 message_delta 中累加)
+                                        // 或从最后一个 message_delta 事件中获取（如果API保证最后提供总数）
+                                    } else if (chunk.type === 'content_block_start' || chunk.type === 'content_block_stop') {
+                                        // 这些是内容块的生命周期事件，通常不需要从中提取用户可见的文本
+                                    } else if (chunk.type === 'ping') {
+                                        // Ping 事件，用于保持连接，可以安全忽略
+                                    } else if (chunk.type === 'error') {
+                                        console.error("[Anthropic Stream Error Event]", chunk.error);
+                                        replyForUnit = `\n[错误：Anthropic API - ${chunk.error?.type}: ${chunk.error?.message}]`;
+                                        unitProducedContent = true; // 错误消息也是一种内容
+                                    }
+                                    // 可以根据需要添加对其他 Anthropic 事件类型的处理
+                                } catch (e) {
+                                    // 只有当 jsonDataString 存在但解析失败时才打印详细警告
+                                    // 避免对空的或非预期的 unit（例如只有 event:ping）也报解析错误
+                                    if (jsonDataString) { // 确保 jsonDataString 不是空/undefined
+                                        console.warn(`[Stream Unit Parse Error] (Anthropic): Failed to parse JSON from data line. Error:`, e, "Problematic jsonDataString:", jsonDataString, "Original Full Unit:", unit);
+                                    } else if (unit.trim() !== "" && !unit.startsWith("event: ping")) {
+                                        // 如果 unit 不为空，不是纯 ping，但也没有 jsonDataString，也值得注意
+                                        // console.warn("[Anthropic Stream DEBUG] Received non-empty unit without 'data:' line (and not a ping):", unit);
+                                    }
                                 }
+                            } else if (eventType === 'ping' || unit.trim() === '' || unit.startsWith('event: ping')) {
+                                // 完全忽略空的 unit 或纯粹的 ping 事件（如果 jsonDataString 为空）
+                            } else if (unit.trim() !== "") { // 如果 unit 不为空，但没有 data，也不是 ping
+                                // console.warn("[Anthropic Stream DEBUG] Received non-empty, non-ping unit without 'data:' line:", unit);
                             }
                         } else if (providerToUse === 'ollama') {
                             try {
@@ -1995,12 +2045,30 @@ async function send() {
                                 if (replyForUnit || thinkingForUnit) unitProducedContent = true;
                             } catch (e) { console.warn(`[Stream Unit Parse Error] (Ollama):`, e, "Unit:", unit); }
                         } else if (providerToUse === 'gemini') {
-                            try {
-                                const chunkJson = JSON.parse(unit);
-                                replyForUnit = chunkJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
-                                if (replyForUnit) unitProducedContent = true;
-                            } catch (e) { console.warn(`[Stream Unit Parse Error] (Gemini):`, e, "Unit:", unit); }
-                        }
+    // console.log("[Gemini Stream DEBUG] Raw unit from buffer split:", unit); // 原始的 unit
+    let jsonDataString = unit.trim(); // 先 trim 一下
+
+    // ★★★ 检查并移除 "data: " 前缀 (如果存在) ★★★
+    if (jsonDataString.startsWith('data:')) {
+        jsonDataString = jsonDataString.substring('data:'.length).trim();
+    }
+
+    if (jsonDataString) { // 确保我们有实际的 JSON 字符串去解析
+        try {
+            const chunkJson = JSON.parse(jsonDataString);
+            // console.log("[Gemini Stream DEBUG] Parsed chunkJson:", JSON.parse(JSON.stringify(chunkJson)));
+
+            replyForUnit = chunkJson.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+            if (replyForUnit) {
+                // console.log("[Gemini Stream DEBUG] Extracted replyForUnit:", replyForUnit);
+                unitProducedContent = true;
+            } else {
+
+            }
+        } catch (e) {
+            console.warn(`[Stream Unit Parse Error] (Gemini):`, e, "Problematic jsonDataString (after potential 'data:' removal):", jsonDataString, "Original Unit:", unit);
+        }}}
 
                         if (unitProducedContent) {
                             // UI update for the stream only happens if the original conversation is still active.
@@ -2105,7 +2173,7 @@ async function send() {
         window.isGeneratingResponse = false;
         if (window.currentAbortController) window.currentAbortController = null;
         updateSubmitButtonState(false);
-        if (promptInput) promptInput.disabled = false;
+
 
         // --- Logic for handling the visual representation of the assistant's reply ---
         if (isActuallyStreaming && requestWasSuccessful && streamContentReceived) {
@@ -2259,36 +2327,59 @@ async function send() {
 }
 
 
-// processStreamChunk function (as provided previously, ensure it's defined)
-function processStreamChunk(rawText, provider, conversationId, assistantTextEl, reasoningContentEl, reasoningBlockEl, explicitThinkingText = null) {
+// processStreamChunk 
+function processStreamChunk(
+    rawText,
+    provider,
+    conversationId,
+    assistantTextEl,
+    reasoningContentEl,
+    reasoningBlockEl,
+    explicitThinkingText = null
+) {
     let canUpdateUI = (window.currentConversationId === conversationId);
-    if (!assistantTextEl && !reasoningContentEl && canUpdateUI) { // Only warn if UI update was expected
-        console.warn("[ProcessChunk] UI elements (assistantTextEl or reasoningContentEl) are null. Cannot update UI for this chunk. Provider:", provider);
-        canUpdateUI = false; // Prevent further attempts if main elements are missing
-    } else if (!assistantTextEl && !reasoningContentEl && !canUpdateUI) {
-        // If canUpdateUI was already false, no need to warn, just skip.
+    if (!assistantTextEl && !reasoningContentEl && canUpdateUI) {
+        console.warn(
+            "[ProcessChunk] UI elements (assistantTextEl or reasoningContentEl) are null. " +
+            "Cannot update UI for this chunk. Provider:",
+            provider
+        );
+        canUpdateUI = false;
     }
-
 
     let replyTextPortion = "";
     let thinkingTextPortion = "";
 
     // 1. 从输入文本中分离思考和回复部分
-    if (explicitThinkingText !== null && typeof explicitThinkingText === 'string') {
+    if (explicitThinkingText !== null && typeof explicitThinkingText === "string") {
         thinkingTextPortion = explicitThinkingText;
-        replyTextPortion = (typeof rawText === 'string') ? rawText : "";
-    } else if (typeof rawText === 'string' && rawText && typeof extractThinkingAndReply === 'function' &&
-               (rawText.includes("<think>") || window.isCurrentlyInThinkingBlock || rawText.includes("</think>"))) {
+        replyTextPortion = (typeof rawText === "string") ? rawText : "";
+    } else if (
+        typeof rawText === "string" &&
+        rawText &&
+        typeof extractThinkingAndReply === "function" &&
+        (rawText.includes("<think>") || window.isCurrentlyInThinkingBlock || rawText.includes("</think>"))
+    ) {
         try {
-            let extracted = extractThinkingAndReply(rawText, "<think>", "</think>", window.isCurrentlyInThinkingBlock);
+            let extracted = extractThinkingAndReply(
+                rawText,
+                "<think>",
+                "</think>",
+                window.isCurrentlyInThinkingBlock
+            );
             replyTextPortion = extracted.replyTextPortion;
             thinkingTextPortion = extracted.thinkingTextPortion;
             window.isCurrentlyInThinkingBlock = extracted.newThinkingBlockState;
         } catch (e) {
-            console.error("[ProcessChunk] Error in extractThinkingAndReply:", e, "Raw text:", rawText);
+            console.error(
+                "[ProcessChunk] Error in extractThinkingAndReply:",
+                e,
+                "Raw text:",
+                rawText
+            );
             replyTextPortion = rawText;
         }
-    } else if (typeof rawText === 'string') {
+    } else if (typeof rawText === "string") {
         replyTextPortion = rawText;
     }
 
@@ -2298,17 +2389,22 @@ function processStreamChunk(rawText, provider, conversationId, assistantTextEl, 
     if (canUpdateUI && thinkingTextPortion) {
         if (reasoningContentEl && reasoningContentEl instanceof HTMLElement) {
             reasoningContentEl.textContent += thinkingTextPortion;
-            if (reasoningBlockEl && reasoningBlockEl.classList.contains('reasoning-block-empty') && reasoningContentEl.textContent.trim() !== '') {
-                reasoningBlockEl.classList.remove('reasoning-block-empty');
+            if (
+                reasoningBlockEl &&
+                reasoningBlockEl.classList.contains("reasoning-block-empty") &&
+                reasoningContentEl.textContent.trim() !== ""
+            ) {
+                reasoningBlockEl.classList.remove("reasoning-block-empty");
             }
             const rce = reasoningContentEl;
             // 思考框内部的自动滚动 (如果需要)
-            if (rce.scrollHeight > rce.clientHeight && (rce.scrollHeight - rce.clientHeight <= rce.scrollTop + 10)) { // 10px threshold
-                 rce.scrollTop = rce.scrollHeight;
+            if (
+                rce.scrollHeight > rce.clientHeight &&
+                (rce.scrollHeight - rce.clientHeight <= rce.scrollTop + 10)
+            ) {
+                rce.scrollTop = rce.scrollHeight;
             }
             uiActuallyUpdated = true;
-        } else if (thinkingTextPortion.trim() !== "" && canUpdateUI) { // 只有当期望更新UI时才警告
-            // console.warn(`[ProcessChunk] Provider ${provider}: Had thinking text, but reasoningContentEl is invalid. Block exists: ${!!reasoningBlockEl}`);
         }
     }
 
@@ -2318,29 +2414,31 @@ function processStreamChunk(rawText, provider, conversationId, assistantTextEl, 
             const textNode = document.createTextNode(replyTextPortion);
             assistantTextEl.appendChild(textNode);
             uiActuallyUpdated = true;
-        } else if (replyTextPortion.trim() !== "" && canUpdateUI) { // 只有当期望更新UI时才警告
-            // console.warn(`[ProcessChunk] Provider ${provider}: Had reply text, but assistantTextEl is invalid.`);
         }
     }
 
-     // 4. 滚动整个消息列表 (#messages) - 仅当UI实际更新时
+    // 4. 滚动整个消息列表 (#messages) - 仅当UI实际更新时
     if (canUpdateUI && uiActuallyUpdated) {
-        const messagesContainer = document.getElementById('messages');
+        const messagesContainer = document.getElementById("messages");
         if (messagesContainer) {
             setTimeout(() => {
                 if (!userHasManuallyScrolledUp) {
                     isScrollingProgrammatically = true;
-                    messagesContainer.scrollTo({ top: messagesContainer.scrollHeight, behavior: 'auto' });
+                    messagesContainer.scrollTo({
+                        top: messagesContainer.scrollHeight,
+                        behavior: "auto"
+                    });
                     requestAnimationFrame(() => {
                         isScrollingProgrammatically = false;
                     });
                 } else {
-                     console.log("[ProcessChunk] Auto-scroll PAUSED by user (wheel or button).");
+                    console.log("[ProcessChunk] Auto-scroll PAUSED by user (wheel or button).");
                 }
             }, 0);
         }
     }
 }
+
 
 
 window.send = send; // 暴露到全局，供HTML调用
@@ -3879,21 +3977,19 @@ if (showPresetPromptsBtn && presetPromptsListPanel && presetPromptsUl) {
     
     // --- 初始化 Qwen 思考模式开关 ---
     if (qwenThinkModeToggle) {
-        // 从 LocalStorage 读取保存的状态
-        const savedThinkMode = localStorage.getItem(QWEN_THINK_MODE_STORAGE_KEY);
-        if (savedThinkMode !== null) 
-        currentQwenThinkMode = savedThinkMode === 'true'; // 转换为布尔值
-        qwenThinkModeToggle.checked = currentQwenThinkMode;
-        console.log("DOMContentLoaded: Qwen Think Mode initialized to:", currentQwenThinkMode);
+    const savedThinkMode = localStorage.getItem(QWEN_THINK_MODE_STORAGE_KEY);
+    if (savedThinkMode !== null) {
+        currentQwenThinkMode = (savedThinkMode === 'true'); // 直接修改顶层变量
+    } // 如果 localStorage 为空, currentQwenThinkMode 保持其顶层初始值
+    qwenThinkModeToggle.checked = currentQwenThinkMode;
+    console.log("DOMContentLoaded: Qwen Think Mode initialized to:", currentQwenThinkMode);
 
-        qwenThinkModeToggle.addEventListener('change', function() {
-            currentQwenThinkMode = this.checked;
-            localStorage.setItem(QWEN_THINK_MODE_STORAGE_KEY, currentQwenThinkMode.toString());
-            console.log("Qwen Think Mode changed to:", currentQwenThinkMode);
-        });
-    } else {
-        console.warn("DOMContentLoaded: Qwen think mode toggle 'qwen-think-mode-toggle' not found.");
-    }
+    qwenThinkModeToggle.addEventListener('change', function() {
+        currentQwenThinkMode = this.checked; // 直接修改顶层变量
+        localStorage.setItem(QWEN_THINK_MODE_STORAGE_KEY, currentQwenThinkMode.toString());
+        console.log("Qwen Think Mode changed by toggle to:", currentQwenThinkMode);
+    });
+}
 
     if (modelFormTitle) {
         console.log("DOMContentLoaded: 'modelFormTitle' was SUCCESSFULLY INITIALIZED to:", modelFormTitle);
@@ -4335,65 +4431,96 @@ if (showModelManagementBtn) {
 
     const messagesContainer = document.getElementById('messages');
     const scrollToBottomBtn = document.getElementById('scroll-to-bottom-btn');
-    const buttonVisibilityThreshold = 150;
+    
+    // 优化后的阈值设置
+    const BUTTON_VISIBILITY_THRESHOLD = 150;   // 显示"回到底部"按钮的距离（正常值）
+    const AUTO_RESUME_THRESHOLD = 1;         // 自动恢复滚动到底部的距离
+    const SCROLL_PAUSE_THRESHOLD = 1;        // 向上滚动这个距离暂停自动滚动
+    
+    let userHasManuallyScrolledUp = false;  // 用户手动滚动状态
 
     if (messagesContainer && scrollToBottomBtn) {
+        // 滚轮事件处理 - 只保留一个wheel事件监听器
         messagesContainer.addEventListener('wheel', (event) => {
-            // 不再关心 isScrollingProgrammatically，因为 wheel 是用户主动的
-            if (event.deltaY < 0) { // 向上滚动
-                if (!userHasManuallyScrolledUp) {
-                    console.log("[Wheel Event - UP] User scrolled up. PAUSING auto-scroll. Setting userHasManuallyScrolledUp = true.");
-                    userHasManuallyScrolledUp = true;
-                }
-            }
-            // 注意：这里完全不处理向下滚动恢复，恢复完全依赖按钮
-        }, { passive: true });
-
-        messagesContainer.addEventListener('scroll', () => {
-            // 只负责按钮显隐
-            const currentScrollTop = messagesContainer.scrollTop;
+            const scrollTop = messagesContainer.scrollTop;
             const scrollHeight = messagesContainer.scrollHeight;
             const clientHeight = messagesContainer.clientHeight;
-            const distanceFromBottomForButton = scrollHeight - clientHeight - currentScrollTop;
+            const distanceFromBottom = scrollHeight - clientHeight - scrollTop;
 
-            if (distanceFromBottomForButton > buttonVisibilityThreshold && scrollHeight > clientHeight) {
+            // 向上滚动时暂停自动滚动
+            if (event.deltaY < 0) {
+                // 只有当用户滚动超过暂停阈值时才标记
+                if (distanceFromBottom > SCROLL_PAUSE_THRESHOLD) {
+                    if (!userHasManuallyScrolledUp) {
+                        console.log("[Wheel] 用户向上滚动，暂停自动滚动", distanceFromBottom);
+                        userHasManuallyScrolledUp = true;
+                    }
+                }
+            }
+            // 向下滚动到底部时恢复自动滚动
+            else if (distanceFromBottom <= AUTO_RESUME_THRESHOLD) {
+                if (userHasManuallyScrolledUp) {
+                    console.log("[Wheel] 用户滚动到底部，恢复自动滚动", distanceFromBottom);
+                    userHasManuallyScrolledUp = false;
+                }
+            }
+        }, { passive: true });
+
+        // 增强滚动事件处理
+        messagesContainer.addEventListener('scroll', () => {
+            const scrollTop = messagesContainer.scrollTop;
+            const scrollHeight = messagesContainer.scrollHeight;
+            const clientHeight = messagesContainer.clientHeight;
+            const distanceFromBottom = scrollHeight - clientHeight - scrollTop;
+
+            // 按钮显隐控制
+            if (distanceFromBottom > BUTTON_VISIBILITY_THRESHOLD && scrollHeight > clientHeight) {
                 scrollToBottomBtn.style.display = 'flex';
             } else {
                 scrollToBottomBtn.style.display = 'none';
             }
-            // 不再在这里修改 userHasManuallyScrolledUp
+
+            // 用户手动滚动到底部时恢复自动滚动
+            if (distanceFromBottom <= AUTO_RESUME_THRESHOLD && userHasManuallyScrolledUp) {
+                console.log("[Scroll] 用户到达底部，恢复自动滚动", distanceFromBottom);
+                userHasManuallyScrolledUp = false;
+            }
         });
 
+        // 点击按钮处理
         scrollToBottomBtn.addEventListener('click', () => {
-            console.log("[ScrollToBottom Btn Click] Resuming auto-scroll and scrolling.");
-            isScrollingProgrammatically = true;
-            userHasManuallyScrolledUp = false; // ★★★ 核心恢复点 ★★★
+            console.log("[Button] 点击回到底部按钮");
+            userHasManuallyScrolledUp = false;
             messagesContainer.scrollTo({
                 top: messagesContainer.scrollHeight,
-                behavior: 'auto' // 改为 auto，更快，减少 smooth 动画期间的复杂性
-            });
-            // 立即或用 rAF 清除，因为 'auto' 滚动很快
-            requestAnimationFrame(() => {
-                isScrollingProgrammatically = false;
+                behavior: 'auto'
             });
         });
 
-        // 初始化... (与之前类似，但 userHasManuallyScrolledUp 的初始判断可以更简单)
-        const initialDistanceFromBottom = messagesContainer.scrollHeight - messagesContainer.clientHeight - messagesContainer.scrollTop;
-        if (initialDistanceFromBottom > buttonVisibilityThreshold && messagesContainer.scrollHeight > messagesContainer.clientHeight) {
-            scrollToBottomBtn.style.display = 'flex';
-        } else {
-            scrollToBottomBtn.style.display = 'none';
-        }
-        if (initialDistanceFromBottom > 5 && messagesContainer.scrollHeight > messagesContainer.clientHeight) {
-            userHasManuallyScrolledUp = true;
-        } else {
-            userHasManuallyScrolledUp = false;
-        }
-        console.log(`[Initial Load] userHasManuallyScrolledUp: ${userHasManuallyScrolledUp}`);
+        // 改进初始化逻辑
+        const initDistance = messagesContainer.scrollHeight - messagesContainer.clientHeight - messagesContainer.scrollTop;
+        
+        // 使用统一的阈值判断初始状态
+        userHasManuallyScrolledUp = initDistance > SCROLL_PAUSE_THRESHOLD;
+        
+        // 设置按钮初始状态
+        scrollToBottomBtn.style.display = 
+            (initDistance > BUTTON_VISIBILITY_THRESHOLD && messagesContainer.scrollHeight > messagesContainer.clientHeight) 
+            ? 'flex' : 'none';
+
+        console.log(`[Init] 初始状态: ${userHasManuallyScrolledUp ? '已暂停自动滚动' : '自动滚动中'}, 距离底部: ${initDistance}px`);
     }
-    // ...
-    console.log("%cDEBUG DOMContentLoaded: All initializations and event bindings complete.", "color: blue;");
-}); // DOMContentLoaded 事件监听器结束
+
+    // 暴露消息处理函数到全局作用域
+    window.onNewMessageAdded = function() {
+        if (messagesContainer && !userHasManuallyScrolledUp) {
+            messagesContainer.scrollTo({
+                top: messagesContainer.scrollHeight,
+                behavior: 'smooth'
+            });
+        }
+    };
+});
+
 
 // --- END OF FILE script.js ---

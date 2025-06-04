@@ -375,7 +375,7 @@ body.dark-theme .message pre { background: rgba(255,255,255,0.08); color: #cdd3d
 }
 .user-message-wrapper:hover .delete-message-btn, /* 用户消息删除按钮显示 */
 .assistant-message-wrapper:hover .delete-message-btn { /* 助手消息删除按钮显示 */
-  opacity: 0.7;
+  opacity: 1.0;
   visibility: visible;
   transition-delay: 0s;
 }
@@ -1981,7 +1981,7 @@ border: 1px solid var(--border-color);
     margin-top: 0;
     visibility: hidden;
     opacity: 0;
-    transition: opacity 0.15s ease-in-out, visibility 0s linear 0.15s;
+    transition: opacity 0.2s ease-in-out, visibility 0s linear 0.2s;
 }
 .message-wrapper:hover .message-actions-container {
     visibility: visible;
@@ -2009,7 +2009,7 @@ border: 1px solid var(--border-color);
 
 .message-action-btn:hover {
     color: var(--text-color); /* 或 var(--text-color-primary) */
-    background-color: rgba(0,0,0,0.05); /* 轻微背景 */
+    background-color: rgba(0,0,0,0.1); /* 轻微背景 */
 }
 body.dark-theme .message-action-btn:hover {
     background-color: rgba(255,255,255,0.1);

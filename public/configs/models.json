@@ -103,14 +103,14 @@
       "isGroupHidden": false,
       "options": [
         {
-          "text": "SF Qwen3-235B-A22B",
-          "value": "sf::Qwen/Qwen3-235B-A22B",
+          "text": "SF Deepseek-R1 0528",
+          "value": "sf::deepseek-ai/DeepSeek-R1",
           "isHidden": false
         },
         {
-          "text": "SF Deepseek-R1 0528",
-          "value": "sf::deepseek-ai/DeepSeek-R1",
-          "isHidden": true
+          "text": "SF Qwen3-235B-A22B",
+          "value": "sf::Qwen/Qwen3-235B-A22B",
+          "isHidden": false
         },
         {
           "text": "SF Qwen3-32B",
@@ -130,7 +130,7 @@
         {
           "text": "SF Qwen3-14B",
           "value": "sf::Qwen/Qwen3-14B",
-          "isHidden": false
+          "isHidden": true
         },
         {
           "text": "SF Qwen3-8B",
@@ -241,7 +241,7 @@
           "isHidden": false
         },
         {
-          "text": "Ollama Qwen3-8b",
+          "text": "Ollama Qwen3-8B",
           "value": "ollama::qwen3:8b",
           "isHidden": false
         },

@@ -1,176 +1,184 @@
 // netlify/functions/siliconflow-proxy.mjs
-// IMPORTANT: This version is designed with Netlify Edge Functions in mind for optimal streaming.
-// If you are using standard Netlify Functions (AWS Lambda), direct ReadableStream
-// passthrough might require different handling or may not be as straightforward.
 
-console.log("SiliconFlow Proxy Edge Function Loaded. Reading SILICONFLOW_API_KEY_SECRET from env.");
+console.log("SiliconFlow Proxy Function Loaded. Reading SILICONFLOW_API_KEY_SECRET from env.");
 
 export default async function handler(request, context) {
   const API_KEY = process.env.SILICONFLOW_API_KEY_SECRET;
-  const API_URL = 'https://api.siliconflow.cn/v1/chat/completions';
+  const API_URL = 'https://api.siliconflow.cn/v1/chat/completions'; // SiliconFlow API 地址
 
-  console.log("[SiliconFlow Proxy] Request received. Method:", request.method);
+  console.log("[SiliconFlow Proxy] 被调用，方法:", request.method);
 
-  // 1. CORS Preflight (OPTIONS request)
+  // 1. CORS 预检处理 (OPTIONS 请求)
   if (request.method === 'OPTIONS') {
-    console.log("[SiliconFlow Proxy] Handling OPTIONS preflight request.");
-    return new Response(null, { // Body should be null or empty for 204
+    console.log("[SiliconFlow Proxy] 处理 OPTIONS 预检请求。");
+    return new Response(null, {
       status: 204, // No Content
       headers: {
-        'Access-Control-Allow-Origin': '*', // Or your specific frontend domain
+        'Access-Control-Allow-Origin': '*', // 或者你的特定前端域名
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization', // Add any other custom headers your frontend sends
-        'Access-Control-Max-Age': '86400', // Optional: Cache preflight response for 1 day
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization', // 允许前端在预检中询问 Authorization
+        'Access-Control-Max-Age': '86400', // 可选: 预检请求缓存1天
       }
     });
   }
 
-  // 2. Allow only POST requests for actual API calls
+  // 2. 只允许 POST 方法
   if (request.method !== 'POST') {
-    console.warn("[SiliconFlow Proxy] Method Not Allowed:", request.method);
+    console.warn("[SiliconFlow Proxy] 方法不允许:", request.method);
     return new Response(JSON.stringify({ error: 'Method Not Allowed. Only POST is accepted.' }), {
       status: 405,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*' // Or your specific frontend domain
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Access-Control-Allow-Origin': '*' // 或者你的特定前端域名
       }
     });
   }
 
-  // 3. Check for API Key
+  // 3. 检查 API Key 是否已配置
   if (!API_KEY) {
-    console.error("[SiliconFlow Proxy] CRITICAL: SiliconFlow API Key (SILICONFLOW_API_KEY_SECRET) is not configured in environment variables!");
+    console.error("[SiliconFlow Proxy] 严重错误: SiliconFlow API Key (SILICONFLOW_API_KEY_SECRET) 未在环境变量中配置!");
     return new Response(JSON.stringify({ error: 'Server Configuration Error: API Key missing.' }), {
       status: 500, // Internal Server Error
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Access-Control-Allow-Origin': '*' 
       }
     });
   }
 
-  // 4. Parse request body from the frontend
+  // 4. 解析前端发送过来的请求体
   let requestBodyFromFrontend;
   try {
     requestBodyFromFrontend = await request.json();
-    console.log("[SiliconFlow Proxy] Parsed frontend request body.");
+    console.log("[SiliconFlow Proxy] 已解析前端请求体。");
   } catch (error) {
-    console.error("[SiliconFlow Proxy] Failed to parse JSON body from frontend:", error.message);
+    console.error("[SiliconFlow Proxy] 解析前端 JSON 请求体失败:", error.message);
     return new Response(JSON.stringify({ error: 'Bad Request: Invalid JSON body.' }), {
       status: 400,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Access-Control-Allow-Origin': '*' 
       }
     });
   }
 
-  // 5. Validate required fields from frontend body
-  const { model, messages, temperature, max_tokens, stream } = requestBodyFromFrontend;
+  const { model, messages, temperature, max_tokens, stream } = requestBodyFromFrontend; // 接收 stream 参数
 
   if (!model || !messages || !Array.isArray(messages) || messages.length === 0) {
-    console.warn("[SiliconFlow Proxy] Bad Request: 'model' and 'messages' (non-empty array) are required.");
+    console.warn("[SiliconFlow Proxy] 错误请求: 'model' 和 'messages' (非空数组) 是必需的。");
     return new Response(JSON.stringify({ error: 'Bad Request: "model" and a non-empty "messages" array are required in the request body.' }), {
       status: 400,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Access-Control-Allow-Origin': '*' 
       }
     });
   }
 
-  // 6. Construct the payload for SiliconFlow API
+  // 5. 构建发送给 SiliconFlow API 的请求体
   const siliconflowPayload = {
     model: model,
-    messages: messages,
-    // SiliconFlow might have different defaults or supported ranges
-    max_tokens: max_tokens !== undefined && Number.isInteger(max_tokens) ? max_tokens : 4096, // Default or frontend provided
-    temperature: temperature !== undefined && typeof temperature === 'number' ? temperature : 0.7, // Default or frontend provided
-    stream: !!stream, // Ensure it's a boolean, defaults to false if 'stream' is not provided
+    messages: messages, // 假设前端已按 SiliconFlow 要求格式化
+    temperature: temperature !== undefined ? temperature : 0.7, // 默认值或前端提供的值
+    // max_tokens: SiliconFlow 可能有不同的默认值或支持范围，例如默认为 4096
+    stream: stream || false, // 将前端传递的 stream 参数或默认 false 传递给 SiliconFlow
   };
+  if (max_tokens) { // 只有在前端明确传递了 max_tokens 时才加入
+      siliconflowPayload.max_tokens = max_tokens;
+  } else if (!siliconflowPayload.stream) { // 如果不是流式且没有提供 max_tokens，可以考虑设置一个默认值
+      // siliconflowPayload.max_tokens = 4096; // 例如 SiliconFlow 的一个常用默认值
+  }
 
-  console.log(`[SiliconFlow Proxy] Forwarding to SiliconFlow API. Stream requested: ${siliconflowPayload.stream}`);
-  // Avoid logging full messages in production for privacy if they contain sensitive data
-  // console.log("[SiliconFlow Proxy] SiliconFlow API Payload:", JSON.stringify(siliconflowPayload, null, 2));
 
+  console.log("[SiliconFlow Proxy] 发送给 SiliconFlow API 的请求体 (stream:", siliconflowPayload.stream, "):", JSON.stringify(siliconflowPayload, null, 2));
 
-  // 7. Call the SiliconFlow API
+  // 6. 调用 SiliconFlow API
   try {
     const apiResponse = await fetch(API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${API_KEY}`,
-        // 'Accept': siliconflowPayload.stream ? 'text/event-stream' : 'application/json' // Some APIs like this header
+        'Accept': siliconflowPayload.stream ? 'text/event-stream' : 'application/json', // 根据是否流式设置 Accept
       },
       body: JSON.stringify(siliconflowPayload),
     });
 
-    console.log(`[SiliconFlow Proxy] SiliconFlow API responded with status: ${apiResponse.status}`);
+    console.log("[SiliconFlow Proxy] 从 SiliconFlow API 收到的状态码:", apiResponse.status);
 
-    // Handle API errors (non-2xx responses)
     if (!apiResponse.ok) {
-      let errorBodyText = "Unknown error structure from API.";
+      const errorText = await apiResponse.text();
+      console.error("[SiliconFlow Proxy] SiliconFlow API 错误响应:", errorText);
+      let errorDetail = errorText;
       try {
-        errorBodyText = await apiResponse.text(); // Try to get error message from API
-        // Attempt to parse if it's JSON, otherwise use raw text
-        const parsedError = JSON.parse(errorBodyText);
-        errorBodyText = JSON.stringify(parsedError, null, 2); // Pretty print if JSON
-      } catch (e) {
-        // If parsing fails, errorBodyText remains the raw text
-      }
-      console.error(`[SiliconFlow Proxy] Error from SiliconFlow API (Status ${apiResponse.status}):`, errorBodyText);
-      return new Response(JSON.stringify({
-        error: `SiliconFlow API Error (Status ${apiResponse.status})`,
-        details: errorBodyText
-      }), {
-        status: apiResponse.status, // Propagate the status from the API
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
+          const errJson = JSON.parse(errorText);
+          // SiliconFlow 的错误结构可能不同，需要适配
+          errorDetail = errJson.error?.message || errJson.message || JSON.stringify(errJson);
+      } catch(e) { /* 保持原始文本错误 */ }
+      return new Response(JSON.stringify({ error: `SiliconFlow API Error (${apiResponse.status})`, details: errorDetail }), {
+        status: apiResponse.status,
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Access-Control-Allow-Origin': '*' 
         }
       });
     }
 
-    // Handle successful response (2xx)
+    // --- 处理流式和非流式响应 ---
     if (siliconflowPayload.stream && apiResponse.body) {
-      // For streaming responses, directly pass through the body
-      console.log("[SiliconFlow Proxy] Streaming response back to client.");
-      // Netlify Edge Functions can return a ReadableStream directly.
-      // The browser will handle it as an SSE stream if Content-Type is correct.
+      console.log("[SiliconFlow Proxy] 正在流式传输 SiliconFlow 响应...");
       return new Response(apiResponse.body, {
-        status: 200,
+        status: apiResponse.status, // 通常是 200
         headers: {
-          'Content-Type': 'text/event-stream; charset=utf-8', // CRITICAL for SSE
-          'Cache-Control': 'no-cache', // Recommended for SSE
-          'Connection': 'keep-alive',  // Recommended for SSE
-          'Access-Control-Allow-Origin': '*'
+          'Content-Type': 'text/event-stream; charset=utf-8', // 关键：为 SSE 设置正确的 Content-Type
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*', // 确保CORS头部也设置在流式响应上
+        }
+      });
+    } else if (apiResponse.body) { // 非流式，一次性读取
+      const responseDataText = await apiResponse.text();
+      let parsedData;
+      let contentType = apiResponse.headers.get('content-type') || 'application/json';
+      let finalBody = responseDataText;
+
+      // 尝试解析为 JSON，如果不是 JSON，则按原样返回
+      if (contentType.includes('application/json')) {
+          try {
+              parsedData = JSON.parse(responseDataText);
+              finalBody = JSON.stringify(parsedData); // 重新序列化以确保是标准JSON字符串
+          } catch(e) {
+              console.warn("[SiliconFlow Proxy] SiliconFlow API 非流式响应声称是 JSON 但解析失败:", responseDataText);
+              // 保持 finalBody 为 responseDataText，contentType 也保持原样（可能是 application/json 但内容无效）
+          }
+      }
+      
+      return new Response(finalBody, {
+        status: apiResponse.status,
+        headers: { 
+          'Content-Type': contentType, 
+          'Access-Control-Allow-Origin': '*' 
         }
       });
     } else {
-      // For non-streaming responses, parse as JSON
-      console.log("[SiliconFlow Proxy] Processing non-streaming response.");
-      const responseData = await apiResponse.json(); // Assuming non-streamed is always JSON
-      return new Response(JSON.stringify(responseData), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-        }
+      console.error("[SiliconFlow Proxy] SiliconFlow API 响应体为空，即使状态码为成功。");
+      return new Response(JSON.stringify({error: "Empty response body from SiliconFlow"}), {
+          status: 500, 
+          headers: {
+            'Content-Type': 'application/json', 
+            'Access-Control-Allow-Origin': '*'
+          }
       });
     }
+    // --- 结束处理响应 ---
 
   } catch (error) {
-    // Catch fetch errors (e.g., network issues) or other unexpected errors
-    console.error('[SiliconFlow Proxy] Network or unexpected error during API call:', error.message, error.stack);
-    return new Response(JSON.stringify({
-      error: 'Proxy encountered an internal error.',
-      details: error.message
-    }), {
-      status: 502, // Bad Gateway, indicating an issue with the upstream server or proxy itself
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*'
+    console.error('[SiliconFlow Proxy] 调用 SiliconFlow API 时发生网络或其他错误:', error);
+    return new Response(JSON.stringify({ error: 'Proxy failed to fetch from SiliconFlow API', details: error.message }), {
+      status: 502, // Bad Gateway
+      headers: { 
+        'Content-Type': 'application/json', 
+        'Access-Control-Allow-Origin': '*' 
       }
     });
   }

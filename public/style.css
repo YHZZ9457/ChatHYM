@@ -506,10 +506,6 @@ body.dark-theme .input-area textarea#prompt:focus {
   background-color: #c53030; /* 红色背景 hover */
 }
 
-/* 按钮内的 span (如果使用) */
-#submit-action-btn span {
-    /* 如果需要特别调整文字样式，可以在这里添加 */
-}
 
 
 /* 模型切换下拉 (位于头部) - 保持原始选择器，参考图片调整 */

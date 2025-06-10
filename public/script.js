@@ -3971,6 +3971,29 @@ if (showPresetPromptsBtn && presetPromptsListPanel && presetPromptsUl) {
 const logoDisplay = document.getElementById('logo-display');
 const searchInput = document.getElementById('search-conversations');
 const searchWrapper = document.getElementById('search-wrapper');
+
+if (sidebar && resizer && body) {
+  
+  // 1. 从 localStorage 加载初始状态
+  const isSidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+  if (isSidebarCollapsed) {
+    body.classList.add('sidebar-collapsed');
+  }
+
+  // 2. 为点击区域添加点击事件
+  resizer.addEventListener('click', () => {
+    // 切换 body 上的 'sidebar-collapsed' 类
+    body.classList.toggle('sidebar-collapsed');
+    
+    // 3. 将新状态保存到 localStorage
+    const isNowCollapsed = body.classList.contains('sidebar-collapsed');
+    localStorage.setItem('sidebarCollapsed', String(isNowCollapsed));
+  });
+
+} else {
+    // 如果元素没找到，这里会打印警告，帮助你调试
+    console.warn("Sidebar toggle functionality could not be initialized. Required elements not found.");
+}
     
 if (sidebarHeader && logoDisplay && searchInput && searchWrapper) {
 
@@ -4243,16 +4266,7 @@ if (sidebarHeader && logoDisplay && searchInput && searchWrapper) {
     }
     
     const exportCurrentBtn = document.getElementById('export-current-btn');
-if (exportCurrentBtn) {
-  exportCurrentBtn.addEventListener('click', () => {
-    if (currentConversationId) {
-      // 调用导出函数，默认导出为 Markdown 格式
-      exportSingleConversation(currentConversationId, 'md'); 
-    } else {
-      showToast('没有活动的对话可导出', 'warning');
-    }
-  });
-}
+
 
     // 0. 首先从配置文件加载模型列表
     console.log("DEBUG DOMContentLoaded: Attempting to load models from config...");
@@ -4462,6 +4476,17 @@ if (exportCurrentBtn) {
     });
     // 初始加载时也调用一次，确保基于初始内容状态正确
     updateScrollToBottomButtonVisibility();
+}
+
+if (exportCurrentBtn) {
+  exportCurrentBtn.addEventListener('click', () => {
+    if (currentConversationId) {
+      // 调用导出函数，默认导出为 Markdown 格式
+      exportSingleConversation(currentConversationId, 'md'); 
+    } else {
+      showToast('没有活动的对话可导出', 'warning');
+    }
+  });
 }
 
     // --- 文件导入功能 ---

@@ -97,7 +97,7 @@ button{font-family:inherit;cursor:pointer; background:transparent; border:none; 
   padding: 16px 0; /* 上下增加些呼吸空间 */
   transition: background-color 0.3s ease, border-color 0.3s ease;
    flex-shrink: 0;
-  transition: width 0.3s ease-in-out; /* 使用 margin-left 来实现动画 */
+  transition: width 0.3s ease-in-out, padding 0.3s ease-in-out;  /* 使用 margin-left 来实现动画 */
   }
 
  #sidebar-resizer {
@@ -118,7 +118,14 @@ button{font-family:inherit;cursor:pointer; background:transparent; border:none; 
 
 /* 当 body 有 .sidebar-collapsed 类时，侧边栏滑出视图 */
 body.sidebar-collapsed .sidebar {
-  margin-left: -250px; /* 负值等于侧边栏宽度 */
+  width: 0; /* 直接将宽度设为0，让主内容区可以扩展 */
+  
+  /* 同时隐藏内边距，防止内容在宽度为0时溢出 */
+  padding-left: 0;
+  padding-right: 0;
+
+  /* 隐藏所有内容 */
+  overflow: hidden; 
 }
 
 
@@ -664,24 +671,7 @@ body.dark-theme .messages, body.dark-theme .sidebar, body.dark-theme .settings-a
   scrollbar-color: rgba(255,255,255,0.3) transparent; /* 修改：从0.2改为0.3 */
 }
 
-/* ===== 9. 响应式 ===== */
-@media(max-width:768px){
-  .sidebar{
-    position: fixed; /* 改为固定定位 */
-    left: -240px; /* 初始隐藏，宽度与.sidebar width一致 */
-    top: 0;
-    bottom: 0;
-    z-index: 1000; /* 置于顶层 */
-    transition: left 0.3s ease-in-out; /* 滑动动画 */
-    box-shadow: var(--shadow-lg); /* 显示时增加阴影 */
-  }
-  /* .sidebar.open { left: 0; } JS控制 */
-  .container{flex-direction:column;}
-  .chat-header{padding: 0 12px; min-height: 48px;} /* 移动端头部padding和高度 */
-  .new-btn{margin:12px 16px;} /* 移动端新建按钮外边距 */
-  .messages { padding: 16px; } /* 移动端消息区padding */
-  .input-area { padding: 8px; } /* 移动端输入区padding */
-}
+
 
 /* ===== 10. Helper 类 ===== */
 .hide{display:none!important;}

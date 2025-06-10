@@ -840,7 +840,7 @@ function appendLoading() {
  * 渲染左侧的对话列表，包括未归档和已归档的对话。
  * 会保留已归档列表的展开/折叠状态。
  */
-function renderConversationList() {
+function renderConversationList(searchTerm = '')  {
   const list = document.getElementById('conversation-list'); // 对话列表的UL元素
 
   // 检查归档区域之前是否是展开状态
@@ -852,8 +852,17 @@ function renderConversationList() {
 
   list.innerHTML = ''; // 清空现有列表项
 
+    // 2. 根据搜索词过滤对话
+  const lowerCaseSearchTerm = searchTerm.toLowerCase().trim();
+  let conversationsToRender = conversations;
+  if (lowerCaseSearchTerm) {
+    conversationsToRender = conversations.filter(c => 
+      c.title.toLowerCase().includes(lowerCaseSearchTerm)
+    );
+  }
+
   // 渲染未归档的对话
-  conversations
+   conversationsToRender
     .filter(c => !c.archived)
     .forEach(c => {
       const li = document.createElement('li');
@@ -3761,7 +3770,60 @@ function populatePresetPromptsList() {
     });
     console.log("[populatePresetPromptsList] Preset prompts list populated.");
 }
+/**
+ * 导出单个对话为指定格式的文件。
+ * @param {string} conversationId 要导出的对话ID
+ * @param {string} [format='md'] 导出的格式 ('md' 或 'json')
+ */
+function exportSingleConversation(conversationId, format = 'md') {
+  const conv = conversations.find(c => c.id === conversationId);
+  if (!conv) {
+    showToast('找不到要导出的对话', 'error'); // 假设您有 showToast 函数
+    return;
+  }
 
+  let fileContent = '';
+  const fileExtension = format;
+  
+  // 生成 Markdown 内容
+  if (format === 'md') {
+    fileContent = `# ${conv.title}\n\n**模型:** ${conv.model || '未知'}\n\n---\n\n`;
+    conv.messages.forEach(msg => {
+      // 兼容字符串和对象格式的 content
+      let content = (typeof msg.content === 'object' && msg.content.text) 
+                    ? msg.content.text 
+                    : String(msg.content);
+      
+      if (msg.role === 'user') {
+        fileContent += `**👤 You:**\n${content}\n\n`;
+      } else if (msg.role === 'assistant' || msg.role === 'model') {
+        fileContent += `**🤖 Assistant:**\n${content}\n\n`;
+        if (msg.reasoning_content) {
+          fileContent += `> **思考过程:**\n> ${msg.reasoning_content.replace(/\n/g, '\n> ')}\n\n`;
+        }
+      }
+      // 可以选择性地忽略 system 消息
+    });
+  } else { 
+    // 生成 JSON 内容
+    fileContent = JSON.stringify(conv, null, 2);
+  }
+
+  // 创建 Blob 并触发下载
+  const blob = new Blob([fileContent], { type: format === 'md' ? 'text/markdown;charset=utf-8' : 'application/json;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  
+  // 清理文件名中的非法字符
+  const safeTitle = (conv.title || 'untitled').replace(/[\/\\?%*:|"<>]/g, '-');
+  a.download = `${safeTitle}.${fileExtension}`;
+  
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
 
 // --- DOMContentLoaded: 页面加载完成后的主要设置和初始化 ---
 document.addEventListener('DOMContentLoaded', async () => {
@@ -3905,25 +3967,103 @@ if (showPresetPromptsBtn && presetPromptsListPanel && presetPromptsUl) {
     temperatureInputInline = document.getElementById('temperature-input-inline');
     temperatureValueDisplayInline = document.getElementById('temperature-value-inline');
     qwenThinkModeToggle = document.getElementById('qwen-think-mode-toggle');
+    const sidebarHeader = document.getElementById('sidebar-header');
+const logoDisplay = document.getElementById('logo-display');
+const searchInput = document.getElementById('search-conversations');
+const searchWrapper = document.getElementById('search-wrapper');
+    
+if (sidebarHeader && logoDisplay && searchInput && searchWrapper) {
+
+  // 功能 1: 点击 Logo，切换到搜索模式
+  logoDisplay.addEventListener('click', () => {
+    sidebarHeader.classList.add('search-mode');
+    searchWrapper.style.display = 'flex'; // 先显示，才能聚焦
+
+    // 延迟聚焦，确保元素已渲染
+    setTimeout(() => {
+      searchInput.focus();
+    }, 50); 
+  });
+
+  // 功能 2: 搜索框失去焦点时，切换回 Logo
+  searchInput.addEventListener('blur', () => {
+    // 只有当搜索框为空时才变回Logo
+    if (searchInput.value.trim() === '') {
+      sidebarHeader.classList.remove('search-mode');
+      // 动画结束后再彻底隐藏元素，避免闪烁
+      setTimeout(() => {
+        if (!sidebarHeader.classList.contains('search-mode')) {
+          searchWrapper.style.display = 'none';
+        }
+      }, 200); // 时间应大于等于 CSS transition 时间
+    }
+  });
+
+  // 功能 3: 在搜索框输入时，实时过滤对话列表
+  searchInput.addEventListener('input', () => {
+    // 调用我们修改过的 renderConversationList 函数
+    renderConversationList(searchInput.value);
+  });
+}
 
 
+if (sidebarHeader && logoDisplay && searchInput && searchWrapper) {
 
-if (sidebar && resizer && body) {
-  
-  // 1. 从 localStorage 加载初始状态
-  const isSidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-  if (isSidebarCollapsed) {
-    body.classList.add('sidebar-collapsed');
+  // --- 封装一个函数，用于从搜索状态恢复到Logo状态 ---
+  function switchToLogoView() {
+    // 1. 如果当前不是Logo状态，才执行恢复操作
+    if (sidebarHeader.classList.contains('search-mode')) {
+      // 2. 清空搜索框内容
+      searchInput.value = '';
+      
+      // 3. 移除 'search-mode' 类以触发CSS动画
+      sidebarHeader.classList.remove('search-mode');
+      
+      // 4. 重新渲染完整的对话列表 (因为搜索词已清空)
+      renderConversationList(''); // 传入空字符串清除过滤
+      
+      // 5. 动画结束后再隐藏搜索框元素，优化性能
+      setTimeout(() => {
+        if (!sidebarHeader.classList.contains('search-mode')) {
+          searchWrapper.style.display = 'none';
+        }
+      }, 200); // 时间应大于等于CSS transition时间
+    }
   }
 
-  // 2. 为点击区域添加点击事件
-  resizer.addEventListener('click', () => {
-    // 切换 body 上的 'sidebar-collapsed' 类
-    body.classList.toggle('sidebar-collapsed');
+  // --- 事件绑定 ---
+
+  // 1. 点击 Logo 时，切换到搜索模式
+  logoDisplay.addEventListener('click', (e) => {
+    e.stopPropagation(); // 防止事件冒泡到document
+    sidebarHeader.classList.add('search-mode');
+    searchWrapper.style.display = 'flex';
     
-    // 3. 将新状态保存到 localStorage
-    const isNowCollapsed = body.classList.contains('sidebar-collapsed');
-    localStorage.setItem('sidebarCollapsed', String(isNowCollapsed));
+    setTimeout(() => {
+      searchInput.focus();
+    }, 50); 
+  });
+
+  // 2. 搜索框输入时，实时过滤
+  searchInput.addEventListener('input', () => {
+    renderConversationList(searchInput.value);
+  });
+  
+  // 3. 点击页面任何其他地方，都恢复到 Logo 状态
+  document.addEventListener('click', (e) => {
+    // 检查点击的是否是搜索框本身
+    const isClickInsideSearch = searchWrapper.contains(e.target);
+    
+    if (!isClickInsideSearch) {
+      switchToLogoView();
+    }
+  });
+
+  // 4. 按下 Escape 键也可以恢复到 Logo 状态
+  searchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      switchToLogoView();
+    }
   });
 }
 
@@ -4102,6 +4242,17 @@ if (sidebar && resizer && body) {
         console.error("DOMContentLoaded: Model form 'model-form' not found. Submit listener NOT attached.");
     }
     
+    const exportCurrentBtn = document.getElementById('export-current-btn');
+if (exportCurrentBtn) {
+  exportCurrentBtn.addEventListener('click', () => {
+    if (currentConversationId) {
+      // 调用导出函数，默认导出为 Markdown 格式
+      exportSingleConversation(currentConversationId, 'md'); 
+    } else {
+      showToast('没有活动的对话可导出', 'warning');
+    }
+  });
+}
 
     // 0. 首先从配置文件加载模型列表
     console.log("DEBUG DOMContentLoaded: Attempting to load models from config...");
@@ -4262,15 +4413,14 @@ if (sidebar && resizer && body) {
 
     const modelSelect = document.getElementById('model');
     if (modelSelect) {
-        modelSelect.addEventListener('change', (e) => {
-            const conv = typeof getCurrentConversation === 'function' ? getCurrentConversation() : null;
-            if (conv) {
-                conv.model = e.target.value;
-                if (typeof saveConversations === 'function') saveConversations();
-            }
-        });
-        // Initial model selection sync (already handled by loadConversation or createNewConversation)
-    } else { console.warn("DOMContentLoaded: Model select dropdown 'model' not found."); }
+    modelSelect.addEventListener('change', (e) => {
+        const conv = getCurrentConversation(); // 获取当前对话
+        if (conv) {
+            conv.model = e.target.value; // 更新对话对象中的模型
+            saveConversations(); // 保存更改
+        }
+    });
+} else { console.warn("DOMContentLoaded: Model select dropdown 'model' not found."); }
 
     const showSettingsBtn = document.getElementById('show-settings-btn');
     if (showSettingsBtn) {

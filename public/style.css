@@ -125,7 +125,7 @@ body.sidebar-collapsed .sidebar {
 
 .logo {
     /* 基础样式保留 */
-    font-size: 1.7rem;
+    font-size: 1.8rem;
     padding: 5px 20px 20px;
     text-align: center;
     font-weight: 600;
@@ -263,39 +263,74 @@ body.sidebar-collapsed .sidebar {
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 .chat-header h1#chat-title{margin:0;font-size:1.1rem;font-weight:500; white-space: nowrap; overflow:hidden; text-overflow: ellipsis; max-width: 300px;} /* 限制标题最大宽度 */
+/* ===== Header Action Buttons (Optimized) ===== */
 
-/* 归档与删除按钮 - 基于原始覆盖，但适配flex布局 */
-#archive-current-btn, #delete-current-btn {
-  position: static !important; /* 移出绝对定位，改为flex item */
-  top: auto !important; right: auto !important; /* 清除原始绝对定位值 */
-  padding: 6px 12px !important;
-  min-width: 70px !important; /* 确保按钮有一定宽度 */
-  text-align: center !important;
-  border-radius: var(--border-radius-md) !important; /* 使用变量 */
-  font-size: 0.9rem !important;
-  cursor: pointer !important;
-  box-shadow: var(--shadow-sm) !important; /* 使用变量 */
-  transition: background-color 0.2s ease, box-shadow 0.2s ease !important;
-  border: 1px solid transparent !important; /* 确保高度一致性 */
-  font-weight: 500; /* 加一点字重 */
-}
-#archive-current-btn { /* 归档按钮，参考图片是浅色底 */
-  background: var(--bg-secondary) !important; /* 用次要背景色 */
-  color: var(--text-color) !important;
-  border-color: var(--border-color) !important; /* 加上边框 */
+/* 1. 为所有头部动作按钮定义一个通用的基础样式 */
+/* 这个选择器现在包含了新的 #export-current-btn */
+#export-current-btn,
+#archive-current-btn, 
+#delete-current-btn {
+  position: static; /* 移出绝对定位 */
+  padding: 6px 14px; /* 稍微增加水平padding，让文字更舒展 */
+  min-width: 70px;
+  text-align: center;
+  border-radius: var(--border-radius-md);
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease; /* 统一过渡效果 */
+  border: 1px solid transparent; /* 默认边框透明 */
+  font-weight: 500;
   
+  /* 注意：我们移除了所有的 !important，因为通过更具体的选择器可以避免它们 */
 }
+
+/* 2. 定义不同按钮的特定颜色 */
+
+/* ★★★ 导出按钮 (主要操作 - Primary) ★★★ */
+#export-current-btn {
+  background-color: var(--primary); /* 使用主题主色 */
+  color: #fff; /* 白色文字 */
+  border-color: var(--primary); /* 边框和背景同色 */
+}
+
+/* 归档按钮 (次要操作 - Secondary) */
+#archive-current-btn {
+  background: var(--bg-secondary);
+  color: var(--text-color);
+  border-color: var(--border-color);
+}
+
+/* 删除按钮 (危险操作 - Danger) */
+#delete-current-btn {
+  background: #e53e3e;
+  color: #fff;
+  /* border-color 保持 transparent */
+}
+
+
+/* 3. 定义悬浮 (hover) 效果 */
+
+/* 导出按钮的悬浮效果 */
+#export-current-btn:hover {
+  background-color: rgba(var(--primary-rgb), 0.85); /* 主色变暗 */
+  border-color: rgba(var(--primary-rgb), 0.85);
+  box-shadow: var(--shadow-md);
+}
+
+/* 归档按钮的悬浮效果 */
 #archive-current-btn:hover {
-  background: rgba(var(--primary-rgb),0.1) !important;
-  border-color: var(--primary) !important;
-  color: var(--primary) !important;
-  box-shadow: var(--shadow-md) !important;
+  background: rgba(var(--primary-rgb), 0.1);
+  border-color: var(--primary);
+  color: var(--primary);
+  box-shadow: var(--shadow-md);
 }
-/* 删除按钮 - 保持危险色 */
-#delete-current-btn{background:#e53e3e!important;color:#fff!important;}
-#delete-current-btn:hover{background:#c53030!important; box-shadow: var(--shadow-md) !important;}
 
-
+/* 删除按钮的悬浮效果 */
+#delete-current-btn:hover {
+  background: #c53030;
+  box-shadow: var(--shadow-md);
+}
 /* 5-2 聊天内容 - 修改 */
 .chat-area{
   flex:1;
@@ -556,8 +591,26 @@ body.dark-theme .input-area textarea#prompt:focus {
 
 .header-actions {
   margin-left: auto; /* 这会将按钮组推到最右边 */
-  display: flex;    /* 让内部按钮水平排列 */
+  display: flex;    /* 让内部按#archive-current-btn,钮水平排列 */
   gap: 8px;         /* 归档和删除按钮之间的间距，可以根据需要调整，或者用 margin */
+
+}
+
+/* 2. 新增的蓝色文字按钮样式 */
+.action-btn-text {
+  background: none;
+  border: none;
+  padding: 6px 8px; /* 轻微的内边距，增加点击区域 */
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--primary); /* ★★★ 核心：使用主题的主色（蓝色） ★★★ */
+  border-radius: var(--border-radius-md);
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.action-btn-text:hover {
+  background-color: rgba(var(--primary-rgb), 0.1); /* 悬浮时显示一个浅蓝色的背景 */
 }
 
 
@@ -2122,3 +2175,74 @@ body.dark-theme .toast.toast-error {
     border-color: #7f1d1d;
 }
 
+
+.sidebar-header {
+  padding: 0 16px; /* 容器的左右内边距 */
+  height: 65px; /* 固定高度，确保切换时布局不跳动。根据您的logo和搜索框高度调整 */
+  display: flex;
+  align-items: center;
+  margin-bottom: 5px;
+  position: relative; /* 用于绝对定位子元素 */
+}
+
+/* Logo 和搜索框的通用切换动画样式 */
+.logo, .search-wrapper {
+  position: absolute; /* 让它们重叠在同一个位置 */
+  width: calc(100% - 32px); /* 宽度等于父容器宽度减去左右padding */
+  opacity: 1;
+  transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out;
+}
+
+/* Logo 样式 */
+.logo {
+  /* 您已有的 .logo 样式 */
+  font-size: 1.7rem;
+  text-align: center;
+  font-weight: 600;
+  color: transparent;
+  background: linear-gradient(135deg, #2320eb 0%, #0077fe 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  cursor: pointer; /* 提示用户可点击 */
+  user-select: none;
+}
+
+/* 搜索框包裹容器样式 (之前已有，稍作调整) */
+.search-wrapper {
+  display: flex;
+  align-items: center;
+}
+
+/* 搜索图标 (之前已有) */
+.search-icon {
+  position: absolute; left: 12px; top: 50%;
+  transform: translateY(-50%); color: var(--text-secondary);
+}
+
+/* 搜索输入框 (之前已有，稍作调整) */
+#search-conversations {
+  width: 100%;
+  padding: 10px 12px 10px 36px; /* 调整padding使垂直居中 */
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--primary); /* 出现时就带边框 */
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-size: 0.9rem;
+  outline: none;
+}
+
+/* --- 切换的核心动画 --- */
+
+/* 当处于搜索模式时，Logo 隐藏 */
+.sidebar-header.search-mode .logo {
+  opacity: 0;
+  transform: scale(0.95); /* 轻微缩小效果 */
+  pointer-events: none; /* 隐藏后不可交互 */
+}
+
+/* 当处于非搜索模式时，搜索框隐藏 */
+.sidebar-header:not(.search-mode) .search-wrapper {
+  opacity: 0;
+  transform: scale(0.95);
+  pointer-events: none;
+}

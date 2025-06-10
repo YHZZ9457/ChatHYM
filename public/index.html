@@ -25,7 +25,21 @@
 <body>
   <div class="container">
     <aside class="sidebar">
-      <div class="logo">ChatHYM v1.0</div> <!-- 版本号更新 -->
+   <div class="sidebar-header" id="sidebar-header">
+  
+  <!-- Logo 元素 -->
+  <div class="logo" id="logo-display">ChatHYM v1.0</div>
+
+  <!-- 搜索框 (初始在HTML中是隐藏的) -->
+  <div class="search-wrapper" id="search-wrapper" style="display: none;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon">
+      <circle cx="11" cy="11" r="8"></circle>
+      <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+    </svg>
+    <input type="search" id="search-conversations" placeholder="搜索对话...">
+  </div>
+  
+</div>
       <button id="new-conv-btn" class="new-btn">+ 新对话</button>
       <nav class="conv-nav">
         <ul id="conversation-list" class="conv-nav">
@@ -51,6 +65,7 @@
             </select>
           </div> <!-- header-model-selector 结束标签 -->
           <div class="header-actions"> <!-- 将按钮包裹起来以便更好地控制 -->
+            <button id="export-current-btn" title="导出当前对话">导出</button>
             <button id="archive-current-btn" title="归档当前会话">归档</button>
             <button id="delete-current-btn" title="删除当前会话">删除</button>
           </div>

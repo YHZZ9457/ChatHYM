@@ -1,5 +1,5 @@
 # .env.example
-# 请在=号后面写入你自己的 API Key
+# 请在等于号后面写入你自己的 API Key
 # 将此文件保存为.env 并在其中填入你的密钥
 # 如果安装了Python，你也可以使用设置API-Keys.py
 

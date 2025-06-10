@@ -90,13 +90,39 @@ button{font-family:inherit;cursor:pointer; background:transparent; border:none; 
 
 /* ===== 4. 侧边栏 ===== */
 .sidebar{
-  width:240px; /* 原始宽度 */
+  width:250px; /* 原始宽度 */
   background:var(--sidebar-bg);
   border-right:1px solid var(--border-color);
   display:flex;flex-direction:column;
   padding: 16px 0; /* 上下增加些呼吸空间 */
   transition: background-color 0.3s ease, border-color 0.3s ease;
+   flex-shrink: 0;
+  transition: width 0.3s ease-in-out; /* 使用 margin-left 来实现动画 */
+  }
+
+ #sidebar-resizer {
+  flex-shrink: 0;
+  width: 8px; /* 加宽一点，方便点击 */
+  background: transparent;
+  position: relative;
+  /* 鼠标悬浮时显示为手指光标，表示可点击 */
+  cursor: pointer; 
+  transition: background-color 0.2s ease;
 }
+
+/* 鼠标悬浮在点击区域时，显示一条蓝色的线作为提示 */
+#sidebar-resizer:hover {
+  background-color: var(--primary);
+}
+
+
+/* 当 body 有 .sidebar-collapsed 类时，侧边栏滑出视图 */
+body.sidebar-collapsed .sidebar {
+  margin-left: -250px; /* 负值等于侧边栏宽度 */
+}
+
+
+
 .logo {
     /* 基础样式保留 */
     font-size: 1.7rem;
@@ -106,7 +132,7 @@ button{font-family:inherit;cursor:pointer; background:transparent; border:none; 
     
     /* 蓝色渐变文字效果 */
     color: transparent;
-    background: linear-gradient(135deg, #2320eb 0%, #0077fe 100%);
+    background: linear-gradient(135deg, #2320eb 0%, #2b8eff 100%);
     -webkit-background-clip: text;
     background-clip: text;
     
@@ -2032,3 +2058,67 @@ body.dark-theme .message-action-btn:hover {
     opacity: 1;
     transition-delay: 0s;
 }
+
+.toast {
+    position: fixed;
+    top: 50px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-40px);
+    padding: 10px 20px;
+    border-radius: var(--border-radius-lg); /* 使用您已定义的变量 */
+    z-index: 1001; /* 确保在最顶层 */
+    box-shadow: var(--shadow-lg);         /* 使用您已定义的变量 */
+    opacity: 0;
+    transition: opacity 0.3s, transform 0.3s, background-color 0.3s, color 0.3s, border-color 0.3s;
+    min-width: 250px;
+    max-width: 400px;
+    text-align: center;
+    font-weight: 500;
+}
+
+.toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+}
+
+/* 2. 浅色主题下的 Toast 样式 */
+body.light-theme .toast {
+    background-color: var(--bg-light); /* 使用浅色主题的白色背景 */
+    color: var(--text-light);          /* 使用浅色主题的深色文字 */
+    border: 1px solid var(--border-light);
+}
+
+body.light-theme .toast.toast-success {
+    background-color: #e6f7ec; /* 浅绿色背景 */
+    color: #0d6b33;            /* 深绿色文字，保证对比度 */
+    border-color: #b7ebc9;
+}
+
+body.light-theme .toast.toast-error {
+    background-color: #fdecea; /* 浅红色背景 */
+    color: #a61d24;            /* 深红色文字 */
+    border-color: #f7c5c7;
+}
+
+
+
+
+/* 3. 深色主题下的 Toast 样式 */
+body.dark-theme .toast {
+    background-color: var(--bg-secondary); /* 使用深色主题的次要背景，比纯黑略浅 */
+    color: var(--text-dark);               /* 使用深色主题的浅色文字 */
+    border: 1px solid var(--border-dark);
+}
+
+body.dark-theme .toast.toast-success {
+    background-color: #1c3d26; /* 深绿色背景 */
+    color: #a7f3c3;            /* 浅绿色文字 */
+    border-color: #2a5a3a;
+}
+
+body.dark-theme .toast.toast-error {
+    background-color: #4d1818; /* 深红色背景 */
+    color: #fecaca;            /* 浅红色文字 */
+    border-color: #7f1d1d;
+}
+

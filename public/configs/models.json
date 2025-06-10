@@ -259,6 +259,11 @@
           "text": "Ollama DSR1-8B",
           "value": "ollama::deepseek-r1:8b",
           "isHidden": false
+        },
+        {
+          "text": "Ollama DTR2-4B",
+          "value": "ollama::FradSer/deeptranslate-r2-4b:latest",
+          "isHidden": true
         }
       ]
     },

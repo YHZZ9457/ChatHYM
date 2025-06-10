@@ -92,7 +92,7 @@ Object.defineProperty(window, 'uploadedFilesData', {
 
     if (Array.isArray(newValue) && newValue.length === 0 && _internalUploadedFilesData && _internalUploadedFilesData.length > 0) {
         console.error('CRITICAL_WATCH: window.uploadedFilesData is being set to an EMPTY ARRAY [] when it previously had data!');
-        ; // 可以在这里打断点
+        ; 
     }
     _internalUploadedFilesData = newValue;
   }
@@ -129,7 +129,7 @@ async function handleFileSelection(event) {
   const MAX_FILES = 5;
   // 使用 window.uploadedFilesData 保证通过 getter/setter
   if (window.uploadedFilesData.length + files.length > MAX_FILES) {
-    alert(`一次最多只能上传 ${MAX_FILES} 个文件。`);
+    showToast(`一次最多只能上传 ${MAX_FILES} 个文件。`, 'warning');
     // 即使超出数量，也清空一下 input，以便用户可以重新选择
     if (fileInputSource) {
         const inputToClear = fileInputSource;
@@ -147,7 +147,7 @@ async function handleFileSelection(event) {
     console.log(`DEBUG: handleFileSelection - Processing file ${i + 1}: ${file.name}, Size: ${file.size}, Type: ${file.type}`);
     const MAX_SIZE_MB = 10;
     if (file.size > MAX_SIZE_MB * 1024 * 1024) {
-      alert(`文件 "${file.name}" 过大 (超过 ${MAX_SIZE_MB}MB)。`);
+      showToast(`文件 "${file.name}" 过大 (超过 ${MAX_SIZE_MB}MB)。`, 'warning');
       continue; // 跳过此文件，继续处理下一个
     }
 
@@ -167,7 +167,7 @@ async function handleFileSelection(event) {
       console.log(`DEBUG: handleFileSelection - File ADDED to uploadedFilesData: ${file.name}. Current count: ${window.uploadedFilesData.length}`);
     } catch (error) {
       console.error(`读取文件 "${file.name}" 失败:`, error);
-      alert(`无法读取文件 "${file.name}"。`);
+      showToast(`无法读取文件 "${file.name}"。`,'error');
       // 即使读取失败，也应该 continue 到下一个文件
     }
   }
@@ -249,10 +249,6 @@ function renderFilePreview() {
 
 function removeUploadedFile(indexToRemove) {
     console.log(`[removeUploadedFile] CALLED. Attempting to remove file at index: ${indexToRemove}`);
-    // 始终通过 window.uploadedFilesData 来访问和操作，以确保触发 getter/setter (如果setter有额外逻辑)
-    // 或者至少确保操作的是正确的全局代理数组。
-    // splice 方法会直接修改 _internalUploadedFilesData 数组，这是可以的，
-    // 因为 Object.defineProperty 的 getter 返回的就是对 _internalUploadedFilesData 的引用。
     console.log("[removeUploadedFile] window.uploadedFilesData BEFORE splice:", JSON.parse(JSON.stringify(window.uploadedFilesData)));
 
     if (indexToRemove >= 0 && indexToRemove < window.uploadedFilesData.length) {
@@ -579,7 +575,7 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
                     }, 2000);
                 }).catch(err => {
                     console.error('[CopyButton] Failed to copy using navigator.clipboard:', err);
-                    alert('自动复制失败。您的浏览器可能不支持或未授予权限。\n请尝试手动复制 (Ctrl+C / Cmd+C)。\n错误: ' + err.message);
+                    showToast('自动复制失败。您的浏览器可能不支持或未授予权限。\n请尝试手动复制 (Ctrl+C / Cmd+C)。\n错误: ' + err.message);
                     // 可选：尝试 selectText(codeElem || pre);
                 });
             } else {
@@ -603,7 +599,7 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
                     }
                 } catch (err) {
                     console.error('[CopyButton] execCommand("copy") fallback failed:', err);
-                    alert('浏览器不支持自动复制。请手动复制 (Ctrl+C / Cmd+C)。');
+                    showToast('浏览器不支持自动复制。请手动复制 (Ctrl+C / Cmd+C)。');
                     // 可选：尝试 selectText(codeElem || pre);
                 }
             }
@@ -694,7 +690,7 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
                 }, 2000);
             }).catch(err => {
                 console.error('复制消息内容失败:', err);
-                alert('复制失败，请手动复制。');
+                showToast('复制失败，请手动复制。');
             });
         } else {
             // 如果没有文本内容可复制，也给用户一个反馈
@@ -790,7 +786,7 @@ function processPreBlocksForCopyButtons(containerElement) {
                     setTimeout(() => { btn.textContent = '复制'; }, 2000);
                 }).catch(err => {
                     console.error('复制失败 (navigator):', err);
-                    alert('自动复制失败。');
+                    showToast('自动复制失败。');
                 });
             } else {
                 try {
@@ -810,7 +806,7 @@ function processPreBlocksForCopyButtons(containerElement) {
                     }
                 } catch (err) {
                     console.error('复制失败 (execCommand):', err);
-                    alert('浏览器不支持自动复制。请手动复制。');
+                    showToast('浏览器不支持自动复制。请手动复制。');
                 }
             }
         });
@@ -1617,7 +1613,7 @@ async function send() {
     // --- 2. 获取用户输入和文件 ---
     const promptInput = document.getElementById('prompt');
     if (!promptInput) {
-        alert("发生内部错误：找不到输入框。");
+        showToast("发生内部错误：找不到输入框。", 'error');
         console.error("[Send] CRITICAL: Prompt input element 'prompt' not found. Aborting.");
         return;
     }
@@ -1626,14 +1622,14 @@ async function send() {
 
     // --- 3. 输入有效性检查 ---
     if (!promptText.trim() && filesToActuallySend.length === 0) {
-        alert("请输入问题或上传文件后再发送。");
+        showToast("请输入问题或上传文件后再发送。",'warning');
         console.log("[Send] Alert: No text or files to send. Aborting.");
         return;
     }
 
     // --- 4. 检查是否已在生成中 ---
     if (window.isGeneratingResponse) {
-        alert("请等待上一个回复生成完毕。");
+        showToast("请等待上一个回复生成完毕。",'warning');
         console.log("[Send] Attempted to send while a request is already in progress. Aborting.");
         return;
     }
@@ -1641,13 +1637,13 @@ async function send() {
     // --- 5. 获取对话和模型信息 ---
     const conversationAtRequestTime = getCurrentConversation();
     if (!conversationAtRequestTime) {
-        alert("错误：无法获取当前对话。请先选择或创建一个对话。");
+        showToast("错误：无法获取当前对话。请先选择或创建一个对话。",'error');
         console.error("[Send] CRITICAL: conversationAtRequestTime is null. Aborting.");
         return;
     }
     const modelValueFromOption = conversationAtRequestTime.model;
     if (!modelValueFromOption) {
-        alert("错误：当前对话没有指定模型。");
+        showToast("错误：当前对话没有指定模型。", 'error');
         console.error("[Send] CRITICAL: modelValueFromOption is null for current conversation. Aborting.");
         return;
     }
@@ -1671,18 +1667,17 @@ async function send() {
             case 'suanlema': actualProvider = 'suanlema'; break;
             case 'openrouter': actualProvider = 'openrouter'; break;
             default:
-                alert(`模型 "${modelValueFromOption}" 配置错误：无法识别的提供商前缀 "${prefix}"。`);
+                showToast(`模型 "${modelValueFromOption}" 配置错误：无法识别的提供商前缀 "${prefix}"。`,'error');
                 console.error(`[Send] Unknown provider prefix: "${prefix}" for model "${modelValueFromOption}". Aborting.`);
                 return;
         }
     } else {
-        alert(`模型 "${modelValueFromOption}" 配置错误：格式不正确。`);
+        showToast(`模型 "${modelValueFromOption}" 配置错误：格式不正确。`,'error');
         console.error(`[Send] Invalid model format: "${modelValueFromOption}". Aborting.`);
         return;
     }
     const providerToUse = actualProvider;
 
-    // --- ★★★ 正式开始“生成”流程，改变状态 ★★★ ---
     window.isGeneratingResponse = true;
     updateSubmitButtonState(true);
     
@@ -2559,7 +2554,24 @@ function processStreamChunk(rawText, provider, conversationId, assistantTextEl, 
 }
 
 
+function showToast(message, type = 'info') { // type可以是 'info', 'success', 'warning', 'error'
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
 
+    document.body.appendChild(toast);
+
+    // 触发进入动画
+    setTimeout(() => {
+        toast.classList.add('show');
+    }, 10);
+
+    // 3秒后自动移除
+    setTimeout(() => {
+        toast.classList.remove('show');
+        toast.addEventListener('transitionend', () => toast.remove());
+    }, 3000);
+}
 
 /**
  * 显示设置区域，隐藏聊天区域。
@@ -2934,12 +2946,12 @@ function handlePostDropdownUpdate(newlySelectedValueInDropdown, previousSelected
                     finalModelForConversation = modelSelect.value;
                     conv.model = finalModelForConversation; // 更新对话对象中的模型
                     if (typeof saveConversations === 'function') saveConversations();
-                    alert(`您当前对话使用的模型 ("${previousSelectedValueBeforeUpdate}" 或 "${conv.model}") 已被隐藏/移除，已自动切换到: "${modelSelect.options[0].text}"`);
+                    showToast(`您当前对话使用的模型 ("${previousSelectedValueBeforeUpdate}" 或 "${conv.model}") 已被隐藏/移除，已自动切换到: "${modelSelect.options[0].text}"`, 'warning');
                 } else {
                     // 没有可供选择的有效模型了
                     conv.model = ""; // 或一个表示无效的特殊值
                     if (typeof saveConversations === 'function') saveConversations();
-                    alert(`您当前对话使用的模型已被隐藏/移除，且没有其他可用模型！`);
+                    showToast(`您当前对话使用的模型已被隐藏/移除，且没有其他可用模型！`, 'error');
                     if(modelSelect.options.length === 0 || modelSelect.options[0].value.startsWith("error::")) { // 如果下拉框是空的或只有错误提示
                        // 可能需要清空 modelSelect 或添加一个“无模型”的占位符选项，
                        // populateModelDropdown 内部应该已经处理了这种情况
@@ -2978,7 +2990,7 @@ function handlePostDropdownUpdate(newlySelectedValueInDropdown, previousSelected
              if (conv && conv.model !== "") { // 只有当之前有模型时才提示
                  conv.model = "";
                  if (typeof saveConversations === 'function') saveConversations();
-                 alert("所有模型均不可用，当前对话的模型已被清除。请在模型管理中添加或显示模型。");
+                 showToast("所有模型均不可用，当前对话的模型已被清除。请在模型管理中添加或显示模型。", 'error');
                  // 可能还需要更新聊天界面的标题或模型显示区域
                  const chatTitleEl = document.getElementById('chat-title');
                  if (chatTitleEl && conv) chatTitleEl.textContent = conv.title; // 保持标题，但模型没了
@@ -3027,7 +3039,7 @@ async function loadModelsFromConfig() {
     modelConfigData = { models: [{ groupLabel: "Fallback", options: [{value: "openai::gpt-3.5-turbo", text: "GPT-3.5 Turbo (配置加载失败)"}] }] };
     editableModelConfig = JSON.parse(JSON.stringify(modelConfigData));
     populateModelDropdown(editableModelConfig.models);
-    alert("无法从 models.json 加载模型列表，已使用回退模型。请检查控制台获取详细错误信息。");
+    showToast("无法从 models.json 加载模型列表，已使用回退模型。请检查控制台获取详细错误信息。",'error');
     return false;
   }
 }
@@ -3515,7 +3527,7 @@ window.deleteModelOption = function(groupIndex, optionIndex) { // 暴露到全�
  */
 async function saveModelsToFile() {
     if (!editableModelConfig || !editableModelConfig.models) { // 增加对 models 数组的检查
-        alert('没有模型配置可供保存，或者模型列表为空。');
+        showToast('没有模型配置可供保存，或者模型列表为空。','error');
         return;
     }
 
@@ -3562,7 +3574,7 @@ async function saveModelsToFile() {
 
     if (!cleanedModelConfig.models || cleanedModelConfig.models.length === 0) {
         if (!confirm("模型列表为空或所有模型/组都无效。是否仍要保存一个空的模型配置文件？（这将清空现有配置）")) {
-            alert("保存操作已取消。");
+            showToast("保存操作已取消。", 'warning');
             return;
         }
         // 如果用户确认保存空配置，继续执行，但 body 会是 { models: [] }
@@ -3589,12 +3601,12 @@ async function saveModelsToFile() {
                  throw new Error(`保存操作失败，服务器响应无效: ${resultText.substring(0, 100)} (Status: ${response.status})`);
             }
             // 如果 response.ok 但 JSON 解析失败，可能服务器返回了非 JSON 的成功消息
-            alert('配置已保存，但服务器响应格式非预期：' + resultText.substring(0,100));
+            showToast('配置已保存，但服务器响应格式非预期：' + resultText.substring(0,100), 'warning');
             // 这种情况也认为是部分成功，可以继续更新前端状态
         }
 
         if (response.ok) {
-            alert(result?.message || '模型配置已成功保存到本地！');
+            showToast(result?.message || '模型配置已成功保存到本地！', 'success');
 
             // ★★★ 使用清理和保存后的 cleanedModelConfig 来更新运行时的状态 ★★★
             modelConfigData = JSON.parse(JSON.stringify(cleanedModelConfig)); // 更新全局的原始数据副本
@@ -3628,10 +3640,10 @@ async function saveModelsToFile() {
                             conv.model = modelSelect.options[0].value; // 选中第一个可用的
                             saveConversations(); // 保存对话的更改
                             modelSelect.value = conv.model; // UI同步
-                            alert(`当前对话使用的模型 "${conv.model}" 在新配置中不再可见或有效，已自动切换到 "${modelSelect.options[0].text}"。`);
+                            showToast(`当前对话使用的模型 "${conv.model}" 在新配置中不再可见或有效，已自动切换到 "${modelSelect.options[0].text}"。`);
                         } else {
                             // 没有可用的模型了
-                            alert(`当前对话使用的模型 "${conv.model}" 在新配置中不再可见或有效，且没有其他可用模型！请添加模型。`);
+                            showToast(`当前对话使用的模型 "${conv.model}" 在新配置中不再可见或有效，且没有其他可用模型！请添加模型。`);
                             // 可能需要清空对话的模型或禁用发送等
                             conv.model = ""; // 或者一个表示无效的特殊值
                             saveConversations();
@@ -3646,7 +3658,7 @@ async function saveModelsToFile() {
         }
     } catch (error) {
         console.error("保存模型配置失败:", error);
-        alert(`保存模型配置失败：${error.message}`);
+        showToast(`保存模型配置失败：${error.message}`, 'error');
     }
 }
 
@@ -3674,7 +3686,7 @@ function applyPresetPrompt(preset) {
             console.log(`[applyPresetPrompt] User input field set with prompt from preset: "${preset.name}"`);
         } else {
             console.error("[applyPresetPrompt] CRITICAL: Prompt input element with ID 'prompt' not found.");
-            alert("错误：找不到聊天输入框。");
+            showToast("错误：找不到聊天输入框。", 'error');
         }
     } else if (preset.type === 'system_prompt') {
         if (currentConversation) {
@@ -3692,7 +3704,7 @@ function applyPresetPrompt(preset) {
                 saveConversations(); // 保存对话更改
             }
 
-            alert(`系统角色已设置为："${preset.name}"。\n提示内容: "${preset.prompt.substring(0, 100)}${preset.prompt.length > 100 ? '...' : ''}"\n此设置将影响接下来的对话。`);
+            showToast(`系统角色已设置为："${preset.name}"。\n提示内容: "${preset.prompt.substring(0, 100)}${preset.prompt.length > 100 ? '...' : ''}"\n此设置将影响接下来的对话。`);
 
             // 可选：你可能想在这里做一些UI提示或操作，例如：
             // - 清空当前聊天消息区的助手回复（如果适用）
@@ -3702,7 +3714,7 @@ function applyPresetPrompt(preset) {
 
             console.log(`[applyPresetPrompt] System prompt set for conversation ID ${currentConversation.id}: "${preset.name}"`);
         } else {
-            alert("错误：没有活动的对话来设置系统角色。\n请先开始或选择一个对话。");
+            showToast("错误：没有活动的对话来设置系统角色。\n请先开始或选择一个对话。");
             console.error("[applyPresetPrompt] No active conversation found to set system prompt.");
         }
     } else {
@@ -3758,6 +3770,9 @@ presetPromptsListPanel = document.getElementById('preset-prompts-list-panel');
 presetPromptsUl = document.getElementById('preset-prompts-ul');
 maxTokensInputInline = document.getElementById('max-tokens-input-inline');
 modelListEditor = document.getElementById('model-list-editor'); // 确保 modelListEditor 在这里被正确获取
+const resizer = document.getElementById('sidebar-resizer');
+const body = document.body;
+sidebar = document.querySelector('.sidebar');
 
 
 console.log("%cDOMContentLoaded: Script fully loaded and parsed.", "color: blue;"); // 日志A
@@ -3824,7 +3839,7 @@ console.log("%cDOMContentLoaded: Script fully loaded and parsed.", "color: blue;
                     // 输入无效，可以恢复到之前的值或清空
                     this.value = currentMaxTokens !== null ? currentMaxTokens.toString() : "";
                     if (this.value === "") this.placeholder = `默认 (如 ${DEFAULT_MAX_TOKENS_PLACEHOLDER})`;
-                    alert("请输入有效的最大Token数 (正整数)。");
+                    showToast("请输入有效的最大Token数 (正整数)。", 'warning');
                 }
             }
         });
@@ -3890,6 +3905,27 @@ if (showPresetPromptsBtn && presetPromptsListPanel && presetPromptsUl) {
     temperatureInputInline = document.getElementById('temperature-input-inline');
     temperatureValueDisplayInline = document.getElementById('temperature-value-inline');
     qwenThinkModeToggle = document.getElementById('qwen-think-mode-toggle');
+
+
+
+if (sidebar && resizer && body) {
+  
+  // 1. 从 localStorage 加载初始状态
+  const isSidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+  if (isSidebarCollapsed) {
+    body.classList.add('sidebar-collapsed');
+  }
+
+  // 2. 为点击区域添加点击事件
+  resizer.addEventListener('click', () => {
+    // 切换 body 上的 'sidebar-collapsed' 类
+    body.classList.toggle('sidebar-collapsed');
+    
+    // 3. 将新状态保存到 localStorage
+    const isNowCollapsed = body.classList.contains('sidebar-collapsed');
+    localStorage.setItem('sidebarCollapsed', String(isNowCollapsed));
+  });
+}
 
  // --- 为行内聊天设置按钮添加事件监听器 ---
     if (chatSettingsBtnInlineElement && inlineChatSettingsPanel) {
@@ -4009,7 +4045,7 @@ if (showPresetPromptsBtn && presetPromptsListPanel && presetPromptsUl) {
           const editOptionIndex = document.getElementById('edit-option-index').value;
 
           if (!groupLabel || !modelText || !modelValue) {
-            alert('所有字段均为必填项！');
+            showToast('所有字段均为必填项！', 'warning');
             return;
           }
 
@@ -4308,11 +4344,11 @@ if (showPresetPromptsBtn && presetPromptsListPanel && presetPromptsUl) {
                         const firstNonArchived = conversations.filter(c => !c.archived)[0];
                         if (typeof loadConversation === 'function') loadConversation(firstNonArchived ? firstNonArchived.id : conversations[0].id);
                     }
-                    alert(`成功导入 ${importedCount} 条新对话。`);
-                } else { alert('没有导入新的对话。'); }
+                    showToast(`成功导入 ${importedCount} 条新对话。`, 'success');
+                } else { showToast('没有导入新的对话。', 'warning'); }
             } catch (err) {
                 console.error('DOMContentLoaded: Error importing history file:', err);
-                alert('导入失败：' + err.message);
+                showToast('导入失败：' + err.message, 'error');
             } finally {
                 importFileInput.value = ''; // Clear the input
             }
@@ -4434,7 +4470,7 @@ if (showModelManagementBtn) {
     
     // 优化后的阈值设置
     const BUTTON_VISIBILITY_THRESHOLD = 150;   // 显示"回到底部"按钮的距离（正常值）
-    const AUTO_RESUME_THRESHOLD = 1;         // 自动恢复滚动到底部的距离
+    const AUTO_RESUME_THRESHOLD = 0.1;         // 自动恢复滚动到底部的距离
     const SCROLL_PAUSE_THRESHOLD = 1;        // 向上滚动这个距离暂停自动滚动
     
     let userHasManuallyScrolledUp = false;  // 用户手动滚动状态

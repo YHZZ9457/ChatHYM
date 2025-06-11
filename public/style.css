@@ -90,7 +90,7 @@ button{font-family:inherit;cursor:pointer; background:transparent; border:none; 
 
 /* ===== 4. 侧边栏 ===== */
 .sidebar{
-  width:250px; /* 原始宽度 */
+  width:260px; /* 原始宽度 */
   background:var(--sidebar-bg);
   border-right:1px solid var(--border-color);
   display:flex;flex-direction:column;

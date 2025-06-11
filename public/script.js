@@ -1767,73 +1767,93 @@ async function send() {
     window.isCurrentlyInThinkingBlock = false;
 
     try {
-        let currentTemperature = parseFloat(localStorage.getItem('model-temperature'));
-        if (isNaN(currentTemperature) || currentTemperature < 0 || currentTemperature > 2) currentTemperature = 0.7;
-        let currentMaxTokensSetting = parseInt(localStorage.getItem(MAX_TOKENS_STORAGE_KEY), 10);
-        if (isNaN(currentMaxTokensSetting) || currentMaxTokensSetting < 1) currentMaxTokensSetting = null;
+        // 1. 获取通用设置
+        let currentTemperature = parseFloat(localStorage.getItem('model-temperature')) || 0.7;
+        let currentMaxTokensSetting = parseInt(localStorage.getItem(MAX_TOKENS_STORAGE_KEY), 10) || null;
+        if (currentMaxTokensSetting && currentMaxTokensSetting < 1) currentMaxTokensSetting = null;
 
         shouldUseStreaming = ['openai', 'anthropic', 'deepseek', 'siliconflow', 'ollama', 'suanlema', 'openrouter', 'gemini'].includes(providerToUse);
-        bodyPayload.model = modelNameForAPI;
 
+        // 2. 初始化 bodyPayload，包含通用参数
+        bodyPayload = {
+            model: modelNameForAPI,
+            temperature: currentTemperature,
+            ...(shouldUseStreaming && { stream: true })
+        };
+
+        // 3. 智能处理 Token 限制参数
+        if (currentMaxTokensSetting) {
+            const modelsWithoutTokenLimit = ['o4-mini', 'o4-mini-2025-04-16'];
+            
+            if (modelsWithoutTokenLimit.includes(modelNameForAPI)) {
+                console.log(`[Send] Model ${modelNameForAPI} is in the token limit blacklist. Skipping max_tokens.`);
+                // 什么都不做，不添加任何 token 参数
+            } else {
+                // 对于所有非黑名单的模型，默认使用 max_tokens
+                // Proxy 端会负责处理 'o3' 等模型的参数名转换
+                bodyPayload.max_tokens = currentMaxTokensSetting;
+                console.log(`[Send] Adding max_tokens: ${currentMaxTokensSetting} for model ${modelNameForAPI}`);
+            }
+        }
+        
+        // 4. 根据 Provider 设置 API URL 和特有参数
         if (providerToUse === 'gemini') {
             apiUrl = `/.netlify/functions/gemini-proxy`;
             bodyPayload.contents = mapMessagesForGemini(conversationAtRequestTime.messages, filesToActuallySend);
-            const generationConfig = { temperature: currentTemperature };
-            if (currentMaxTokensSetting) generationConfig.maxOutputTokens = currentMaxTokensSetting;
-            bodyPayload.generationConfig = generationConfig;
+            bodyPayload.generationConfig = { temperature: bodyPayload.temperature };
+            if (bodyPayload.max_tokens) {
+                 bodyPayload.generationConfig.maxOutputTokens = bodyPayload.max_tokens;
+            }
             const systemMsg = conversationAtRequestTime.messages.find(m => m.role === 'system');
-            if (systemMsg && systemMsg.content) bodyPayload.system_instruction = { role: "system", parts: [{text: String(systemMsg.content)}] };
-            delete bodyPayload.messages; delete bodyPayload.stream; delete bodyPayload.temperature; delete bodyPayload.max_tokens;
+            if (systemMsg?.content) bodyPayload.system_instruction = { role: "system", parts: [{text: String(systemMsg.content)}] };
+            delete bodyPayload.messages; delete bodyPayload.temperature; delete bodyPayload.max_tokens;
         } else if (providerToUse === 'ollama') {
             const ollamaSettings = JSON.parse(localStorage.getItem('ollama-settings') || '{}');
-            apiUrl = (ollamaSettings && ollamaSettings.apiUrl && ollamaSettings.apiUrl.trim()) ? ollamaSettings.apiUrl.trim() : 'http://localhost:11434/api/chat';
+            apiUrl = ollamaSettings?.apiUrl?.trim() || 'http://localhost:11434/api/chat';
             bodyPayload.messages = mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, 'ollama', filesToActuallySend);
-            const imageBase64Array = filesToActuallySend.filter(f => f.type?.startsWith('image/') && f.base64).map(f => f.base64.split(',')[1]);
-            if (imageBase64Array.length > 0) {
-                 const lastUserMsgIndex = bodyPayload.messages.map(m => m.role).lastIndexOf('user');
-                 if (lastUserMsgIndex !== -1) {
-                    if (!bodyPayload.messages[lastUserMsgIndex].images) bodyPayload.messages[lastUserMsgIndex].images = [];
-                    bodyPayload.messages[lastUserMsgIndex].images.push(...imageBase64Array);
-                 }
+            bodyPayload.options = { temperature: bodyPayload.temperature };
+            if (bodyPayload.max_tokens) {
+                bodyPayload.options.num_predict = bodyPayload.max_tokens;
             }
-            bodyPayload.options = { temperature: currentTemperature };
-            if (currentMaxTokensSetting) bodyPayload.options.num_predict = currentMaxTokensSetting;
-            if (shouldUseStreaming) bodyPayload.stream = true;
+            // (保持 Ollama 图片处理逻辑)
             const systemMsg = conversationAtRequestTime.messages.find(m => m.role === 'system');
-            if (systemMsg && systemMsg.content) bodyPayload.system = String(systemMsg.content).trim();
-            delete bodyPayload.temperature; delete bodyPayload.max_tokens; delete bodyPayload.contents; delete bodyPayload.generationConfig; delete bodyPayload.system_instruction;
-        } else if (providerToUse === 'openrouter' || providerToUse === 'suanlema') {
-            apiUrl = `/.netlify/functions/${providerToUse}-proxy`;
-            bodyPayload.messages = mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, 'openai', filesToActuallySend);
-            if (shouldUseStreaming) bodyPayload.stream = true;
-            bodyPayload.temperature = currentTemperature;
-            if (currentMaxTokensSetting) bodyPayload.max_tokens = currentMaxTokensSetting;
-            delete bodyPayload.contents; delete bodyPayload.generationConfig; delete bodyPayload.options; delete bodyPayload.images; delete bodyPayload.system_instruction;
-        } else { // OpenAI, Deepseek, Anthropic, SiliconFlow
+            if (systemMsg?.content) bodyPayload.system = String(systemMsg.content).trim();
+            delete bodyPayload.temperature; delete bodyPayload.max_tokens;
+        } else { // 适用于所有其他 OpenAI-like 的 providers
             apiUrl = `/.netlify/functions/${providerToUse}-proxy`;
             bodyPayload.messages = mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, providerToUse, filesToActuallySend);
-            if (shouldUseStreaming) bodyPayload.stream = true;
-            bodyPayload.temperature = currentTemperature;
             if (providerToUse === 'anthropic') {
-                bodyPayload.max_tokens = currentMaxTokensSetting || 4096;
                 const systemMsg = conversationAtRequestTime.messages.find(m => m.role === 'system');
-                if (systemMsg && systemMsg.content) bodyPayload.system = String(systemMsg.content);
-            } else {
-                if (currentMaxTokensSetting) bodyPayload.max_tokens = currentMaxTokensSetting;
+                if (systemMsg?.content) bodyPayload.system = String(systemMsg.content);
+                if (!bodyPayload.max_tokens) bodyPayload.max_tokens = 4096;
             }
-            delete bodyPayload.contents; delete bodyPayload.generationConfig; delete bodyPayload.options; delete bodyPayload.images; delete bodyPayload.system_instruction;
         }
+        
+        console.log(`[Send] Final Body Payload for ${providerToUse} (before stringify):`, JSON.parse(JSON.stringify(bodyPayload)));
 
-        console.log(`[Send] Request URL: ${apiUrl}`);
-
-        const response = await fetch(apiUrl, {
+        // 5. 发送请求
+        response = await fetch(apiUrl, {
             method: 'POST',
             headers: headers,
             body: JSON.stringify(bodyPayload),
             signal: signal
         });
 
+        // 6. 正确处理响应
+        if (!response.ok) {
+            const errorText = await response.text();
+            let detail = errorText;
+            try {
+                const errJson = JSON.parse(errorText);
+                detail = errJson.error?.message || errJson.details || errJson.error || JSON.stringify(errJson);
+            } catch (e) { /* use raw text */ }
+            console.error(`[Send] API Error Response (${response.status}) from ${providerToUse}:`, detail);
+            throw new Error(`API请求失败 (${response.status}): ${detail.substring(0, 200)}`);
+        }
+
+        // --- 后续的成功响应处理 (流式或非流式) ---
         responseContentType = response.headers.get('content-type');
+        isActuallyStreaming = shouldUseStreaming && response.body && responseContentType?.includes('text/event-stream');
         isActuallyStreaming = shouldUseStreaming && response.body &&
             ((providerToUse !== 'ollama' && responseContentType?.includes('text/event-stream')) ||
              (providerToUse === 'ollama' && responseContentType?.includes('application/x-ndjson')) ||
@@ -2955,7 +2975,7 @@ function handlePostDropdownUpdate(newlySelectedValueInDropdown, previousSelected
                     finalModelForConversation = modelSelect.value;
                     conv.model = finalModelForConversation; // 更新对话对象中的模型
                     if (typeof saveConversations === 'function') saveConversations();
-                    showToast(`您当前对话使用的模型 ("${previousSelectedValueBeforeUpdate}" 或 "${conv.model}") 已被隐藏/移除，已自动切换到: "${modelSelect.options[0].text}"`, 'warning');
+                    showToast(`您当前对话使用的模型 ("${previousSelectedValueBeforeUpdate}" 或 "${conv.model}") 已被隐藏/移除，已自动切换到: "${modelSelect.options[0].text}"`);
                 } else {
                     // 没有可供选择的有效模型了
                     conv.model = ""; // 或一个表示无效的特殊值

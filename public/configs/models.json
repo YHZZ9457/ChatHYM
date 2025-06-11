@@ -6,7 +6,7 @@
       "options": [
         {
           "text": "OR Deepseek-R1 8B",
-          "value": "openrouter::deepseek/deepseek-r1-0528-qwen3-8b",
+          "value": "openrouter::deepseek/deepseek-r1-0528-qwen3-8b:free",
           "isHidden": false
         },
         {
@@ -52,6 +52,11 @@
         {
           "text": "OR Grok3 Mini",
           "value": "openrouter::x-ai/grok-3-mini-beta",
+          "isHidden": false
+        },
+        {
+          "text": "OR O3",
+          "value": "openrouter::openai/o3",
           "isHidden": false
         }
       ]

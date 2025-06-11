@@ -1,141 +1,134 @@
 // netlify/functions/volcengine-proxy.mjs
 
-// 引入 dotenv，以便在本地开发时从 .env 文件加载 API Key
-import dotenv from 'dotenv';
-dotenv.config();
-
-
 /**
- * A helper function to validate and clean a single message object.
- * This version correctly handles both string and array (multi-modal) content,
- * making it compatible with modern Volcengine models.
- * @param {object} message The message object from the frontend.
- * @param {number} index The index of the message in the array for logging.
- * @returns {object|null} A cleaned message object or null if invalid.
+ * 一个健壮的辅助函数，用于验证消息对象。
+ * 火山引擎的 API 与 OpenAI 格式兼容，此函数借鉴了最佳实践。
  */
 function validateAndCleanMessage(message, index) {
   if (!message || typeof message !== 'object') {
-    console.warn(`[Volcengine Proxy Validator] Message #${index} is not a valid object. Ignoring.`);
+    console.warn(`[Volcengine Proxy Validator] 消息 #${index} 不是一个有效的对象，已忽略。`);
     return null;
   }
-
   const { role, content } = message;
+  // 火山引擎支持的标准角色
   const validRoles = ['user', 'assistant', 'system'];
-
   if (!role || !validRoles.includes(role)) {
-    console.warn(`[Volcengine Proxy Validator] Message #${index} has an invalid or missing role: "${role}". Ignoring.`);
+    console.warn(`[Volcengine Proxy Validator] 消息 #${index} 的角色无效或缺失: "${role}"，已忽略。`);
     return null;
   }
   
-  if (content === undefined || content === null) {
-      console.warn(`[Volcengine Proxy Validator] Message #${index} has null or undefined content. Ignoring.`);
-      return null;
+  // 检查 content 字段
+  if (typeof content !== 'string' && !Array.isArray(content)) {
+    console.warn(`[Volcengine Proxy Validator] 消息 #${index} 的 content 必须是字符串或数组，已忽略。`);
+    return null;
+  }
+  
+  // 如果 content 是字符串，确保它不是空的（API 可能会拒绝）
+  if (typeof content === 'string' && content.trim() === '') {
+    console.warn(`[Volcengine Proxy Validator] 消息 #${index} 的 content 为空字符串，已忽略。`);
+    return null;
   }
 
-  // ▼▼▼ 核心修正：正确处理字符串和数组两种情况 ▼▼▼
-  if (typeof content === 'string') {
-    if (content.trim() === '') {
-      message.content = ' '; // API might reject empty strings.
-    }
-  } else if (Array.isArray(content)) {
-    // 如果是数组，校验其结构是否符合多模态要求
-    if (content.length === 0) {
-      console.warn(`[Volcengine Proxy Validator] Message #${index} content is an empty array. Ignoring.`);
-      return null;
-    }
-    const cleanedParts = content.filter(part =>
-      part && typeof part.type === 'string' &&
-      ( (part.type === 'text' && typeof part.text === 'string' && part.text.trim() !== '') ||
-        (part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string') )
-    );
-    if (cleanedParts.length === 0) {
-      console.warn(`[Volcengine Proxy Validator] Message #${index} content array is empty after cleaning. Ignoring.`);
-      return null;
-    }
-    message.content = cleanedParts;
-  } else {
-    // 其他所有类型（如 number, object）都是无效的
-    console.warn(`[Volcengine Proxy Validator] Message #${index} has an invalid content type: ${typeof content}. Ignoring.`);
+  // 如果 content 是数组（用于多模态），确保它不为空
+  if (Array.isArray(content) && content.length === 0) {
+    console.warn(`[Volcengine Proxy Validator] 消息 #${index} 的 content 数组为空，已忽略。`);
     return null;
   }
   
   return message;
 }
 
-
 /**
- * Netlify Function to proxy requests to the Volcengine Ark API.
+ * Netlify Function，用于将请求代理到火山引擎（Volcengine）MaaS API。
+ * 此函数假定运行环境（如 Netlify Dev 或线上部署）已处理好环境变量的加载。
  */
 export default async function handler(request, context) {
-  // 1. Handle CORS Preflight (OPTIONS) Request
+  // 1. 处理 CORS 预检请求 (OPTIONS)
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
       headers: {
-        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Origin': '*', // 生产环境建议替换为你的前端域名
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
       },
     });
   }
 
-  // 2. Reject non-POST requests
+  // 2. 拒绝非 POST 请求
   if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { 
+      status: 405, 
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } 
+    });
   }
 
   try {
-    // 3. Get API Key from environment variables (loaded by dotenv)
-    const VOLCENGINE_API_KEY = process.env.VOLCENGINE_API_KEY;
+    // 3. 从环境变量中安全地获取 API Key
+    // 注意：在 Netlify 中，环境变量应命名为 VOLCENGINE_API_KEY_SECRET
+    const API_KEY = process.env.VOLCENGINE_API_KEY_SECRET;
 
-    if (!VOLCENGINE_API_KEY) {
-      console.error("[Volcengine Proxy] CRITICAL: VOLCENGINE_API_KEY not found in process.env. Please check your .env file.");
-      return new Response(JSON.stringify({ error: 'Server configuration error: VOLCENGINE_API_KEY is not set.' }), { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+    if (!API_KEY) {
+      console.error("[Volcengine Proxy] 严重错误: 环境变量 VOLCENGINE_API_KEY_SECRET 未设置！");
+      return new Response(JSON.stringify({ error: '服务器配置错误：API Key 未设置。' }), { 
+        status: 500, 
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } 
+      });
     }
 
-    // 4. Parse and validate the request body from the frontend
+    // 4. 解析并验证来自前端的请求体
     const { model, messages, temperature, max_tokens, stream } = await request.json();
 
     if (!model || !Array.isArray(messages) || messages.length === 0) {
-      return new Response(JSON.stringify({ error: 'Bad Request: "model" and a non-empty "messages" array are required.' }), { status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+      return new Response(JSON.stringify({ error: '请求无效: "model" 和非空的 "messages" 数组是必需的。' }), { 
+        status: 400, 
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } 
+      });
     }
 
-    // 5. Sanitize the 'messages' array using the updated helper function
+    // 5. 清理和验证 'messages' 数组
     const cleanedMessages = messages.map(validateAndCleanMessage).filter(Boolean);
     if (cleanedMessages.length === 0) {
-      return new Response(JSON.stringify({ error: 'Bad Request: No valid messages left after validation.' }), { status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+      return new Response(JSON.stringify({ error: '请求无效: 经过验证后，没有有效的消息。' }), { 
+        status: 400, 
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } 
+      });
     }
     
-    // 6. Construct the final payload for the Volcengine API
+    // 6. 构建最终发送到火山引擎 API 的 payload
     const volcenginePayload = {
       model,
       messages: cleanedMessages,
-      stream: !!stream,
+      stream: !!stream, // 确保 stream 是一个布尔值
+      // 如果前端提供了有效的 temperature，则使用它，否则使用一个合理的默认值
       temperature: typeof temperature === 'number' ? temperature : 0.7,
+      // 只有在提供了有效的 max_tokens 时才将其添加到 payload 中
       ...(typeof max_tokens === 'number' && max_tokens > 0 && { max_tokens }),
     };
 
-    // 7. Define the hardcoded API endpoint
-    const BASE_URL = 'https://ark.cn-beijing.volces.com/api/v3';
-    const endpoint = `${BASE_URL}/chat/completions`;
+    // 7. 定义火山引擎 MaaS API 端点
+    // 注意：区域（cn-beijing）可能需要根据你的服务位置进行更改
+    const API_URL = 'https://ark.cn-beijing.volces.com/api/v3/chat/completions';
 
-    console.log(`[Volcengine Proxy] Sending payload to endpoint: ${endpoint}`);
+    console.log(`[Volcengine Proxy] 正在向端点发送请求: ${API_URL}`);
     console.log("[Volcengine Proxy] Payload:", JSON.stringify(volcenginePayload, null, 2));
 
-    // 8. Forward the request to the Volcengine API
-    const apiResponse = await fetch(endpoint, {
+    // 8. 将请求转发到火山引擎 API
+    const apiResponse = await fetch(API_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${VOLCENGINE_API_KEY}`,
+        'Authorization': `Bearer ${API_KEY}`,
       },
       body: JSON.stringify(volcenginePayload),
     });
 
-    // 9. Efficiently proxy the response back to the client
+    // 9. 高效地将 API 响应代理回客户端（无论是成功、失败还是流式数据）
+    // 这种方法直接传递响应体，避免了内存缓冲，对流式响应至关重要。
     const responseHeaders = {
       'Content-Type': apiResponse.headers.get('Content-Type') || 'application/json',
       'Access-Control-Allow-Origin': '*',
+      // 如果是流式传输，添加必要的头信息以确保客户端正确处理
       ...(volcenginePayload.stream && { 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' }),
     };
 
@@ -146,10 +139,18 @@ export default async function handler(request, context) {
     });
 
   } catch (error) {
-    console.error('[Volcengine Proxy] An unexpected error occurred:', error);
+    console.error('[Volcengine Proxy] 发生意外错误:', error);
+    // 如果错误是由于客户端发送了无效的 JSON 引起的
     if (error instanceof SyntaxError) {
-      return new Response(JSON.stringify({ error: 'Bad Request: Invalid JSON format.' }), { status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+      return new Response(JSON.stringify({ error: '请求无效: JSON 格式错误。' }), { 
+          status: 400, 
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
     }
-    return new Response(JSON.stringify({ error: 'Internal Server Error', details: error.message }), { status: 502, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+    // 处理其他所有内部错误（例如，网络问题）
+    return new Response(JSON.stringify({ error: '内部服务器错误', details: error.message }), { 
+      status: 502, // 502 Bad Gateway 是代理错误的常用状态码
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } 
+    });
   }
 }

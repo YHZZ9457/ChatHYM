@@ -1354,247 +1354,119 @@ function mapMessagesForGemini(messagesHistory, currentFilesData) {
 }
 
 function mapMessagesForStandardOrClaude(messagesHistory, provider, currentFilesData) {
-    console.log("[mapMessagesForStandardOrClaude] Called with provider:", provider, "Files count:", currentFilesData ? currentFilesData.length : 0);
-    if (currentFilesData) console.log("[mapMessagesForStandardOrClaude] Files data:", JSON.parse(JSON.stringify(currentFilesData)));
+    console.log(`[mapMessages] Called for provider: ${provider}. History length: ${messagesHistory.length}, Current files: ${currentFilesData?.length || 0}`);
 
-    const mappedApiMessages = [];
-
-    messagesHistory.forEach(msg => {
+    // 1. 映射历史消息
+    const mappedApiMessages = messagesHistory.map(msg => {
+        // --- 处理 System 消息 ---
         if (msg.role === 'system') {
-            // Anthropic 和 Ollama 的 system message 通常在顶层单独传递，
-            // 所以如果 provider 是这两者之一，我们在这里不添加 system message 到 mappedApiMessages。
-            // send 函数中应该有单独的逻辑来处理 bodyPayload.system (对于 Ollama) 或顶层 system (对于 Anthropic)。
-            if (provider !== 'anthropic' && provider !== 'ollama') {
-                mappedApiMessages.push({ role: 'system', content: msg.content });
+            // Anthropic 和 Ollama 的 system prompt 在顶层单独处理，这里不加入 messages 数组
+            if (provider === 'anthropic' || provider === 'ollama') {
+                return null; // 返回 null，稍后过滤掉
             }
-        } else if (msg.role === 'assistant' || msg.role === 'model') {
-            // 假设助手的历史回复 content 已经是字符串
-            // 如果它也可能是对象，你需要添加类似下面用户消息的处理逻辑
-            let assistantContent = '';
+            return { role: 'system', content: msg.content };
+        }
+
+        // --- 处理 Assistant 消息 ---
+        if (msg.role === 'assistant' || msg.role === 'model') {
+            // 假设历史助手的 content 已经是 string 或兼容的格式
+            // 如果是 Anthropic 的历史回复，它可能是数组，这里简化处理
+            let assistantContent = (typeof msg.content === 'string') ? msg.content : JSON.stringify(msg.content);
+            return { role: 'assistant', content: assistantContent };
+        }
+
+        // --- 处理 User 消息 ---
+        if (msg.role === 'user') {
+            // 对于历史消息，我们简化处理：
+            // - 不处理历史文件，只处理文本
+            // - 将 content 统一转换为字符串格式，以适应所有 provider 的历史记录
+            let historicTextContent = "";
             if (typeof msg.content === 'string') {
-                assistantContent = msg.content;
-            } else if (msg.content && typeof msg.content.toString === 'function') {
-                assistantContent = msg.content.toString(); // 尝试调用 toString
-                if (assistantContent === '[object Object]' && Object.keys(msg.content).length > 0) {
-                    console.warn(`[mapMessages] Assistant history content is an object for provider ${provider}. Stringifying.`, msg.content);
-                    assistantContent = JSON.stringify(msg.content); // 后备：转为JSON字符串
-                }
-            } else {
-                assistantContent = String(msg.content || ''); // 其他情况转字符串
+                historicTextContent = msg.content;
+            } else if (msg.content && typeof msg.content.text === 'string') {
+                historicTextContent = msg.content.text;
+            } else if (Array.isArray(msg.content)) { // 如果是多模态数组
+                const textPart = msg.content.find(p => p.type === 'text');
+                historicTextContent = textPart ? textPart.text : '[multimodal content]';
             }
-            mappedApiMessages.push({ role: 'assistant', content: assistantContent });
-
-        } else if (msg.role === 'user') {
-            let userApiContent;
-
+            
+            // 为 Ollama 返回纯字符串
             if (provider === 'ollama') {
-                // 对于 Ollama，content 必须是字符串
-                let ollamaUserText = "";
-                if (typeof msg.content === 'string') {
-                    ollamaUserText = msg.content;
-                } else if (msg.content && typeof msg.content.text === 'string') {
-                    ollamaUserText = msg.content.text;
-                    // 可选：如果历史用户消息也保存了文件信息，可以在这里作为文本追加
-                    if (Array.isArray(msg.content.files) && msg.content.files.length > 0) {
-                        const fileNames = msg.content.files.map(f => f.name).join(', ');
-                        ollamaUserText += ` (附带历史文件: ${fileNames})`;
-                    }
-                } else if (Array.isArray(msg.content)) { // 如果历史 content 是数组 (例如来自 OpenAI 格式)
-                    const textPart = msg.content.find(part => part.type === 'text');
-                    ollamaUserText = textPart ? textPart.text : "";
-                    // 可以选择性地提及图片或其他部分
-                    const imageParts = msg.content.filter(part => part.type === 'image_url' || part.type === 'image');
-                    if (imageParts.length > 0) {
-                        ollamaUserText += ` (附带 ${imageParts.length} 个历史图像内容)`;
-                    }
-                } else if (msg.content) { // 其他对象类型
-                    ollamaUserText = JSON.stringify(msg.content); // 作为最后的手段，转为JSON字符串
-                    console.warn("[mapMessages] Ollama: Converted complex historical user content to JSON string:", ollamaUserText);
-                }
-                userApiContent = ollamaUserText.trim() || " "; // 确保非空
-            } else {
-                // 对于其他 provider (OpenAI, Anthropic等)，content 通常是 parts 数组
-                let userContentParts = [];
-                if (typeof msg.content === 'string') {
-                    userContentParts.push({ type: 'text', text: msg.content });
-                } else if (msg.content && typeof msg.content.text === 'string') {
-                    userContentParts.push({ type: 'text', text: msg.content.text });
-                    // 如果历史用户消息也保存了文件，并且这些 provider 支持历史多模态，
-                    // 你需要在这里添加逻辑来转换 msg.content.files 为相应的 image_url 或 image source 对象。
-                    // 例如 (简化版，只考虑图片):
-                    if (Array.isArray(msg.content.files) && msg.content.files.length > 0) {
-                        msg.content.files.forEach(file => {
-                            if (file.type && file.type.startsWith('image/')) { // 假设历史文件有 type 和 base64
-                                // 注意：历史文件的 base64 可能没有保存，或者保存方式不同
-                                // 这里只是一个概念，你需要根据你如何存储历史文件数据来调整
-                                if (provider === 'openai' || provider === 'deepseek' || provider === 'siliconflow') {
-                                    // 假设历史文件对象有 base64 属性
-                                    if(file.base64) userContentParts.push({ type: "image_url", image_url: { url: file.base64 } });
-                                    else userContentParts.push({ type: "text", text: `[历史图片: ${file.name}]` });
-
-                                } else if (provider === 'anthropic') {
-                                    if(file.base64 && file.type) userContentParts.push({ type: "image", source: { type: "base64", media_type: file.type, data: file.base64.split(',')[1] } });
-                                    else userContentParts.push({ type: "text", text: `[历史图片: ${file.name}]` });
-                                }
-                            }
-                        });
-                    }
-                } else if (Array.isArray(msg.content)) {
-                    // 如果历史 content 本身已经是 parts 数组，直接使用（需要确保其内部结构兼容）
-                    userContentParts = msg.content;
-                } else {
-                    console.warn("[mapMessages] Non-Ollama: Encountered complex/unexpected historical user content, defaulting.", msg.content);
-                    userContentParts.push({ type: 'text', text: ' ' });
-                }
-                // 确保 parts 不为空
-                if (userContentParts.length === 0) {
-                    userContentParts.push({ type: 'text', text: ' ' });
-                }
-                userApiContent = userContentParts;
+                 return { role: 'user', content: historicTextContent.trim() || " " };
             }
-            mappedApiMessages.push({ role: 'user', content: userApiContent });
+            // 为其他 provider 返回多模态数组格式（即使只有文本）
+            return { role: 'user', content: [{ type: 'text', text: historicTextContent.trim() || " " }] };
         }
-    });
 
-    // 2. 处理当前的用户输入 (文本 + 文件)
-    // 我们需要从 messagesHistory 中找到最后一条用户消息，并用当前输入（文本+文件）更新它的 content。
-    // 或者，如果 send 函数中 messagesHistory.push(...) 发生在调用此函数之前，
-    // 那么 messagesHistory 的最后一条已经是当前用户输入了。
+        return null; // 对于未知的 role，返回 null
+    }).filter(Boolean); // 过滤掉所有被返回为 null 的消息
 
-    let lastUserMessageIndex = -1;
-    for (let i = mappedApiMessages.length - 1; i >= 0; i--) {
-        if (mappedApiMessages[i].role === 'user') {
-            lastUserMessageIndex = i;
-            break;
+    // 2. 特殊处理最后一轮的用户输入 (包含当前要上传的文件)
+    const lastMessageIndex = mappedApiMessages.length - 1;
+    if (lastMessageIndex >= 0 && mappedApiMessages[lastMessageIndex].role === 'user') {
+        
+        // 获取最后一条用户消息的文本
+        let currentPromptText = "";
+        const lastMessageContent = mappedApiMessages[lastMessageIndex].content;
+        if (Array.isArray(lastMessageContent) && lastMessageContent[0]?.type === 'text') {
+            currentPromptText = lastMessageContent[0].text;
+        } else if (typeof lastMessageContent === 'string') { // 兼容 Ollama 的历史
+            currentPromptText = lastMessageContent;
         }
-    }
 
-    if (lastUserMessageIndex === -1) { // 理论上不应该发生，因为 send 函数会 push 用户消息
-        console.error("[mapMessagesForStandardOrClaude] No user message found in history to append files to. Creating a new one.");
-        mappedApiMessages.push({ role: 'user', content: [] });
-        lastUserMessageIndex = mappedApiMessages.length - 1;
-    }
-    
-    // 获取当前用户输入的文本 (假设它在 history 的最后一条用户消息的 content.text 中，
-    // 或者如果 content 是字符串，那就是 content 本身)
-    let currentPromptText = "";
-    const lastUserMsgFromHistory = mappedApiMessages[lastUserMessageIndex];
-    if (typeof lastUserMsgFromHistory.content === 'string') {
-        currentPromptText = lastUserMsgFromHistory.content;
-    } else if (Array.isArray(lastUserMsgFromHistory.content) && lastUserMsgFromHistory.content.length > 0 && lastUserMsgFromHistory.content[0].type === 'text') {
-        currentPromptText = lastUserMsgFromHistory.content[0].text;
-    } else if (lastUserMsgFromHistory.content && typeof lastUserMsgFromHistory.content.text === 'string'){ // from userMessageContentForHistory
-        currentPromptText = lastUserMsgFromHistory.content.text;
-    }
+        // --- 根据 provider 构建最后一轮的用户消息 content ---
+        if (provider === 'ollama') {
+            // Ollama 需要纯字符串，并将图片信息作为文本描述
+            let ollamaContentString = currentPromptText;
+            if (currentFilesData && currentFilesData.length > 0) {
+                 const imageFiles = currentFilesData.filter(f => f.type?.startsWith('image/'));
+                 if (imageFiles.length > 0) {
+                     ollamaContentString += `\n(附带图片: ${imageFiles.map(f=>f.name).join(', ')})`;
+                 }
+                 // 可以添加对文本文件的处理
+            }
+            mappedApiMessages[lastMessageIndex].content = ollamaContentString.trim() || " ";
 
+        } else {
+            // 对于所有其他支持多模态的 provider (OpenAI, Anthropic, Volcengine, etc.)
+            let currentUserContentParts = [];
+            
+            // 添加文本部分
+            if (currentPromptText.trim()) {
+                currentUserContentParts.push({ type: 'text', text: currentPromptText.trim() });
+            }
 
-    let currentUserContentParts = [];
-
-    // Add text part
-    if (currentPromptText && currentPromptText.trim() !== "") {
-        currentUserContentParts.push({ type: "text", text: currentPromptText.trim() });
-    }
-
-    // Add file parts
-    if (currentFilesData && currentFilesData.length > 0) {
-        currentFilesData.forEach(fileData => {
-            if (fileData.type && fileData.type.startsWith('image/')) {
-                if (provider === 'openai' || provider === 'deepseek' || provider === 'siliconflow') {
-                    currentUserContentParts.push({
-                        type: "image_url",
-                        image_url: {
-                            url: fileData.base64 // 确保 base64 是 Data URL: "data:image/jpeg;base64,..."
+            // 添加图片文件部分
+            if (currentFilesData && currentFilesData.length > 0) {
+                currentFilesData.forEach(fileData => {
+                    if (fileData.type?.startsWith('image/')) {
+                        
+                        // ★★★ 核心逻辑：volcengine 和 openai 使用相同的 image_url 格式 ★★★
+                        if (provider === 'openai' || provider === 'deepseek' || provider === 'siliconflow' || provider === 'volcengine' || provider === 'openrouter') {
+                            currentUserContentParts.push({
+                                type: "image_url",
+                                image_url: { url: fileData.base64 } // 发送 base64 Data URL
+                            });
+                        } else if (provider === 'anthropic') {
+                            currentUserContentParts.push({
+                                type: "image",
+                                source: { type: "base64", media_type: fileData.type, data: fileData.base64.split(',')[1] }
+                            });
                         }
-                    });
-                } else if (provider === 'anthropic') { // Claude 3
-                    currentUserContentParts.push({
-                        type: "image",
-                        source: {
-                            type: "base64",
-                            media_type: fileData.type,
-                            data: fileData.base64.split(',')[1] // Claude 需要纯 Base64，不带 "data:...;base64," 前缀
-                        }
-                    });
-                } else if (provider === 'ollama') {
-                   
-                    console.log("[mapMessagesForStandardOrClaude] Ollama provider: Images will be handled by top-level 'bodyPayload.images' if applicable, not adding to content parts here.");
-                }
-            }
-            // Handle other file types if necessary (e.g., text/plain)
-            else if (fileData.type === 'text/plain' && fileData.base64) {
-                try {
-                    const textContent = atob(fileData.base64.split(',')[1]);
-                    currentUserContentParts.push({ type: "text", text: `\n\n--- 文件内容: ${fileData.name} ---\n${textContent}\n--- 文件结束 ---` });
-                } catch (e) { console.error("Error decoding base64 text file:", e); }
-            }
-        });
-    }
-if (provider === 'ollama') {
-        let ollamaContentString = currentPromptText; // 从提取的或空的 currentPromptText 开始
-
-        // 图片通过 send 函数中的 bodyPayload.images 处理，这里只在文本中提及
-        if (currentFilesData && currentFilesData.length > 0) {
-            const imageFiles = currentFilesData.filter(f => f.type && f.type.startsWith('image/'));
-            const textFiles = currentFilesData.filter(f => f.type === 'text/plain');
-
-            if (imageFiles.length > 0) {
-                const imageFileNames = imageFiles.map(f => f.name).join(', ');
-                if (ollamaContentString) {
-                    ollamaContentString += `\n(附带图片: ${imageFileNames})`;
-                } else {
-                    ollamaContentString = `(处理图片: ${imageFileNames})`;
-                }
-            }
-            if (textFiles.length > 0) {
-                 textFiles.forEach(fileData => {
-                    try {
-                        const textContentFromFile = atob(fileData.base64.split(',')[1]);
-                        ollamaContentString += `\n\n--- 文件: ${fileData.name} ---\n${textContentFromFile}\n--- 文件结束 ---`;
-                    } catch (e) { console.error("Error decoding base64 text file for Ollama content:", e); }
-                 });
-            }
-        }
-        if (!ollamaContentString.trim()) {
-             ollamaContentString = " "; // Ollama content 不应为空字符串
-        }
-        mappedApiMessages[lastUserMessageIndex].content = ollamaContentString; // 赋值为字符串
-    } else {
-        // 对于其他 provider (OpenAI, Anthropic, etc.)，content 是一个 parts 数组
-        let currentUserContentParts = [];
-        if (currentPromptText) {
-            currentUserContentParts.push({ type: "text", text: currentPromptText });
-        }
-
-        if (currentFilesData && currentFilesData.length > 0) {
-            currentFilesData.forEach(fileData => {
-                if (fileData.type && fileData.type.startsWith('image/')) {
-                    if (provider === 'openai' || provider === 'deepseek' || provider === 'siliconflow') {
-                        currentUserContentParts.push({
-                            type: "image_url",
-                            image_url: { url: fileData.base64 }
-                        });
-                    } else if (provider === 'anthropic') {
-                        currentUserContentParts.push({
-                            type: "image",
-                            source: { type: "base64", media_type: fileData.type, data: fileData.base64.split(',')[1] }
-                        });
                     }
-                } else if (fileData.type === 'text/plain' && fileData.base64) {
-                    try {
-                        const textContentFromFile = atob(fileData.base64.split(',')[1]);
-                        currentUserContentParts.push({ type: "text", text: `\n\n--- 文件: ${fileData.name} ---\n${textContentFromFile}\n--- 文件结束 ---` });
-                    } catch (e) { console.error("Error decoding base64 text file for content parts:", e); }
-                }
-            });
-        }
+                });
+            }
 
-        if (currentUserContentParts.length === 0) {
-            currentUserContentParts.push({ type: "text", text: " " }); // 确保 content parts 不为空
+            // 如果没有任何内容，添加一个空文本部分以避免 API 错误
+            if (currentUserContentParts.length === 0) {
+                currentUserContentParts.push({ type: "text", text: " " });
+            }
+            
+            mappedApiMessages[lastMessageIndex].content = currentUserContentParts;
         }
-        mappedApiMessages[lastUserMessageIndex].content = currentUserContentParts; // 赋值为数组
     }
-    
-    console.log("[mapMessagesForStandardOrClaude] Mapped API messages:", JSON.parse(JSON.stringify(mappedApiMessages)));
+
+    console.log("[mapMessages] Final mapped messages:", JSON.parse(JSON.stringify(mappedApiMessages)));
     return mappedApiMessages;
 }
 

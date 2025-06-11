@@ -1675,6 +1675,7 @@ async function send() {
             case 'ollama': actualProvider = 'ollama'; break;
             case 'suanlema': actualProvider = 'suanlema'; break;
             case 'openrouter': actualProvider = 'openrouter'; break;
+            case 'volcengine': actualProvider = 'volcengine'; break;
             default:
                 showToast(`模型 "${modelValueFromOption}" 配置错误：无法识别的提供商前缀 "${prefix}"。`,'error');
                 console.error(`[Send] Unknown provider prefix: "${prefix}" for model "${modelValueFromOption}". Aborting.`);
@@ -1772,7 +1773,15 @@ async function send() {
         let currentMaxTokensSetting = parseInt(localStorage.getItem(MAX_TOKENS_STORAGE_KEY), 10) || null;
         if (currentMaxTokensSetting && currentMaxTokensSetting < 1) currentMaxTokensSetting = null;
 
-        shouldUseStreaming = ['openai', 'anthropic', 'deepseek', 'siliconflow', 'ollama', 'suanlema', 'openrouter', 'gemini'].includes(providerToUse);
+        shouldUseStreaming = ['openai', 
+            'anthropic', 
+            'deepseek', 
+            'siliconflow', 
+            'ollama', 
+            'suanlema', 
+            'openrouter', 
+            'volcengine',
+            'gemini'].includes(providerToUse);
 
         // 2. 初始化 bodyPayload，包含通用参数
         bodyPayload = {
@@ -1967,7 +1976,13 @@ async function send() {
                         let thinkingForUnit = "";
                         let unitProducedContent = false;
 
-                        if (providerToUse === 'siliconflow' || providerToUse === 'openai' || providerToUse === 'deepseek' || providerToUse === 'openrouter' || providerToUse === 'suanlema') {
+                        if (providerToUse === 'siliconflow' || 
+                            providerToUse === 'openai' || 
+                            providerToUse === 'deepseek' ||
+                             providerToUse === 'openrouter' || 
+                             providerToUse === 'suanlema'|| 
+                              providerToUse === 'volcengine'
+                            ) {
                             const lines = unit.split('\n');
                             const dataLine = lines.find(l => l.trim().startsWith('data: '));
                             if (dataLine) {

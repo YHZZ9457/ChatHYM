@@ -380,12 +380,7 @@ if (typeof marked !== 'undefined') {
 }
 
 function appendMessage(role, messageContent, modelForNote, reasoningText, conversationId, messageIndex) {
-    console.log(`[AppendMessage CALLED] Role: "${role}"`, "Content received:", messageContent, "ModelNote:", modelForNote, "Reasoning provided:", typeof reasoningText);
-    
-    const emptyChatPlaceholder = document.getElementById('empty-chat-placeholder');
-    if (emptyChatPlaceholder && emptyChatPlaceholder.style.display !== 'none') {
-        emptyChatPlaceholder.style.display = 'none';
-    }
+    console.log(`[AppendMessage CALLED] Role: "${role}"`, { messageContent, reasoningText });
 
     const container = document.getElementById('messages');
     if (!container) {
@@ -393,332 +388,177 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
         return null;
     }
 
+    
+    const emptyChatPlaceholder = document.getElementById('empty-chat-placeholder');
+    if (emptyChatPlaceholder) {
+        emptyChatPlaceholder.style.display = 'none';
+    }
+
+    // --- 1. 创建基础 DOM 结构 ---
     const messageWrapperDiv = document.createElement('div');
-    messageWrapperDiv.className = 'message-wrapper';
-    messageWrapperDiv.classList.add(role === 'user' ? 'user-message-wrapper' : 'assistant-message-wrapper');
+    messageWrapperDiv.className = `message-wrapper ${role === 'user' ? 'user-message-wrapper' : 'assistant-message-wrapper'}`;
     messageWrapperDiv.dataset.conversationId = conversationId;
     messageWrapperDiv.dataset.messageIndex = messageIndex;
 
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role === 'assistant' || role === 'model' ? 'assistant' : 'user'}`;
 
-    let reasoningContentElementForMathJax = null; // 用于 MathJax
-    
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'text';
 
+    const actionsContainer = document.createElement('div');
+    actionsContainer.className = 'message-actions-container';
 
-// --- 1. 为助手消息创建并填充思考过程的 DOM 结构 ---
-if (role === 'assistant' || role === 'model') {
-    const reasoningBlockDiv = document.createElement('div');
-    reasoningBlockDiv.className = 'reasoning-block';
-    
-    const labelContainer = document.createElement('div');
-    labelContainer.className = 'reasoning-label';
-    
-    const labelText = document.createElement('span');
-    labelText.textContent = '思考过程:';
-    labelContainer.appendChild(labelText);
-
-    const copyBtn = document.createElement('button');
-    copyBtn.className = 'copy-reasoning-btn';
-    copyBtn.textContent = '复制';
-    copyBtn.type = 'button';
-    labelContainer.appendChild(copyBtn);
-    
-    reasoningBlockDiv.appendChild(labelContainer);
-
-    // ★ 这一行被移到 if 块内部
-    reasoningContentElementForMathJax = document.createElement('div'); 
-    reasoningContentElementForMathJax.className = 'reasoning-content';
-    reasoningBlockDiv.appendChild(reasoningContentElementForMathJax);
-
-    // ★ 新增逻辑：根据 reasoningText 是否有内容来决定是否显示和绑定事件
-    if (typeof reasoningText === 'string' && reasoningText.trim()) {
-        reasoningContentElementForMathJax.textContent = reasoningText;
-        // 有内容，不添加 empty 类
-    } else {
-        reasoningBlockDiv.classList.add('reasoning-block-empty'); // 内容为空，添加 empty 类以隐藏
+    // --- 2. 特殊处理: System 消息 ---
+    if (role === 'system') {
+        const systemDiv = document.createElement('div');
+        systemDiv.className = 'system-prompt-display';
+        systemDiv.innerHTML = `<strong>系统指令:</strong><div class="system-prompt-content">${escapeHtml(String(messageContent))}</div>`;
+        container.querySelector('.system-prompt-display')?.remove();
+        container.insertBefore(systemDiv, container.firstChild);
+        return systemDiv;
     }
 
-    // 为复制按钮绑定事件
-    copyBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        // ★ 注意：这里我们从 DOM 元素中获取文本，而不是依赖初始的 reasoningText
-        const textToCopy = reasoningContentElementForMathJax.textContent || "";
-        if (textToCopy) {
-            navigator.clipboard.writeText(textToCopy).then(() => {
-                copyBtn.textContent = '已复制!';
-                setTimeout(() => { copyBtn.textContent = '复制'; }, 2000);
-            }).catch(err => {
-                copyBtn.textContent = '复制失败';
-                setTimeout(() => { copyBtn.textContent = '复制'; }, 2000);
-            });
-        }
-    });
-
-    messageDiv.appendChild(reasoningBlockDiv);
-}
-
-
-// --- 2. 处理主要内容 (文本和文件信息) ---
-    let textPart = '';
-    let filesInfoPart = ''; // 用于存储 "[已附带文件: ...]" 这样的信息
-
-    // 解析传入的 messageContent
+    // --- 3. 构建最终要渲染的 Markdown 文本 ---
+    let finalMarkdown = "";
     if (typeof messageContent === 'string') {
-        textPart = messageContent; // 如果 messageContent 是字符串，直接赋给 textPart
-    } else if (messageContent && typeof messageContent === 'object') {
-        // 如果 messageContent 是对象，尝试从中提取 .text 和 .files
-        if (typeof messageContent.text === 'string') {
-            textPart = messageContent.text; // 获取文本部分
-        }
-        // 只有用户消息才处理 files 数组来生成 filesInfoPart
-        if (role === 'user' && Array.isArray(messageContent.files) && messageContent.files.length > 0) {
+        finalMarkdown = messageContent;
+    } else if (messageContent && typeof messageContent.text !== 'undefined') {
+        let textPart = messageContent.text || "";
+        let filesInfoPart = "";
+        if (Array.isArray(messageContent.files) && messageContent.files.length > 0) {
             const fileNames = messageContent.files.map(f => f.name).join(', ');
             filesInfoPart = `[已附带文件: ${fileNames}]`;
         }
-    } else if (messageContent !== null && messageContent !== undefined) {
-        // 其他情况（例如布尔值、数字，虽然不太可能），尝试转换为字符串
-        textPart = String(messageContent);
-    }
-    // 此时，textPart 包含了来自 messageContent 的原始文本（可能包含 /think 或 /no_think）
-    // filesInfoPart 包含了文件信息字符串（如果存在）
-
-    // ▼▼▼ 针对用户角色的消息，清理 textPart 中的内部指令 ▼▼▼
-    if (role === 'user') {
-        const thinkPattern = /\s*\/think$/;       // 匹配末尾的 " /think" (前面可能有空格)
-        const noThinkPattern = /\s*\/no_think$/; // 匹配末尾的 " /no_think"
-
-        if (thinkPattern.test(textPart)) {
-            textPart = textPart.replace(thinkPattern, '');
-            // console.log("[AppendMessage] User role: Removed '/think' from textPart for UI display.");
-        } else if (noThinkPattern.test(textPart)) {
-            textPart = textPart.replace(noThinkPattern, '');
-            // console.log("[AppendMessage] User role: Removed '/no_think' from textPart for UI display.");
+        const trimmedText = textPart.trim();
+        finalMarkdown = trimmedText && filesInfoPart ? `${trimmedText}\n${filesInfoPart}` : (trimmedText || filesInfoPart);
+    } else if (messageContent) {
+        // 对于未知的对象类型，安全地转换为字符串，避免 [object Object]
+        try {
+            finalMarkdown = JSON.stringify(messageContent, null, 2);
+        } catch (e) {
+            finalMarkdown = "[无法渲染的复杂内容]";
         }
     }
-    // ▲▲▲ 清理结束 ▲▲▲
     
-    if (role === 'system') {
-        // ★★★ 为系统消息创建特殊的DOM结构和样式 ★★★
-        const systemPromptDiv = document.createElement('div');
-        systemPromptDiv.className = 'system-prompt-display'; // 新的CSS类
-        systemPromptDiv.innerHTML = `<strong>系统指令:</strong><div class="system-prompt-content">${escapeHtml(String(messageContent))}</div>`;
+    // --- 4. 填充主内容和思考过程 ---
+    let reasoningContentElement;
+    // 思考过程块 (只为助手消息创建)
+    if (role === 'assistant' || role === 'model') {
+        const reasoningBlockDiv = document.createElement('div');
+        reasoningBlockDiv.className = 'reasoning-block reasoning-block-empty'; // 默认隐藏
         
-        // 决定将它添加到哪里，例如消息列表的顶部，或者一个专门的区域
-        // 为了简单，我们还是加到 messages 容器，但它的样式会不同
-        const container = document.getElementById('messages');
-        if (container) {
-            // 可能需要先移除旧的系统提示显示（如果只允许一个）
-            const oldSystemPromptDisplay = container.querySelector('.system-prompt-display');
-            if (oldSystemPromptDisplay) oldSystemPromptDisplay.remove();
-            container.insertBefore(systemPromptDiv, container.firstChild); // 插入到最前面
+        const labelContainer = document.createElement('div');
+        labelContainer.className = 'reasoning-label';
+        
+        const labelText = document.createElement('span');
+        labelText.textContent = '思考过程:';
+        labelContainer.appendChild(labelText);
+
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'copy-reasoning-btn';
+        copyBtn.textContent = '复制';
+        copyBtn.type = 'button';
+        labelContainer.appendChild(copyBtn);
+
+        reasoningContentElement = document.createElement('div');
+        reasoningContentElement.className = 'reasoning-content';
+
+        if (typeof reasoningText === 'string' && reasoningText.trim()) {
+            reasoningContentElement.textContent = reasoningText;
+            reasoningBlockDiv.classList.remove('reasoning-block-empty');
         }
-        return systemPromptDiv; // 返回创建的元素
-    }
 
-    // ▼▼▼ 组合最终用于 Markdown 解析的字符串 ▼▼▼
-    let markdownInput = "";
-    const trimmedTextPart = textPart.trim(); // 清理后的用户文本或原始助手文本
-
-    if (trimmedTextPart && filesInfoPart) { // 如果文本和文件信息都存在 (主要针对用户消息)
-        markdownInput = trimmedTextPart + "\n" + filesInfoPart; // 用单个换行连接
-    } else if (trimmedTextPart) { // 只有文本
-        markdownInput = trimmedTextPart;
-    } else if (filesInfoPart) { // 只有文件信息 (主要针对用户消息)
-        markdownInput = filesInfoPart;
-    } else if (role === 'assistant' || role === 'model') {
-        // 对于助手/模型，如果文本为空（例如流式占位符），markdownInput 也为空字符串
-        // 这将使得后续的 contentDiv.innerHTML = '';
-        markdownInput = "";
-    } else {
-        // 对于用户消息，如果文本和文件信息都为空，也视为空
-        markdownInput = "";
-    }
-    // ▲▲▲ 组合结束 ▲▲▲
-
-    let contentHtml = '';
-    // 只有当最终要处理的 Markdown 输入非空（trim后），
-    // 或者特定条件下（如助手消息无思考过程，但仍需创建空的.text div以便流式填充），才进行解析
-    if (markdownInput.trim() !== '' || ((role === 'assistant' || role === 'model') && !reasoningText) ) {
-        contentHtml = (typeof marked !== 'undefined') ? marked.parse(markdownInput) : escapeHtml(markdownInput);
-    } else if (role === 'assistant' || role === 'model') {
-        // 确保即使 markdownInput 为空，助手消息的 contentHtml 也是空字符串，而不是 undefined
-        contentHtml = '';
-    }
-
-const contentDiv = document.createElement('div');
-contentDiv.className = 'text';
-
-// 只有当 markdownInput (即组合后的文本内容) 非空时，才进行 Markdown 解析和填充
-// 如果为空，contentDiv.innerHTML 会保持为空字符串，但这个 div 本身依然存在
-if (markdownInput.trim() !== '') {
-    contentDiv.innerHTML = (typeof marked !== 'undefined') ? marked.parse(markdownInput) : escapeHtml(markdownInput);
-}
-
-// ★ 关键：无条件地将 contentDiv (即使是空的) 添加到 messageDiv 中 ★
-messageDiv.appendChild(contentDiv);
-
-
-    // --- 为 <pre> 标签添加复制按钮 ---
-    const preElements = contentDiv.querySelectorAll('pre');
-    console.log(`[AppendMessage] Found ${preElements.length} <pre> elements to process for copy buttons.`);
-
-    preElements.forEach((pre, preIndex) => {
-        console.log(`[AppendMessage] Processing <pre> element #${preIndex + 1}`);
-        pre.style.position = 'relative';
-
-        const btn = document.createElement('button');
-        btn.className = 'copy-btn'; // 确保 CSS 中有 .copy-btn 的样式
-        btn.textContent = '复制';
-        btn.setAttribute('aria-label', '复制此代码块'); // 增强可访问性
-
-        btn.addEventListener('click', (e) => {
+        copyBtn.addEventListener('click', e => {
             e.stopPropagation();
-            console.log("[CopyButton] Clicked on copy button for <pre>:", pre);
-
-            const codeElem = pre.querySelector('code');
-            let textToCopy = "";
-
-            if (codeElem) {
-                textToCopy = codeElem.innerText;
-            } else {
-                // Fallback: clone pre, remove button, then get innerText
-                const clone = pre.cloneNode(true);
-                const buttonInClone = clone.querySelector('.copy-btn');
-                if (buttonInClone) {
-                    buttonInClone.remove();
-                }
-                textToCopy = clone.innerText;
-            }
-            textToCopy = textToCopy.trim(); // 去除首尾空白
-
-            if (textToCopy === "") {
-                console.warn("[CopyButton] No text content found in <pre> to copy.");
-                const originalButtonText = btn.textContent;
-                btn.textContent = '无内容';
-                btn.disabled = true;
-                setTimeout(() => {
-                    btn.textContent = originalButtonText;
-                    btn.disabled = false;
-                }, 2000);
-                return;
-            }
-
-            console.log("[CopyButton] Attempting to copy text:", textToCopy.substring(0, 50) + "..."); // 只打印部分文本
-
-            if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-                navigator.clipboard.writeText(textToCopy).then(() => {
-                    console.log("[CopyButton] Text successfully copied to clipboard.");
-                    btn.textContent = '已复制!';
-                    setTimeout(() => {
-                        btn.textContent = '复制';
-                    }, 2000);
-                }).catch(err => {
-                    console.error('[CopyButton] Failed to copy using navigator.clipboard:', err);
-                    showToast('自动复制失败。您的浏览器可能不支持或未授予权限。\n请尝试手动复制 (Ctrl+C / Cmd+C)。\n错误: ' + err.message);
-                    // 可选：尝试 selectText(codeElem || pre);
-                });
-            } else {
-                console.warn('[CopyButton] navigator.clipboard.writeText is not available.');
-                // 尝试传统的 execCommand('copy') 作为后备 (兼容性更好，但正在被废弃)
-                try {
-                    const textarea = document.createElement('textarea');
-                    textarea.value = textToCopy;
-                    textarea.style.position = 'fixed'; // Prevent scrolling to bottom
-                    document.body.appendChild(textarea);
-                    textarea.focus();
-                    textarea.select();
-                    const successful = document.execCommand('copy');
-                    document.body.removeChild(textarea);
-                    if (successful) {
-                        console.log("[CopyButton] Text copied to clipboard using execCommand fallback.");
-                        btn.textContent = '已复制!';
-                        setTimeout(() => { btn.textContent = '复制'; }, 2000);
-                    } else {
-                        throw new Error('execCommand("copy") failed.');
-                    }
-                } catch (err) {
-                    console.error('[CopyButton] execCommand("copy") fallback failed:', err);
-                    showToast('浏览器不支持自动复制。请手动复制 (Ctrl+C / Cmd+C)。');
-                    // 可选：尝试 selectText(codeElem || pre);
-                }
-            }
+            navigator.clipboard.writeText(reasoningContentElement.textContent || "").then(() => {
+                copyBtn.textContent = '已复制!';
+                setTimeout(() => { copyBtn.textContent = '复制'; }, 2000);
+            }).catch(() => {
+                copyBtn.textContent = '复制失败';
+                setTimeout(() => { copyBtn.textContent = '复制'; }, 2000);
+            });
         });
+        
+        reasoningBlockDiv.appendChild(labelContainer);
+        reasoningBlockDiv.appendChild(reasoningContentElement);
+        messageDiv.appendChild(reasoningBlockDiv);
+    }
+    
+    // 主内容块
+    if (finalMarkdown.trim()) {
+    // ★ 对用户消息的内容再做一次 trim，确保没有尾随换行
+    let contentToRender = (role === 'user') ? finalMarkdown.trim() : finalMarkdown;
+    contentDiv.innerHTML = marked.parse(contentToRender);
+}
+if (contentDiv.lastChild && contentDiv.lastChild.nodeType === Node.TEXT_NODE && !contentDiv.lastChild.textContent.trim()) {
+        contentDiv.removeChild(contentDiv.lastChild);
+    }
+    messageDiv.appendChild(contentDiv);
 
+
+    // --- 5. 为代码块 <pre> 添加复制按钮 ---
+    contentDiv.querySelectorAll('pre').forEach(pre => {
+        if (pre.querySelector('.copy-btn')) return;
+        pre.style.position = 'relative';
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.textContent = '复制';
+        btn.addEventListener('click', e => {
+            e.stopPropagation();
+            const code = pre.querySelector('code');
+            const textToCopy = code ? code.innerText : pre.innerText;
+            navigator.clipboard.writeText(textToCopy.trim()).then(() => {
+                btn.textContent = '已复制!';
+                setTimeout(() => { btn.textContent = '复制'; }, 2000);
+            }).catch(err => {
+                showToast('复制失败: ' + err.message, 'error');
+            });
+        });
         pre.appendChild(btn);
-        console.log("[AppendMessage] Copy button appended to <pre> element.");
     });
 
-    // --- 清理空节点 ---
-    if (typeof pruneEmptyNodes === 'function' && messageDiv.contains(contentDiv)) {
-        pruneEmptyNodes(contentDiv); // 清理主要内容区域
-    }
-    if (typeof pruneEmptyNodes === 'function' && reasoningContentElementForMathJax && messageDiv.contains(reasoningContentElementForMathJax)) {
-        pruneEmptyNodes(reasoningContentElementForMathJax); // 清理思考过程区域 (如果它是空的)
-    }
-
-
-    // --- 3. 添加模型注释 ---
+    // --- 6. 添加模型注释 ---
     if ((role === 'assistant' || role === 'model') && modelForNote) {
         const note = document.createElement('div');
         note.className = 'model-note';
-        let displayModelName = modelForNote;
-        const modelSelectElement = document.getElementById('model');
-        if (modelSelectElement) {
-            const selectedOption = modelSelectElement.querySelector(`option[value="${modelForNote}"]`);
-            if (selectedOption) {
-                displayModelName = selectedOption.textContent;
-            } else {
-                const parts = String(modelForNote).split('::');
-                if (parts.length === 2) displayModelName = parts[1];
-            }
-        }
-        note.textContent = `模型：${displayModelName}`;
-      
+        const modelSelect = document.getElementById('model');
+        const option = modelSelect ? modelSelect.querySelector(`option[value="${modelForNote}"]`) : null;
+        const displayName = option ? option.textContent : (String(modelForNote).split('::')[1] || modelForNote);
+        note.textContent = `模型：${displayName}`;
         messageDiv.appendChild(note);
     }
 
-       // --- 创建操作按钮容器 ---
-    const actionsContainer = document.createElement('div');
-    actionsContainer.className = 'message-actions-container'; // 应用您为按钮组设计的CSS类
-
-    // --- 4. 创建并配置删除单条消息的按钮 ---
+    // --- 7. 创建并绑定操作按钮 ---
+    // 删除单条消息按钮
     const deleteMsgBtn = document.createElement('button');
-    deleteMsgBtn.className = 'delete-message-btn message-action-btn'; // 使用通用类
+    deleteMsgBtn.className = 'delete-message-btn message-action-btn';
     deleteMsgBtn.textContent = '✕';
     deleteMsgBtn.title = '删除此条消息';
-    deleteMsgBtn.addEventListener('click', (e) => {
+    deleteMsgBtn.addEventListener('click', e => {
         e.stopPropagation();
         const convId = messageWrapperDiv.dataset.conversationId;
-        const msgIndex = parseInt(messageWrapperDiv.dataset.messageIndex, 10);
-        if (convId && !isNaN(msgIndex)) {
-            deleteSingleMessage(messageWrapperDiv, convId, msgIndex);
-        } else {
-            console.error('无法删除消息：缺少对话ID或消息索引。Dataset:', messageWrapperDiv.dataset);
-        }
-    });
-    actionsContainer.appendChild(deleteMsgBtn); // 将删除按钮添加到 actionsContainer
+    const msgIndex = parseInt(messageWrapperDiv.dataset.messageIndex, 10);
 
-    // --- 创建并配置复制整条消息的按钮 ---
+    // 检查我们是否成功从 DOM 中获取了数据
+    if (convId && !isNaN(msgIndex)) {
+        deleteSingleMessage(messageWrapperDiv, convId, msgIndex);
+    } else {
+        // 如果 DOM 中没有数据，这是一个严重的问题，需要报错
+        console.error('无法删除消息：缺少对话ID或消息索引。Dataset:', messageWrapperDiv.dataset);
+    }
+    // ▲▲▲ 修改结束 ▲▲▲
+});
+    actionsContainer.appendChild(deleteMsgBtn);
+
+    // 复制整条消息按钮
     const copyMessageBtn = document.createElement('button');
-    copyMessageBtn.className = 'copy-full-message-btn message-action-btn'; // 使用通用类
+    copyMessageBtn.className = 'copy-full-message-btn message-action-btn';
     copyMessageBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>';
     copyMessageBtn.title = '复制消息内容';
-    copyMessageBtn.addEventListener('click', (e) => {
+    copyMessageBtn.addEventListener('click', e => {
         e.stopPropagation();
-        let textToCopy = "";
-        const textElement = messageDiv.querySelector('.text');
-        const reasoningContentElement = messageDiv.querySelector('.reasoning-content');
-
-        if (textElement) {
-            textToCopy += textElement.innerText.trim();
-        }
-        const includeReasoningInCopy = false;
-        if (includeReasoningInCopy && reasoningContentElement && reasoningContentElement.textContent.trim()) {
-            if (textToCopy) textToCopy += "\n\n--- 思考过程 ---\n";
-            textToCopy += reasoningContentElement.textContent.trim();
-        }
-
+        const textToCopy = contentDiv.innerText.trim();
         if (textToCopy) {
             navigator.clipboard.writeText(textToCopy).then(() => {
                 const originalIcon = copyMessageBtn.innerHTML;
@@ -728,50 +568,23 @@ messageDiv.appendChild(contentDiv);
                     copyMessageBtn.innerHTML = originalIcon;
                     copyMessageBtn.title = '复制消息内容';
                 }, 2000);
-            }).catch(err => {
-                console.error('复制消息内容失败:', err);
-                showToast('复制失败，请手动复制。');
             });
-        } else {
-            // 如果没有文本内容可复制，也给用户一个反馈
-            const originalIcon = copyMessageBtn.innerHTML;
-            copyMessageBtn.innerHTML = '空'; // 或者一个不同的图标表示空
-            copyMessageBtn.title = '无文本内容可复制';
-             setTimeout(() => {
-                copyMessageBtn.innerHTML = originalIcon;
-                copyMessageBtn.title = '复制消息内容';
-            }, 2000);
         }
     });
-    actionsContainer.appendChild(copyMessageBtn);
+    actionsContainer.insertBefore(copyMessageBtn, deleteMsgBtn); 
 
+    // --- 8. 最终组装 ---
     messageWrapperDiv.appendChild(messageDiv);
     messageWrapperDiv.appendChild(actionsContainer);
+    container.appendChild(messageWrapperDiv);
 
-    // --- 6. 将整个消息包裹层添加到消息容器中 ---
-    if (messageDiv.hasChildNodes() || role === 'user') {
-        container.appendChild(messageWrapperDiv);
-    } else {
-        console.warn("[AppendMessage] messageDiv has no children and is not user role. Not appending wrapper. This is unexpected.", "Role:", role);
-        return null;
-    }
-
-    // --- 滚动和 MathJax ---
-    if (container.contains(messageWrapperDiv)) {
-        container.scrollTop = container.scrollHeight;
-    }
-
-    if (window.MathJax && MathJax.typesetPromise) {
-        const elementsToTypeset = [];
-        const currentContentDivInMsg = messageDiv.querySelector('.text');
-        if (currentContentDivInMsg && currentContentDivInMsg.innerHTML.trim() !== '') {
-            elementsToTypeset.push(currentContentDivInMsg);
-        }
-        // 确保 reasoningContentElementForMathJax 是有效的DOM元素再加入渲染列表
-        if (reasoningContentElementForMathJax && reasoningContentElementForMathJax instanceof Node && messageDiv.contains(reasoningContentElementForMathJax)) {
-            if (reasoningContentElementForMathJax.textContent.trim() !== '') { // 确保有内容才渲染
-                elementsToTypeset.push(reasoningContentElementForMathJax);
-            }
+    // --- 9. 后处理 ---
+    container.scrollTop = container.scrollHeight;
+    if (window.MathJax) {
+        const elementsToTypeset = [contentDiv];
+        // 只有当 reasoningContentElement 存在且有内容时才加入渲染
+        if (reasoningContentElement && reasoningContentElement.textContent.trim()) {
+            elementsToTypeset.push(reasoningContentElement);
         }
         if (elementsToTypeset.length > 0) {
             MathJax.typesetPromise(elementsToTypeset).catch(err => console.error("MathJax typesetting failed:", err));
@@ -857,6 +670,7 @@ function processPreBlocksForCopyButtons(containerElement) {
 function appendLoading() {
   const container = document.getElementById('messages');
   console.log("[AppendMessage] #messages container:", container);
+  
 
   if (!container) {
       console.error("appendLoading: Message container '#messages' not found.");
@@ -1100,7 +914,7 @@ function loadConversation(id) {
             return createNewConversation(); // 返回 createNewConversation 的结果
         }
     }
-
+    console.log("[DEBUG 1] Conversation to load:", JSON.parse(JSON.stringify(convToLoad)));
     console.log(`[LoadConv] Successfully found conversation: "${convToLoad.title}" (ID: ${convToLoad.id})`);
 
     if (convToLoad.isNew) {
@@ -1215,40 +1029,31 @@ function loadConversation(id) {
  */
 function deleteSingleMessage(messageElement, conversationId, messageIndex) {
   const conv = conversations.find(c => c.id === conversationId);
-  if (!conv || messageIndex < 0 || messageIndex >= conv.messages.length) {
-    console.error('无法删除消息：无效的对话ID或消息索引。');
-    // 提供一个选项，即使数据不一致也从界面移除，避免UI卡死
-    if (confirm('数据可能不一致。确实要从界面移除此条消息吗？（这可能不会从存储中删除）')) {
-      messageElement.remove();
-    }
-    return;
-  }
+  
+  // 检查数据模型中是否存在该消息
+  const messageExistsInData = conv && messageIndex >= 0 && messageIndex < conv.messages.length;
 
-  // 准备消息内容预览，用于确认对话框
-  const messageToConfirm = conv.messages[messageIndex];
-  let confirmTextPreview = "";
-  if (messageToConfirm && messageToConfirm.content) {
-    confirmTextPreview = String(messageToConfirm.content).substring(0, 50); // 取前50个字符
-    if (String(messageToConfirm.content).length > 50) {
-      confirmTextPreview += "..."; // 内容过长则加省略号
+  if (messageExistsInData) {
+    // 如果数据存在，正常删除
+    const messageToConfirm = conv.messages[messageIndex];
+    let confirmTextPreview = String(messageToConfirm.content?.text || messageToConfirm.content || "").substring(0, 50) + "...";
+
+    if (confirm(`确实要删除这条消息吗？\n\n"${confirmTextPreview}"`)) {
+      conv.messages.splice(messageIndex, 1);
+      saveConversations();
+      // 重新加载对话以刷新整个 UI，这是最可靠的方式
+      loadConversation(conversationId);
     }
   } else {
-    confirmTextPreview = "(无法预览内容)";
-  }
-
-  if (confirm(`确实要删除这条消息吗？\n\n"${confirmTextPreview}"`)) {
-    // 1. 从数据模型中删除
-    const deletedMessage = conv.messages.splice(messageIndex, 1); // splice返回被删除元素的数组
-    saveConversations(); // 保存更改
-
-    console.log(`消息已从数据中删除 (对话ID: ${conversationId}, 原索引: ${messageIndex})`, deletedMessage[0]);
-
-    // 2. 更新DOM
-    if (conversationId === currentConversationId) {
-      loadConversation(currentConversationId);
-    } else {
+    // ★ 如果数据不存在（比如正在生成的流式消息），我们只从 UI 上移除 ★
+    console.warn(`[Delete] Message at index ${messageIndex} not found in data model for conv ${conversationId}. Likely a streaming message. Removing from UI only.`);
+    if (confirm('这条消息仍在生成中或数据异常。确实要从界面上移除它吗？（此操作不会保存）')) {
       messageElement.remove();
-      renderConversationList(); // 例如，如果对话列表显示消息摘要或计数
+      // 如果这是正在生成的消息，我们还应该中止请求
+      if (window.isGeneratingResponse && window.currentAbortController) {
+          console.log("[Delete] Aborting current stream request.");
+          window.currentAbortController.abort();
+      }
     }
   }
 }
@@ -1614,30 +1419,38 @@ async function send() {
 
 
 
-    const processedPromptTextForAPI = promptText.trim();
-    const displayMessageForUI = promptText.trim(); // 用于 UI 显示的消息就是用户输入的原文
+  const processedPromptTextForAPI = promptText.trim();
+// ... (Qwen3 /think 逻辑，如果保留)
 
-    let userMessageContentForHistory;
-    if (filesToActuallySend.length > 0) {
-        const fileNames = filesToActuallySend.map(f => f.name).join(', ');
-        displayMessageForUI = (displayMessageForUI ? `${displayMessageForUI}\n[已附带文件: ${fileNames}]` : `[已发送文件: ${fileNames}]`);
-        userMessageContentForHistory = { text: processedPromptTextForAPI, files: filesToActuallySend.map(f => ({ name: f.name, type: f.type })) };
-    } else {
-        userMessageContentForHistory = processedPromptTextForAPI;
-    }
+// 构建最终要在 UI 上显示的消息字符串
+let displayMessageForUI;
+if (processedPromptTextForAPI && filesToActuallySend.length > 0) {
+    const fileNames = filesToActuallySend.map(f => f.name).join(', ');
+    displayMessageForUI = `${processedPromptTextForAPI}\n[已附带文件: ${fileNames}]`;
+} else if (filesToActuallySend.length > 0) {
+    const fileNames = filesToActuallySend.map(f => f.name).join(', ');
+    displayMessageForUI = `[已附带文件: ${fileNames}]`;
+} else {
+    displayMessageForUI = processedPromptTextForAPI;
+}
 
-    // --- 用户消息添加到UI和数据模型 ---
-    if (window.currentConversationId === conversationIdAtRequestTime) {
-        console.log("[Send] Appending USER message to UI for active original conversation.");
-        appendMessage('user', displayMessageForUI, null, undefined, conversationIdAtRequestTime, conversationAtRequestTime.messages.length);
-    } else {
-        console.log("[Send] User message for a non-active conversation. Appending to data model only, UI will update on load.");
-    }
-    conversationAtRequestTime.messages.push({
-        role: 'user',
-        content: userMessageContentForHistory,
-        model: modelValueFromOption
-    });
+// 构建要存入历史的结构化数据
+const userMessageContentForHistory = {
+    text: processedPromptTextForAPI,
+    files: filesToActuallySend.map(f => ({ name: f.name, type: f.type }))
+};
+
+// --- 用户消息添加到UI和数据模型 ---
+if (window.currentConversationId === conversationIdAtRequestTime) {
+    // ★ 直接将最终的显示字符串传递给 appendMessage ★
+    appendMessage('user', displayMessageForUI, null, undefined, conversationIdAtRequestTime, conversationAtRequestTime.messages.length);
+}
+conversationAtRequestTime.messages.push({
+    role: 'user',
+    content: userMessageContentForHistory,
+    model: modelValueFromOption
+});
+
 
     // --- 清理输入框并显示加载提示 ---
     if (promptInput) {

@@ -386,7 +386,7 @@ body.light-theme .setting-item input:checked + .slider {
 #delete-current-btn {
   position: static; /* 移出绝对定位 */
   padding: 6px 14px; /* 稍微增加水平padding，让文字更舒展 */
-  min-width: 70px;
+  min-width: 60px;
   text-align: center;
   border-radius: var(--border-radius-md);
   font-size: 0.9rem;
@@ -914,13 +914,20 @@ body.dark-theme .messages, body.dark-theme .sidebar, body.dark-theme .settings-a
 /* —— 补丁结束 —— */
 
 
-/* 清除助手机泡内 <p> 的默认 margin */
+/* 1. 为消息气泡内的所有 <p> 标签设置一个默认的下边距 */
 .message .text p {
-  margin: 0 0 0.5em 0; /* 保留段落下边距，最后一个p除外 */
+  margin-top: 0;
+  margin-bottom: 0.75em; /* 设置一个合理的段间距 */
 }
-.message .text p:last-child { margin-bottom: 0; }
+
+/* 2. ★ 核心修正：移除最后一个 <p> 标签的下边距 ★ */
+.message .text p:last-of-type {
+  margin-bottom: 0;
+}
+
+/* 3. (可选) 隐藏完全空的 <p> 标签 */
 .message .text p:empty {
-  display: none !important;
+  display: none;
 }
 
 .message.user .text {

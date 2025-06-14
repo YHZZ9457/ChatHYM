@@ -15,6 +15,11 @@
           "isHidden": false
         },
         {
+          "text": "OR Deepseek-V3",
+          "value": "openrouter::deepseek/deepseek-chat-v3-0324",
+          "isHidden": false
+        },
+        {
           "text": "OR GPT4o-mini",
           "value": "openrouter::openai/gpt-4o-mini",
           "isHidden": false
@@ -58,6 +63,16 @@
           "text": "OR O3",
           "value": "openrouter::openai/o3",
           "isHidden": false
+        },
+        {
+          "text": "OR Qwen3-32B",
+          "value": "openrouter::qwen/qwen3-32b",
+          "isHidden": false
+        },
+        {
+          "text": "OR Magistral Small",
+          "value": "openrouter::mistralai/magistral-small-2506",
+          "isHidden": true
         }
       ]
     },
@@ -292,28 +307,27 @@
           "isHidden": false
         }
       ]
-      
     },
     {
-  "groupLabel": "火山引擎 (Volcengine)",
-  "isGroupHidden": false,
-  "options": [
-    {
-      "text": "Doubao 1.6",
-      "value": "volcengine::doubao-seed-1.6-250615",
-      "isHidden": false
-    },
-    {
-      "text": "Doubao 1.6 Flash",
-      "value": "volcengine::doubao-seed-1.6-flash-250615",
-      "isHidden": false
-    },
-    {
-      "text": "Doubao 1.6 Thinking",
-      "value": "volcengine::doubao-seed-1.6-thinking-250615",
-      "isHidden": false
+      "groupLabel": "火山引擎 (Volcengine)",
+      "isGroupHidden": false,
+      "options": [
+        {
+          "text": "Doubao 1.6",
+          "value": "volcengine::doubao-seed-1.6-250615",
+          "isHidden": false
+        },
+        {
+          "text": "Doubao 1.6 Flash",
+          "value": "volcengine::doubao-seed-1.6-flash-250615",
+          "isHidden": false
+        },
+        {
+          "text": "Doubao 1.6 Thinking",
+          "value": "volcengine::doubao-seed-1.6-thinking-250615",
+          "isHidden": false
+        }
+      ]
     }
-  ]
-}
   ]
 }

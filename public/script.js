@@ -54,8 +54,8 @@ let modelFormTitle = null;
 let temperatureInputInline = null;
 let inlineChatSettingsPanel = null;
 let chatSettingsBtnInlineElement = null; // 用于 document click 事件
-let qwenThinkModeToggle = null;
-let currentQwenThinkMode = false; // 存储当前模式，默认为不开启
+let thinkModeToggle = null;
+let currentthinkModeToggle = false; // 存储当前模式，默认为不开启
 let showPresetPromptsBtn = null;
 let presetPromptsListPanel = null;
 let presetPromptsUl = null;
@@ -64,10 +64,14 @@ const QWEN_THINK_MODE_STORAGE_KEY = 'qwen-think-mode-enabled';
 let maxTokensInputInline = null;
 let currentMaxTokens = null; // 存储当前设置的最大Token数，可以是数字或null (表示使用API默认)
 const MAX_TOKENS_STORAGE_KEY = 'chat-max-tokens';
-const DEFAULT_MAX_TOKENS_PLACEHOLDER = 1024; // 用于 placeholder 或回退  
+const DEFAULT_MAX_TOKENS_PLACEHOLDER = 4096; // 用于 placeholder 或回退  
 let submitActionBtn = null;
 let isGeneratingResponse = false;
 let currentAbortController = null;
+const THINK_MODE_STORAGE_KEY = 'chat-think-mode-enabled'; 
+let autoThinkModeToggle = null; // <-- 新增
+let isAutoThinkModeEnabled = false; // <-- 新增
+const AUTO_THINK_MODE_STORAGE_KEY = 'chat-auto-think-mode-enabled'; // <-- 新增
 //let lastMessagesScrollTop = 0;
 
 let lastScrollTop = 0; // 用于检测滚动方向
@@ -366,6 +370,14 @@ function pruneEmptyNodes(container) {
     }
   });
 }
+if (typeof marked !== 'undefined') {
+  marked.setOptions({
+    gfm: true, // 确保 GFM (GitHub Flavored Markdown) 是开启的，它能更好地处理表格
+    breaks: true, // 自动将换行符转为 <br>
+    // ★★★ 核心：如果您在使用 highlighter，确保它不会错误地处理表格 ★★★
+
+  });
+}
 
 function appendMessage(role, messageContent, modelForNote, reasoningText, conversationId, messageIndex) {
     console.log(`[AppendMessage CALLED] Role: "${role}"`, "Content received:", messageContent, "ModelNote:", modelForNote, "Reasoning provided:", typeof reasoningText);
@@ -391,32 +403,60 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
     messageDiv.className = `message ${role === 'assistant' || role === 'model' ? 'assistant' : 'user'}`;
 
     let reasoningContentElementForMathJax = null; // 用于 MathJax
+    
 
-// --- 1. 处理并添加思考过程的 DOM 结构 ---
-    if (typeof reasoningText === 'string' && (role === 'assistant' || role === 'model')) {
-        const reasoningBlockDiv = document.createElement('div');
-        reasoningBlockDiv.className = 'reasoning-block';
 
-        // 首先创建并添加标签 (label)
-        const label = document.createElement('div');
-        label.className = 'reasoning-label';
-        label.textContent = '思考过程:';
-        reasoningBlockDiv.appendChild(label);
+// --- 1. 为助手消息创建并填充思考过程的 DOM 结构 ---
+if (role === 'assistant' || role === 'model') {
+    const reasoningBlockDiv = document.createElement('div');
+    reasoningBlockDiv.className = 'reasoning-block';
+    
+    const labelContainer = document.createElement('div');
+    labelContainer.className = 'reasoning-label';
+    
+    const labelText = document.createElement('span');
+    labelText.textContent = '思考过程:';
+    labelContainer.appendChild(labelText);
 
-        // 然后创建并添加内容区 (content)
-        reasoningContentElementForMathJax = document.createElement('div');
-        reasoningContentElementForMathJax.className = 'reasoning-content';
-        reasoningContentElementForMathJax.textContent = reasoningText; // 直接用传入的 reasoningText 填充
-        reasoningBlockDiv.appendChild(reasoningContentElementForMathJax);
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'copy-reasoning-btn';
+    copyBtn.textContent = '复制';
+    copyBtn.type = 'button';
+    labelContainer.appendChild(copyBtn);
+    
+    reasoningBlockDiv.appendChild(labelContainer);
 
-        // 如果内容为空，添加 'empty' 类
-        if (!reasoningText || reasoningText.trim() === '') {
-            reasoningBlockDiv.classList.add('reasoning-block-empty');
-        }
+    // ★ 这一行被移到 if 块内部
+    reasoningContentElementForMathJax = document.createElement('div'); 
+    reasoningContentElementForMathJax.className = 'reasoning-content';
+    reasoningBlockDiv.appendChild(reasoningContentElementForMathJax);
 
-        // 将整个 reasoningBlockDiv 添加到 messageDiv
-        messageDiv.appendChild(reasoningBlockDiv);
+    // ★ 新增逻辑：根据 reasoningText 是否有内容来决定是否显示和绑定事件
+    if (typeof reasoningText === 'string' && reasoningText.trim()) {
+        reasoningContentElementForMathJax.textContent = reasoningText;
+        // 有内容，不添加 empty 类
+    } else {
+        reasoningBlockDiv.classList.add('reasoning-block-empty'); // 内容为空，添加 empty 类以隐藏
     }
+
+    // 为复制按钮绑定事件
+    copyBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // ★ 注意：这里我们从 DOM 元素中获取文本，而不是依赖初始的 reasoningText
+        const textToCopy = reasoningContentElementForMathJax.textContent || "";
+        if (textToCopy) {
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                copyBtn.textContent = '已复制!';
+                setTimeout(() => { copyBtn.textContent = '复制'; }, 2000);
+            }).catch(err => {
+                copyBtn.textContent = '复制失败';
+                setTimeout(() => { copyBtn.textContent = '复制'; }, 2000);
+            });
+        }
+    });
+
+    messageDiv.appendChild(reasoningBlockDiv);
+}
 
 
 // --- 2. 处理主要内容 (文本和文件信息) ---
@@ -506,17 +546,17 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
         contentHtml = '';
     }
 
-    // --- 创建并填充 .text div ---
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'text';
-    contentDiv.innerHTML = (typeof marked !== 'undefined' && markdownInput) ? marked.parse(markdownInput) : (markdownInput || ""); // 如果 markdownInput 为空，则 innerHTML 为 ""
+const contentDiv = document.createElement('div');
+contentDiv.className = 'text';
 
-    // 只有当 markdownInput (trim后) 非空，或者它是助手消息的占位符时，才进行 Markdown 解析
-    // 或者如果已经有思考过程块了，也确保 .text div 被添加到 DOM（即使为空）
-    if (markdownInput.trim() !== '' || ((role === 'assistant' || role === 'model') && (reasoningContentElementForMathJax || !reasoningText) )) {
-        contentDiv.innerHTML = (typeof marked !== 'undefined') ? marked.parse(markdownInput) : escapeHtml(markdownInput);
-    }
-    messageDiv.appendChild(contentDiv);
+// 只有当 markdownInput (即组合后的文本内容) 非空时，才进行 Markdown 解析和填充
+// 如果为空，contentDiv.innerHTML 会保持为空字符串，但这个 div 本身依然存在
+if (markdownInput.trim() !== '') {
+    contentDiv.innerHTML = (typeof marked !== 'undefined') ? marked.parse(markdownInput) : escapeHtml(markdownInput);
+}
+
+// ★ 关键：无条件地将 contentDiv (即使是空的) 添加到 messageDiv 中 ★
+messageDiv.appendChild(contentDiv);
 
 
     // --- 为 <pre> 标签添加复制按钮 ---
@@ -1570,28 +1610,12 @@ async function send() {
     console.log("================ DEBUG: send() function initiated (post-checks) ================");
     console.log(`[Send Params] ConvID: ${conversationIdAtRequestTime}, ModelOpt: ${modelValueFromOption}, Provider: ${providerToUse}, APIModel: ${modelNameForAPI}`);
     console.log("[Send Files] Files to send count:", filesToActuallySend.length, filesToActuallySend.map(f => f.name));
-    console.log("[Send State] QwenThinkMode (global):", window.currentQwenThinkMode);
+    console.log("[Send State] QwenthinkModeToggle (global):", window.currentQwenthinkModeToggle);
 
-    // --- 预处理 promptText, 构建 UI 消息和历史消息 ---
-    let processedPromptTextForAPI = promptText.trim();
-    let isQwen3FamilyModel = false;
-    if (typeof modelNameForAPI === 'string') {
-        const modelNameLower = modelNameForAPI.toLowerCase();
-        if (modelNameLower.startsWith('qwen3') || modelNameLower.startsWith('qwen/qwen3') || modelNameLower.startsWith('free:qwen3')) {
-            isQwen3FamilyModel = true;
-        }
-    }
-    if (isQwen3FamilyModel) {
-    console.log(`[Send Qwen Logic] Current value of currentQwenThinkMode is: ${currentQwenThinkMode}`); // 添加日志确认
-    if (currentQwenThinkMode === true) {
-        processedPromptTextForAPI += " /think";
-    } else {
-        processedPromptTextForAPI += " /no_think";
-    }
-}
 
-    let displayMessageForUI = promptText.trim();
-    if (isQwen3FamilyModel) displayMessageForUI = displayMessageForUI.replace(/\s*\/(think|no_think)$/, '');
+
+    const processedPromptTextForAPI = promptText.trim();
+    const displayMessageForUI = promptText.trim(); // 用于 UI 显示的消息就是用户输入的原文
 
     let userMessageContentForHistory;
     if (filesToActuallySend.length > 0) {
@@ -1662,9 +1686,44 @@ async function send() {
             ...(shouldUseStreaming && { stream: true })
         };
 
+
+const modelNameLower = modelNameForAPI.toLowerCase();
+
+if (isAutoThinkModeEnabled) {
+    // --- 自动模式开启 ---
+    console.log("[Send] Auto Think Mode is ON. Letting the model decide.");
+
+    // 对于豆包模型，可以明确发送 "auto"
+    if (providerToUse === 'volcengine' && modelNameLower.includes('doubao')) {
+        bodyPayload.thinking = "auto";
+        console.log("[Send] Set 'thinking: \"auto\"' for Volcengine Doubao model.");
+    }
+    // 对于 Qwen3 和其他模型，我们什么参数都不发送，让它们使用自己的默认（通常是自动）行为。
+
+} else {
+    // --- 手动模式 ---
+    console.log("[Send] Manual Think Mode is active. Using the toggle setting.");
+    
+    // 检查是否是 Qwen3 系列模型
+    if (modelNameLower.includes('qwen/qwen3') || modelNameLower.includes('qwen3')) {
+        bodyPayload.enable_thinking = !!window.currentThinkMode;
+        console.log(`[Send] Set 'enable_thinking: ${bodyPayload.enable_thinking}' for Qwen3 model.`);
+    }
+    // 检查是否是火山豆包模型
+    else if (providerToUse === 'volcengine' && modelNameLower.includes('doubao')) {
+        if (window.currentThinkMode) {
+            bodyPayload.thinking = "on";
+            console.log("[Send] Set 'thinking: \"on\"' for Volcengine Doubao model.");
+        } else {
+            bodyPayload.thinking = "off";
+            console.log("[Send] Set 'thinking: \"off\"' for Volcengine Doubao model.");
+        }
+    }
+}
+        
         // 3. 智能处理 Token 限制参数
         if (currentMaxTokensSetting) {
-            const modelsWithoutTokenLimit = ['o4-mini', 'o4-mini-2025-04-16'];
+            const modelsWithoutTokenLimit = ['o4-mini', 'o4-mini-2025-04-16','o3'];
             
             if (modelsWithoutTokenLimit.includes(modelNameForAPI)) {
                 console.log(`[Send] Model ${modelNameForAPI} is in the token limit blacklist. Skipping max_tokens.`);
@@ -3873,7 +3932,7 @@ if (showPresetPromptsBtn && presetPromptsListPanel && presetPromptsUl) {
     inlineChatSettingsPanel = document.getElementById('inline-chat-settings-panel');
     temperatureInputInline = document.getElementById('temperature-input-inline');
     temperatureValueDisplayInline = document.getElementById('temperature-value-inline');
-    qwenThinkModeToggle = document.getElementById('qwen-think-mode-toggle');
+    thinkModeToggle = document.getElementById('think-mode-toggle');
     const sidebarHeader = document.getElementById('sidebar-header');
 const logoDisplay = document.getElementById('logo-display');
 const searchInput = document.getElementById('search-conversations');
@@ -4081,21 +4140,27 @@ if (sidebarHeader && logoDisplay && searchInput && searchWrapper) {
         if (!temperatureValueDisplayInline) console.warn("DOMContentLoaded: Span 'temperature-value-inline' not found!");
     }
     
-    // --- 初始化 Qwen 思考模式开关 ---
-    if (qwenThinkModeToggle) {
-    const savedThinkMode = localStorage.getItem(QWEN_THINK_MODE_STORAGE_KEY);
-    if (savedThinkMode !== null) {
-        currentQwenThinkMode = (savedThinkMode === 'true'); // 直接修改顶层变量
-    } // 如果 localStorage 为空, currentQwenThinkMode 保持其顶层初始值
-    qwenThinkModeToggle.checked = currentQwenThinkMode;
-    console.log("DOMContentLoaded: Qwen Think Mode initialized to:", currentQwenThinkMode);
+    
+    if (thinkModeToggle) {
+        // 从 localStorage 读取保存的状态
+        const savedThinkMode = localStorage.getItem(THINK_MODE_STORAGE_KEY);
+        
+        if (savedThinkMode !== null) {
+            currentThinkMode = (savedThinkMode === 'true');
+        } else {
+            currentThinkMode = false; // 默认关闭
+        }
+        
+        thinkModeToggle.checked = currentThinkMode;
+        console.log("DOMContentLoaded: Think Mode initialized to:", currentThinkMode);
 
-    qwenThinkModeToggle.addEventListener('change', function() {
-        currentQwenThinkMode = this.checked; // 直接修改顶层变量
-        localStorage.setItem(QWEN_THINK_MODE_STORAGE_KEY, currentQwenThinkMode.toString());
-        console.log("Qwen Think Mode changed by toggle to:", currentQwenThinkMode);
-    });
-}
+        // 为开关的 change 事件添加监听器
+        thinkModeToggle.addEventListener('change', function() {
+            currentThinkMode = this.checked;
+            localStorage.setItem(THINK_MODE_STORAGE_KEY, currentThinkMode.toString());
+            console.log("Think Mode changed by toggle to:", currentThinkMode);
+        });
+    }
 
     if (modelFormTitle) {
         console.log("DOMContentLoaded: 'modelFormTitle' was SUCCESSFULLY INITIALIZED to:", modelFormTitle);
@@ -4395,6 +4460,21 @@ if (exportCurrentBtn) {
     }
   });
 }
+
+// ▼▼▼ 新增：初始化“自动思考模式”开关 ▼▼▼
+    autoThinkModeToggle = document.getElementById('auto-think-mode-toggle');
+    if (autoThinkModeToggle) {
+        // 从 localStorage 读取状态，默认为 false (关闭)
+        isAutoThinkModeEnabled = localStorage.getItem(AUTO_THINK_MODE_STORAGE_KEY) === 'true';
+        autoThinkModeToggle.checked = isAutoThinkModeEnabled;
+        console.log("DOMContentLoaded: Auto Think Mode initialized to:", isAutoThinkModeEnabled);
+
+        autoThinkModeToggle.addEventListener('change', function() {
+            isAutoThinkModeEnabled = this.checked;
+            localStorage.setItem(AUTO_THINK_MODE_STORAGE_KEY, isAutoThinkModeEnabled.toString());
+            console.log("Auto Think Mode changed by toggle to:", isAutoThinkModeEnabled);
+        });
+    }
 
     // --- 文件导入功能 ---
     const importFileInput = document.getElementById('import-file');

@@ -126,15 +126,15 @@
                      min="0" max="2" step="0.01" value="0.70">
             </div>
             <div class="setting-item inline-setting-item">
-          <label for="max-tokens-input-inline">最大 Tokens:</label>
+          <label for="max-tokens-input-inline">单次最大 Tokens:</label>
           <input type="number" id="max-tokens-input-inline" name="max_tokens" 
                  min="1" step="1" placeholder="4096"> 
           
         </div>
             <div class="setting-item inline-setting-item">
-          <label for="qwen-think-mode-toggle">Qwen3思考模式:</label>
+          <label for="qwen-think-mode-toggle">模型思考模式:</label>
           <label class="switch">
-            <input type="checkbox" id="qwen-think-mode-toggle">
+            <input type="checkbox" id="think-mode-toggle">
             <span class="slider round"></span>
           </label>
         </div>
@@ -196,6 +196,15 @@
             </div>
           </div>
         </div>
+        <div class="setting-item">
+    <label for="auto-think-mode-toggle" title="开启后，将由模型自动判断是否需要思考，忽略聊天界面的手动开关。">
+      自动判断思考模式
+     </label>
+    <label class="switch">
+    <input type="checkbox" id="auto-think-mode-toggle">
+    <span class="slider round"></span>
+     </label>
+        </div>
         <!-- 模型管理入口按钮 -->
         <div class="setting-item">
           <label>模型配置管理</label>
@@ -210,7 +219,7 @@
           </p>
           <ul>
             <li>QQ：2680159691</a></li>
-            <li>GitHub：<a href="https://github.com/yourusername/your-repo" target="_blank" rel="noopener noreferrer">项目仓库</a></li>
+            <li>GitHub：<a href="https://github.com/YHZZ9457/ChatHYM/"target=_blank" rel="noopener noreferrer">项目仓库</a></li>
           </ul>
 
           <h4>版本信息</h4>

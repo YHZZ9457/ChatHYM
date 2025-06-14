@@ -22,6 +22,13 @@
       "description": "对输入的代码进行审查和优化建议。"
     },
     {
+      "id": "code_reviewer",
+      "name": "省流助手",
+      "type": "user_input",
+      "prompt": "请尽可能简短地回答以下问题：\n\n",
+      "description": "节约Prompt"
+    },
+    {
       "id": "creative_writer",
       "name": "创意写作助手",
       "type": "user_input",

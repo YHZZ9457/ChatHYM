@@ -7,39 +7,9 @@ let conversations = [];
 let isScrollingProgrammatically = false;
 let userHasManuallyScrolledUp = false;
 
-// 使用 IIFE 来创建明确的作用域并控制初始化顺序
-(function() {
-  let _internalCurrentConversationId = null; // 在 IIFE 内部声明
-
-  Object.defineProperty(window, 'currentConversationId', {
-    configurable: true,
-    enumerable: true,
-    get: function() {
-      // console.log('[GET currentConversationId]', _internalCurrentConversationId);
-      return _internalCurrentConversationId; // 现在通过闭包访问 IIFE 内的 _internalCurrentConversationId
-    },
-    set: function(newValue) {
-      const oldValue = _internalCurrentConversationId; // 现在通过闭包访问
-      if (oldValue !== newValue) {
-          console.groupCollapsed(`%c[SET currentConversationId] From: ${oldValue} To: ${newValue}`, "color:red; font-weight:bold;");
-          console.log('New Value:', newValue);
-          try {
-              throw new Error("Call stack for currentConversationId setter");
-          } catch (e) {
-              console.log("Set from call stack:\n" + e.stack.split('\n').slice(2, 12).join('\n'));
-          }
-          console.groupEnd();
-      }
-      _internalCurrentConversationId = newValue; // 现在通过闭包访问
-    }
-  });
-
-  // 在 Object.defineProperty 完成后，再进行初始化
-  window.currentConversationId = null; // 这将调用上面定义的 setter
-})();
+let currentConversationId = null;
 
 // 初始化
-window.currentConversationId = null; // 触发一次初始 set (可选)
 let modelConfigData = null; // 用于存储从 models.json 加载的原始模型配置
 let editableModelConfig = null; // 用于在管理界面编辑的模型配置的深拷贝
 let isModelManagementActive = false
@@ -72,54 +42,19 @@ const THINK_MODE_STORAGE_KEY = 'chat-think-mode-enabled';
 let autoThinkModeToggle = null; // <-- 新增
 let isAutoThinkModeEnabled = false; // <-- 新增
 const AUTO_THINK_MODE_STORAGE_KEY = 'chat-auto-think-mode-enabled'; // <-- 新增
-//let lastMessagesScrollTop = 0;
 
-let lastScrollTop = 0; // 用于检测滚动方向
  
 window.isNearBottomMessages = window.isNearBottomMessages || function() { return true; };
 
-
-let _internalUploadedFilesData = []; // 使用带下划线的内部变量
-Object.defineProperty(window, 'uploadedFilesData', {
-  configurable: true,
-  enumerable: true,
-  get: function() {
-    console.log('DEBUG_WATCH: GETTING window.uploadedFilesData. Length:', _internalUploadedFilesData.length);
-    return _internalUploadedFilesData;
-  },
-  set: function(newValue) {
-    console.groupCollapsed(`DEBUG_WATCH: SETTING window.uploadedFilesData`);
-    console.log('Old internal value (length):', _internalUploadedFilesData ? _internalUploadedFilesData.length : 'undefined');
-    console.log('New value being set (is array, length):', Array.isArray(newValue), newValue ? newValue.length : 'undefined');
-    try { throw new Error("Call stack for setter"); } catch (e) { console.log("Set from:\n" + e.stack.split('\n').slice(2, 7).join('\n')); } // 打印更长的调用栈
-    console.groupEnd();
-
-    if (Array.isArray(newValue) && newValue.length === 0 && _internalUploadedFilesData && _internalUploadedFilesData.length > 0) {
-        console.error('CRITICAL_WATCH: window.uploadedFilesData is being set to an EMPTY ARRAY [] when it previously had data!');
-        ; 
-    }
-    _internalUploadedFilesData = newValue;
-  }
-});
 
 
 
 // --- 辅助函数 ---
 
-function storageKeyFor(provider) {
-  return {
-    openai: 'openai-api-key',
-    deepseek: 'deepseek-api-key',
-    siliconflow: 'siliconflow-api-key',
-    gemini: 'gemini-api-key',
-    anthropic: 'anthropic-api-key',
-    ollama: 'ollama-settings' 
-  }[provider];
-}
 
 async function handleFileSelection(event) {
   console.log("DEBUG: handleFileSelection function initiated."); // 日志文本已更正
-  console.log("DEBUG handleFileSelection START: Raw window.uploadedFilesData is:", JSON.parse(JSON.stringify(window.uploadedFilesData))); // 日志文本已更正
+  console.log("DEBUG handleFileSelection START: Raw uploadedFilesData is:", JSON.parse(JSON.stringify(uploadedFilesData))); // 日志文本已更正
 
   const files = event.target.files;
   const fileInputSource = event.target; // 保存对触发事件的 input 的引用
@@ -131,8 +66,8 @@ async function handleFileSelection(event) {
   console.log(`DEBUG: handleFileSelection - ${files.length} file(s) selected initially.`);
 
   const MAX_FILES = 5;
-  // 使用 window.uploadedFilesData 保证通过 getter/setter
-  if (window.uploadedFilesData.length + files.length > MAX_FILES) {
+  // 使用 uploadedFilesData 保证通过 getter/setter
+  if (uploadedFilesData.length + files.length > MAX_FILES) {
     showToast(`一次最多只能上传 ${MAX_FILES} 个文件。`, 'warning');
     // 即使超出数量，也清空一下 input，以便用户可以重新选择
     if (fileInputSource) {
@@ -159,8 +94,8 @@ async function handleFileSelection(event) {
       console.log(`DEBUG: handleFileSelection - Attempting to read file: ${file.name}`);
       const base64String = await readFileAsBase64(file); // 调用全局 readFileAsBase64
 
-      // 使用 window.uploadedFilesData.push 以确保通过 getter/setter
-      window.uploadedFilesData.push({
+      // 使用 uploadedFilesData.push 以确保通过 getter/setter
+      uploadedFilesData.push({
         name: file.name,
         type: file.type,
         base64: base64String,
@@ -168,7 +103,7 @@ async function handleFileSelection(event) {
       });
       filesProcessedCount++; // <--- 正确增加计数器
 
-      console.log(`DEBUG: handleFileSelection - File ADDED to uploadedFilesData: ${file.name}. Current count: ${window.uploadedFilesData.length}`);
+      console.log(`DEBUG: handleFileSelection - File ADDED to uploadedFilesData: ${file.name}. Current count: ${uploadedFilesData.length}`);
     } catch (error) {
       console.error(`读取文件 "${file.name}" 失败:`, error);
       showToast(`无法读取文件 "${file.name}"。`,'error');
@@ -178,12 +113,12 @@ async function handleFileSelection(event) {
   // filesProcessedCount 现在会正确显示处理（尝试推送）的文件数量
   console.log(`DEBUG: handleFileSelection - Finished processing loop. ${filesProcessedCount} of ${files.length} files were attempted to be pushed.`);
 
-  console.log("DEBUG: handleFileSelection - Calling renderFilePreview(). Current uploadedFilesData length:", window.uploadedFilesData.length);
+  console.log("DEBUG: handleFileSelection - Calling renderFilePreview(). Current uploadedFilesData length:", uploadedFilesData.length);
   renderFilePreview(); // 调用全局 renderFilePreview
 
   // 在函数末尾打印数据状态 (在异步清空 input.value 之前)
   console.log("DEBUG handleFileSelection END (before async input clear): _internalUploadedFilesData is:", JSON.parse(JSON.stringify(_internalUploadedFilesData)));
-  console.log("DEBUG handleFileSelection END (before async input clear): window.uploadedFilesData (via getter) is:", JSON.parse(JSON.stringify(window.uploadedFilesData)));
+  console.log("DEBUG handleFileSelection END (before async input clear): uploadedFilesData (via getter) is:", JSON.parse(JSON.stringify(uploadedFilesData)));
 
   // 方案1：使用 setTimeout 将清空操作推迟到下一个事件循环
   if (fileInputSource) {
@@ -207,7 +142,7 @@ function readFileAsBase64(file) {
 function renderFilePreview() {
     // 打印内部数据状态，确认数据在函数开始时是存在的
     console.log("DEBUG renderFilePreview START: _internalUploadedFilesData at start:", JSON.parse(JSON.stringify(_internalUploadedFilesData)));
-    console.log("DEBUG renderFilePreview START: window.uploadedFilesData (getter) at start, length:", window.uploadedFilesData ? window.uploadedFilesData.length : 'undefined');
+    console.log("DEBUG renderFilePreview START: uploadedFilesData (getter) at start, length:", uploadedFilesData ? uploadedFilesData.length : 'undefined');
 
     // 1. 确认 filePreviewArea DOM 元素是否正确获取
     if (!filePreviewArea) {
@@ -216,10 +151,10 @@ function renderFilePreview() {
     }
     filePreviewArea.innerHTML = '';
 
-    if (window.uploadedFilesData && window.uploadedFilesData.length > 0) {
+    if (uploadedFilesData && uploadedFilesData.length > 0) {
         filePreviewArea.style.display = 'flex';
 
-        window.uploadedFilesData.forEach((fileData, index) => {
+        uploadedFilesData.forEach((fileData, index) => {
             const previewItem = document.createElement('div');
             previewItem.className = 'file-preview-item-sleek'; // 使用这个类名
             previewItem.title = fileData.name;
@@ -248,16 +183,16 @@ function renderFilePreview() {
 
     // 打印内部数据状态，确认数据在函数结束时没有被意外修改
     // console.log("DEBUG renderFilePreview END: _internalUploadedFilesData at end:", JSON.parse(JSON.stringify(_internalUploadedFilesData)));
-    // console.log("DEBUG renderFilePreview END: window.uploadedFilesData (getter) at end, length:", window.uploadedFilesData ? window.uploadedFilesData.length : 'undefined');
+    // console.log("DEBUG renderFilePreview END: uploadedFilesData (getter) at end, length:", uploadedFilesData ? uploadedFilesData.length : 'undefined');
 }
 
 function removeUploadedFile(indexToRemove) {
     console.log(`[removeUploadedFile] CALLED. Attempting to remove file at index: ${indexToRemove}`);
-    console.log("[removeUploadedFile] window.uploadedFilesData BEFORE splice:", JSON.parse(JSON.stringify(window.uploadedFilesData)));
+    console.log("[removeUploadedFile] uploadedFilesData BEFORE splice:", JSON.parse(JSON.stringify(uploadedFilesData)));
 
-    if (indexToRemove >= 0 && indexToRemove < window.uploadedFilesData.length) {
-        // 直接对 window.uploadedFilesData (即其背后的 _internalUploadedFilesData) 进行 splice 操作
-        const removedFileArray = window.uploadedFilesData.splice(indexToRemove, 1); // splice 会修改原数组并返回被删除的元素数组
+    if (indexToRemove >= 0 && indexToRemove < uploadedFilesData.length) {
+        // 直接对 uploadedFilesData (即其背后的 _internalUploadedFilesData) 进行 splice 操作
+        const removedFileArray = uploadedFilesData.splice(indexToRemove, 1); // splice 会修改原数组并返回被删除的元素数组
         
         if (removedFileArray.length > 0) {
             console.log(`[removeUploadedFile] File "${removedFileArray[0].name}" removed successfully.`);
@@ -265,7 +200,7 @@ function removeUploadedFile(indexToRemove) {
             console.warn("[removeUploadedFile] Splice operation did not seem to remove any element, though index was valid.");
         }
         
-        console.log("[removeUploadedFile] window.uploadedFilesData AFTER splice:", JSON.parse(JSON.stringify(window.uploadedFilesData)));
+        console.log("[removeUploadedFile] uploadedFilesData AFTER splice:", JSON.parse(JSON.stringify(uploadedFilesData)));
 
         // ★★★ 关键：在数据修改后，必须调用 renderFilePreview() 来更新UI ★★★
         if (typeof renderFilePreview === 'function') {
@@ -275,7 +210,7 @@ function removeUploadedFile(indexToRemove) {
             console.error("[removeUploadedFile] CRITICAL - renderFilePreview function is not defined!");
         }
     } else {
-        console.warn(`[removeUploadedFile] Invalid index or array already empty. Index: ${indexToRemove}, Current Length: ${window.uploadedFilesData.length}`);
+        console.warn(`[removeUploadedFile] Invalid index or array already empty. Index: ${indexToRemove}, Current Length: ${uploadedFilesData.length}`);
     }
 }
 
@@ -1083,11 +1018,25 @@ function renameConversation(id) {
  */
 function deleteConversation(id) {
   const idx = conversations.findIndex(c => c.id === id);
-  if (idx === -1) return; // 对话不存在
+  if (idx === -1) {
+    // 如果尝试删除一个不存在的对话，也给一个提示
+    showToast('无法删除：对话未找到。', 'error');
+    return;
+  }
 
+  // ▼▼▼ 新增：在删除前获取对话标题用于提示 ▼▼▼
+  const deletedTitle = conversations[idx].title; 
+  
   const wasCurrent = conversations[idx].id === currentConversationId; // 检查是否是当前对话
-  conversations.splice(idx, 1); // 从数组中移除
+  
+  // 从数组中移除
+  conversations.splice(idx, 1);
+  
+  // 保存更改
   saveConversations();
+
+  // ▼▼▼ 新增：显示成功的 toast 提示 ▼▼▼
+  showToast(`对话「${deletedTitle}」已删除。`, 'success');
 
   if (wasCurrent) { // 如果删除的是当前对话
     if (conversations.length > 0) {
@@ -1102,6 +1051,38 @@ function deleteConversation(id) {
   } else {
     // 如果删除的不是当前对话，只需更新列表
     renderConversationList();
+  }
+}
+
+
+/**
+ * 清空当前活动对话的所有消息记录。
+ */
+function clearCurrentConversation() {
+  if (!currentConversationId) {
+    showToast('没有活动的对话可供清空。', 'warning');
+    return;
+  }
+
+  const conv = getCurrentConversation();
+  if (!conv) {
+    showToast('发生错误：找不到当前对话的数据。', 'error');
+    return;
+  }
+
+  // 弹出确认框
+  if (confirm(`确定要清空「${conv.title}」的所有消息吗？\n此操作无法恢复。`)) {
+    
+    // 核心：清空 messages 数组，但保留 system prompt (如果有的话)
+    const systemPrompt = conv.messages.find(m => m.role === 'system');
+    conv.messages = systemPrompt ? [systemPrompt] : [];
+
+    saveConversations();
+    
+    // 重新加载对话以刷新UI
+    loadConversation(currentConversationId);
+    
+    showToast(`对话「${conv.title}」已清空。`, 'success');
   }
 }
 
@@ -1344,7 +1325,7 @@ async function send() {
         return;
     }
     const promptText = promptInput.value.replace(/\n$/, '');
-    const filesToActuallySend = window.uploadedFilesData ? [...window.uploadedFilesData] : [];
+    const filesToActuallySend = uploadedFilesData ? [...uploadedFilesData] : [];
 
     // --- 3. 输入有效性检查 ---
     if (!promptText.trim() && filesToActuallySend.length === 0) {
@@ -1374,7 +1355,7 @@ async function send() {
         return;
     }
     const conversationIdAtRequestTime = conversationAtRequestTime.id;
-    console.log(`[Send INTERNAL CHECK] At send start: conversationIdAtRequestTime is ${conversationIdAtRequestTime}. window.currentConversationId is currently ${window.currentConversationId}`);
+    console.log(`[Send INTERNAL CHECK] At send start: conversationIdAtRequestTime is ${conversationIdAtRequestTime}. currentConversationId is currently ${currentConversationId}`);
 
     // --- 6. 解析提供商和模型名称 ---
     let actualProvider;
@@ -1441,7 +1422,7 @@ const userMessageContentForHistory = {
 };
 
 // --- 用户消息添加到UI和数据模型 ---
-if (window.currentConversationId === conversationIdAtRequestTime) {
+if (currentConversationId === conversationIdAtRequestTime) {
     // ★ 直接将最终的显示字符串传递给 appendMessage ★
     appendMessage('user', displayMessageForUI, null, undefined, conversationIdAtRequestTime, conversationAtRequestTime.messages.length);
 }
@@ -1463,7 +1444,7 @@ conversationAtRequestTime.messages.push({
         }
     }
 
-    if (window.currentConversationId === conversationIdAtRequestTime) {
+    if (currentConversationId === conversationIdAtRequestTime) {
         console.log("[Send] Attempting to append LOADING indicator for conversation:", conversationIdAtRequestTime);
         loadingDiv = appendLoading();
         if (loadingDiv) console.log("[Send] Loading indicator appended.");
@@ -1624,10 +1605,10 @@ if (isAutoThinkModeEnabled) {
         if (isActuallyStreaming) {
             console.log("[Send] Response IS streaming. Content-Type:", responseContentType);
             // Remove loadingDiv if it was for the active original conversation
-            if (loadingDiv && loadingDiv.parentNode && window.currentConversationId === conversationIdAtRequestTime) {
+            if (loadingDiv && loadingDiv.parentNode && currentConversationId === conversationIdAtRequestTime) {
                 loadingDiv.remove();
                 loadingDiv = null;
-            } else if (loadingDiv && loadingDiv.parentNode && window.currentConversationId !== conversationIdAtRequestTime) {
+            } else if (loadingDiv && loadingDiv.parentNode && currentConversationId !== conversationIdAtRequestTime) {
                 // If conversation changed, but loadingDiv was for original conv, remove it too.
                 loadingDiv.remove();
                 loadingDiv = null;
@@ -1663,7 +1644,7 @@ if (isAutoThinkModeEnabled) {
             // If the conversation changed, appendMessage would have added it to the currently visible DOM.
             // We must remove it from the visible DOM if it's for a non-active conversation.
             const messagesContainer = document.getElementById('messages');
-            if (window.currentConversationId !== conversationIdAtRequestTime) {
+            if (currentConversationId !== conversationIdAtRequestTime) {
                 if (tempMsgElementWrapper && tempMsgElementWrapper.parentNode === messagesContainer) {
                     tempMsgElementWrapper.remove();
                     console.log("[Send Stream UI] tempMsgElementWrapper was created and attached by appendMessage, but removed as it's for a non-active conversation.");
@@ -1994,7 +1975,7 @@ if (isAutoThinkModeEnabled) {
                 }
 
                 const messagesContainer = document.getElementById('messages');
-                if (window.currentConversationId === conversationIdAtRequestTime) {
+                if (currentConversationId === conversationIdAtRequestTime) {
                     if (messagesContainer && !tempMsgElementWrapper.parentNode) {
                         messagesContainer.appendChild(tempMsgElementWrapper);
                         console.log("[Send FINALLY] Appended fully populated tempMsgElementWrapper to DOM for active original conversation.");
@@ -2010,7 +1991,7 @@ if (isAutoThinkModeEnabled) {
                 }
             } else {
                 console.warn("[Send FINALLY] Successful stream, but UI placeholder elements (tempMsgElementWrapper or assistantTextElement) missing. Appending as new message if conversation is active.");
-                if (window.currentConversationId === conversationIdAtRequestTime) {
+                if (currentConversationId === conversationIdAtRequestTime) {
                     appendMessage(assistantRoleForDisplay, finalAssistantReply, modelValueFromOption, finalThinkingProcess, conversationIdAtRequestTime, conversationAtRequestTime.messages.length +1);
                 }
             }
@@ -2020,7 +2001,7 @@ if (isAutoThinkModeEnabled) {
                 console.log("[Send FINALLY] Removing existing stream placeholder before appending definitive message for non-stream/failed scenario.");
                 tempMsgElementWrapper.remove();
             }
-            if (window.currentConversationId === conversationIdAtRequestTime) {
+            if (currentConversationId === conversationIdAtRequestTime) {
                 console.log("[Send FINALLY] Appending definitive message/error to UI for active original conversation.");
                 appendMessage(assistantRoleForDisplay, finalAssistantReply, modelValueFromOption, finalThinkingProcess, conversationIdAtRequestTime, conversationAtRequestTime.messages.length +1);
             } else {
@@ -2078,14 +2059,14 @@ if (isAutoThinkModeEnabled) {
             let titleCandidate = String(finalAssistantReply).replace(/<[^>]+>/g, '').replace(/[\s*#\-–—~`\[\](){}|：:「『“”。！？,，\.>]+/gm, '').trim().substring(0, 30);
             if (titleCandidate.length > 2) {
                 convForAutoName.title = titleCandidate + (titleCandidate.length === 30 ? "..." : "");
-                if (window.currentConversationId === conversationIdAtRequestTime && document.getElementById('chat-title')) { // Only update UI title if it's the active one
+                if (currentConversationId === conversationIdAtRequestTime && document.getElementById('chat-title')) { // Only update UI title if it's the active one
                      document.getElementById('chat-title').textContent = convForAutoName.title;
                 }
             }
         }
         if (typeof saveConversations === 'function') saveConversations();
         if (typeof renderConversationList === 'function') renderConversationList(); // This will re-render list, highlighting current active one
-        if (window.currentConversationId === conversationIdAtRequestTime && typeof enableInlineTitleEdit === 'function') {
+        if (currentConversationId === conversationIdAtRequestTime && typeof enableInlineTitleEdit === 'function') {
             enableInlineTitleEdit();
         }
 
@@ -2095,13 +2076,13 @@ if (isAutoThinkModeEnabled) {
             finalAssistantReply && !finalAssistantReply.includes('（用户已中止）') && !String(finalAssistantReply).toLowerCase().startsWith('错误：');
         if (requestConsideredFullySuccessfulForFileClear && filesToActuallySend && filesToActuallySend.length > 0) {
             console.log("[Send FINALLY] Request fully successful with content, clearing uploaded files.");
-            window.uploadedFilesData = [];
+            uploadedFilesData = [];
             if (typeof renderFilePreview === 'function') renderFilePreview();
         }
 
         // --- 最终滚动 (Only if the original conversation is still active) ---
         const messagesContainerForScroll = document.getElementById('messages');
-        if (messagesContainerForScroll && window.currentConversationId === conversationIdAtRequestTime) {
+        if (messagesContainerForScroll && currentConversationId === conversationIdAtRequestTime) {
              requestAnimationFrame(() => { messagesContainerForScroll.scrollTop = messagesContainerForScroll.scrollHeight; });
         }
 
@@ -2110,117 +2091,6 @@ if (isAutoThinkModeEnabled) {
 }
 
 
-// processStreamChunk 
-function processStreamChunk(
-    rawText,
-    provider,
-    conversationId,
-    assistantTextEl,
-    reasoningContentEl,
-    reasoningBlockEl,
-    explicitThinkingText = null
-) {
-    let canUpdateUI = (window.currentConversationId === conversationId);
-    if (!assistantTextEl && !reasoningContentEl && canUpdateUI) {
-        console.warn(
-            "[ProcessChunk] UI elements (assistantTextEl or reasoningContentEl) are null. " +
-            "Cannot update UI for this chunk. Provider:",
-            provider
-        );
-        canUpdateUI = false;
-    }
-
-    let replyTextPortion = "";
-    let thinkingTextPortion = "";
-
-    // 1. 从输入文本中分离思考和回复部分
-    if (explicitThinkingText !== null && typeof explicitThinkingText === "string") {
-        thinkingTextPortion = explicitThinkingText;
-        replyTextPortion = (typeof rawText === "string") ? rawText : "";
-    } else if (
-        typeof rawText === "string" &&
-        rawText &&
-        typeof extractThinkingAndReply === "function" &&
-        (rawText.includes("<think>") || window.isCurrentlyInThinkingBlock || rawText.includes("</think>"))
-    ) {
-        try {
-            let extracted = extractThinkingAndReply(
-                rawText,
-                "<think>",
-                "</think>",
-                window.isCurrentlyInThinkingBlock
-            );
-            replyTextPortion = extracted.replyTextPortion;
-            thinkingTextPortion = extracted.thinkingTextPortion;
-            window.isCurrentlyInThinkingBlock = extracted.newThinkingBlockState;
-        } catch (e) {
-            console.error(
-                "[ProcessChunk] Error in extractThinkingAndReply:",
-                e,
-                "Raw text:",
-                rawText
-            );
-            replyTextPortion = rawText;
-        }
-    } else if (typeof rawText === "string") {
-        replyTextPortion = rawText;
-    }
-
-    let uiActuallyUpdated = false;
-
-    // 2. 更新思考过程 UI (如果可以更新UI且有内容)
-    if (canUpdateUI && thinkingTextPortion) {
-        if (reasoningContentEl && reasoningContentEl instanceof HTMLElement) {
-            reasoningContentEl.textContent += thinkingTextPortion;
-            if (
-                reasoningBlockEl &&
-                reasoningBlockEl.classList.contains("reasoning-block-empty") &&
-                reasoningContentEl.textContent.trim() !== ""
-            ) {
-                reasoningBlockEl.classList.remove("reasoning-block-empty");
-            }
-            const rce = reasoningContentEl;
-            // 思考框内部的自动滚动 (如果需要)
-            if (
-                rce.scrollHeight > rce.clientHeight &&
-                (rce.scrollHeight - rce.clientHeight <= rce.scrollTop + 10)
-            ) {
-                rce.scrollTop = rce.scrollHeight;
-            }
-            uiActuallyUpdated = true;
-        }
-    }
-
-    // 3. 更新主要回复 UI (如果可以更新UI且有内容)
-    if (canUpdateUI && replyTextPortion) {
-        if (assistantTextEl && assistantTextEl instanceof HTMLElement) {
-            const textNode = document.createTextNode(replyTextPortion);
-            assistantTextEl.appendChild(textNode);
-            uiActuallyUpdated = true;
-        }
-    }
-
-    // 4. 滚动整个消息列表 (#messages) - 仅当UI实际更新时
-    if (canUpdateUI && uiActuallyUpdated) {
-        const messagesContainer = document.getElementById("messages");
-        if (messagesContainer) {
-            setTimeout(() => {
-                if (!userHasManuallyScrolledUp) {
-                    isScrollingProgrammatically = true;
-                    messagesContainer.scrollTo({
-                        top: messagesContainer.scrollHeight,
-                        behavior: "auto"
-                    });
-                    requestAnimationFrame(() => {
-                        isScrollingProgrammatically = false;
-                    });
-                } else {
-                    console.log("[ProcessChunk] Auto-scroll PAUSED by user (wheel or button).");
-                }
-            }, 0);
-        }
-    }
-}
 
 
 
@@ -2238,7 +2108,7 @@ window.send = send; // 暴露到全局，供HTML调用
  * @param {string | null} [explicitThinkingText=null] - 如果API分别提供思考和回复，则这是显式的思考文本。
  */
 function processStreamChunk(rawText, provider, conversationId, assistantTextEl, reasoningContentEl, reasoningBlockEl, explicitThinkingText = null) {
-    let canUpdateUI = (window.currentConversationId === conversationId);
+    let canUpdateUI = (currentConversationId === conversationId);
     if (!assistantTextEl && !reasoningContentEl && canUpdateUI) {
         // 如果 canUpdateUI 为 true 但关键元素缺失，才警告
         console.warn("[ProcessChunk] UI elements (assistantTextEl or reasoningContentEl) are null, but UI update was expected. Cannot update UI for this chunk. Provider:", provider);
@@ -4170,19 +4040,6 @@ if (sidebarHeader && logoDisplay && searchInput && searchWrapper) {
     }
     
     
-    
-    fileInputInline = document.getElementById('file-input-inline');
-    if (fileInputInline) {
-        console.log("DEBUG DOMContentLoaded: Checking typeof handleFileSelection:", typeof handleFileSelection);
-        if (typeof handleFileSelection === 'function') {
-            fileInputInline.addEventListener('change', handleFileSelection);
-            console.log("DEBUG DOMContentLoaded: 'change' event listener for fileInputInline BOUND SUCCESSFULLY.");
-        } else {
-            console.error("CRITICAL DOMContentLoaded: handleFileSelection IS NOT A FUNCTION for fileInputInline!");
-        }
-    } else {
-        console.warn("DOMContentLoaded: fileInputInline not found.");
-    }
     const newConvBtn = document.getElementById('new-conv-btn');
     if (newConvBtn) {
         newConvBtn.addEventListener('click', () => {
@@ -4209,6 +4066,11 @@ if (sidebarHeader && logoDisplay && searchInput && searchWrapper) {
             }
         });
     } else { console.warn("DOMContentLoaded: Delete current conversation button 'delete-current-btn' not found."); }
+
+    const clearCurrentBtn = document.getElementById('clear-current-btn');
+  if (clearCurrentBtn) {
+    clearCurrentBtn.addEventListener('click', clearCurrentConversation);
+  }
 
     const modelSelect = document.getElementById('model');
     if (modelSelect) {
@@ -4413,10 +4275,10 @@ if (showModelManagementBtn) {
 });
     // --- 行内文件上传按钮和聊天设置按钮的事件监听器 (CONSOLIDATED AND SINGLE BINDING) ---
     const uploadFileBtnInline = document.getElementById('upload-file-btn-inline');
-    console.log("!!! uploadFileBtnInline CLICKED, triggering fileInputInline.click() !!!");
     const chatSettingsBtnInline = document.getElementById('chat-settings-btn-inline');
-    console.log("uploadFileBtnInline element:", uploadFileBtnInline);
-    console.log("fileInputInline element:", fileInputInline);
+
+
+    const fileInputInline = document.getElementById('file-input-inline'); // 确保在这里获取
 
     if (uploadFileBtnInline && fileInputInline) {
         // Click on custom button triggers hidden file input

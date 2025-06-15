@@ -6,7 +6,7 @@
       "options": [
         {
           "text": "OR Deepseek-R1 8B",
-          "value": "openrouter::deepseek/deepseek-r1-0528-qwen3-8b:free",
+          "value": "openrouter::deepseek/deepseek-r1-0528-qwen3-8b",
           "isHidden": false
         },
         {
@@ -175,7 +175,7 @@
         {
           "text": "SF GLM-4-9B",
           "value": "sf::THUDM/GLM-4-9B-0414",
-          "isHidden": false
+          "isHidden": true
         }
       ]
     },
@@ -227,7 +227,7 @@
         {
           "text": "Claude 4.0 Opus",
           "value": "anthropic::claude-opus-4-20250514",
-          "isHidden": false
+          "isHidden": true
         },
         {
           "text": "Claude 4.0 Sonnet",
@@ -289,7 +289,7 @@
         {
           "text": "Slm Qwen3-32B",
           "value": "suanlema::Qwen3-32B",
-          "isHidden": false
+          "isHidden": true
         },
         {
           "text": "Slm QwQ-32B-Free",

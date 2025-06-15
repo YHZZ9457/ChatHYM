@@ -376,13 +376,14 @@ body.light-theme .setting-item input:checked + .slider {
   flex-shrink:0;
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
-.chat-header h1#chat-title{margin:0;font-size:1.1rem;font-weight:500; white-space: nowrap; overflow:hidden; text-overflow: ellipsis; max-width: 300px;} /* 限制标题最大宽度 */
+.chat-header h1#chat-title{margin:0;font-size:1.1rem;font-weight:500; white-space: nowrap; overflow:hidden; text-overflow: ellipsis; max-width: 240px;} /* 限制标题最大宽度 */
 /* ===== Header Action Buttons (Optimized) ===== */
 
 /* 1. 为所有头部动作按钮定义一个通用的基础样式 */
 /* 这个选择器现在包含了新的 #export-current-btn */
 #export-current-btn,
 #archive-current-btn, 
+#clear-current-btn,
 #delete-current-btn {
   position: static; /* 移出绝对定位 */
   padding: 6px 14px; /* 稍微增加水平padding，让文字更舒展 */
@@ -413,6 +414,12 @@ body.light-theme .setting-item input:checked + .slider {
   background: var(--bg-secondary);
   color: var(--text-color);
   border-color: var(--border-color);
+}
+/* 删除按钮 (危险操作 - Danger) */
+#clear-current-btn{
+  background: #e53e3e;
+  color: #fff;
+  /* border-color 保持 transparent */
 }
 
 /* 删除按钮 (危险操作 - Danger) */
@@ -1558,6 +1565,37 @@ body.dark-theme .model-group-editor {
   border-color: rgba(229, 62, 62, 0.5);
   color: #c53030;
 }
+
+/* ===== 修复和增强：隐藏模型的特定样式 ===== */
+
+/* 1. 为隐藏的模型条目应用视觉变化 */
+.model-option-editor.model-option-hidden {
+    opacity: 0.6; /* 整体半透明，视觉上表示“已禁用” */
+    
+    /* 覆盖背景色，使其与普通条目有明显区别 */
+    background-color: var(--bg-secondary) !important; 
+    
+    /* 边框也可以变虚线，进一步强调状态 */
+    border-style: dashed;
+}
+
+/* 2. 移除隐藏条目的交互性 */
+.model-option-editor.model-option-hidden {
+    cursor: not-allowed; /* 鼠标指针变为“禁止” */
+}
+
+/* 3. 使隐藏条目的文字颜色变浅 */
+.model-option-editor.model-option-hidden .details,
+.model-option-editor.model-option-hidden .details strong,
+.model-option-editor.model-option-hidden .details span {
+    color: var(--text-secondary) !important; /* 使用次要文字颜色 */
+}
+
+/* 4. （可选）隐藏条目在 hover 时不应有阴影变化 */
+.model-option-editor.model-option-hidden:hover {
+    box-shadow: var(--shadow-sm); /* 保持原始的小阴影，不加深 */
+}
+
 
 /* 模态对话框样式 */
 .modal {

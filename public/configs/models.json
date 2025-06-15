@@ -42,7 +42,7 @@
         {
           "text": "OR Gemma3 27B",
           "value": "openrouter::google/gemma-3-27b-it",
-          "isHidden": false
+          "isHidden": true
         },
         {
           "text": "OR Deepseek R1 70B",

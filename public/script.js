@@ -125,7 +125,7 @@ async function handleFileSelection(event) {
   renderFilePreview(); // 调用全局 renderFilePreview
 
   // 在函数末尾打印数据状态 (在异步清空 input.value 之前)
-  console.log("DEBUG handleFileSelection END (before async input clear): _internalUploadedFilesData is:", JSON.parse(JSON.stringify(_internalUploadedFilesData)));
+ // console.log("DEBUG handleFileSelection END (before async input clear): _internalUploadedFilesData is:", JSON.parse(JSON.stringify(_internalUploadedFilesData)));
   console.log("DEBUG handleFileSelection END (before async input clear): uploadedFilesData (via getter) is:", JSON.parse(JSON.stringify(uploadedFilesData)));
 
   // 方案1：使用 setTimeout 将清空操作推迟到下一个事件循环
@@ -149,7 +149,7 @@ function readFileAsBase64(file) {
 
 function renderFilePreview() {
     // 打印内部数据状态，确认数据在函数开始时是存在的
-    console.log("DEBUG renderFilePreview START: _internalUploadedFilesData at start:", JSON.parse(JSON.stringify(_internalUploadedFilesData)));
+    //console.log("DEBUG renderFilePreview START: _internalUploadedFilesData at start:", JSON.parse(JSON.stringify(_internalUploadedFilesData)));
     console.log("DEBUG renderFilePreview START: uploadedFilesData (getter) at start, length:", uploadedFilesData ? uploadedFilesData.length : 'undefined');
 
     // 1. 确认 filePreviewArea DOM 元素是否正确获取
@@ -406,19 +406,38 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
     }
 
     // --- 3. 构建最终要渲染的 Markdown 文本 ---
-    let finalMarkdown = "";
+     let finalMarkdown = "";
+
+    // ★ 新增：专门为用户消息处理附件
+    if ((role === 'user') && messageContent && typeof messageContent.files !== 'undefined' && Array.isArray(messageContent.files) && messageContent.files.length > 0) {
+        const attachmentsContainer = document.createElement('div');
+        attachmentsContainer.className = 'user-attachments-container';
+
+        messageContent.files.forEach(file => {
+            const attachmentItem = document.createElement('div');
+            attachmentItem.className = 'attachment-item';
+            attachmentItem.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-paperclip" viewBox="0 0 16 16">
+                    <path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v8.5a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v8.5a3.5 3.5 0 1 1-7 0V3z"/>
+                </svg>
+                <span>${escapeHtml(file.name)}</span>
+            `;
+            attachmentsContainer.appendChild(attachmentItem);
+        });
+        
+        // 将附件容器添加到消息气泡中，位于文本内容上方
+        messageDiv.appendChild(attachmentsContainer);
+    }
+
     if (typeof messageContent === 'string') {
         finalMarkdown = messageContent;
     } else if (messageContent && typeof messageContent.text !== 'undefined') {
-        let textPart = messageContent.text || "";
-        let filesInfoPart = "";
-        if (Array.isArray(messageContent) && messageContent[0]?.type === 'text' && messageContent[0]?.text) {
+        // 提取文本部分
+        finalMarkdown = messageContent.text || "";
+    } else if (Array.isArray(messageContent) && messageContent[0]?.type === 'text' && messageContent[0]?.text) {
         // 这是旧的、错误的 Anthropic 历史数据格式
         console.warn("[AppendMessage] Detected legacy array format for message content. Extracting text.");
         finalMarkdown = messageContent[0].text;
-    }
-        const trimmedText = textPart.trim();
-        finalMarkdown = trimmedText && filesInfoPart ? `${trimmedText}\n${filesInfoPart}` : (trimmedText || filesInfoPart);
     } else if (messageContent) {
         // 对于未知的对象类型，安全地转换为字符串，避免 [object Object]
         try {
@@ -1670,8 +1689,10 @@ async function send() {
         if (requestWasSuccessful && streamContentReceived && targetConversationForStorage?.title === '新对话') { let titleCandidate = String(finalAssistantReply).replace(/<[^>]+>/g, '').replace(/[\s*#\-–—~`\[\](){}|：:「『“”。！？,，\.>]+/gm, '').trim().substring(0, 30); if (titleCandidate.length > 2) { targetConversationForStorage.title = titleCandidate + (titleCandidate.length === 30 ? "..." : ""); if (currentConversationId === conversationIdAtRequestTime && document.getElementById('chat-title')) document.getElementById('chat-title').textContent = targetConversationForStorage.title; } }
         renderConversationList();
         const requestSucceededWithContent = requestWasSuccessful && (streamContentReceived || !isActuallyStreaming) && !finalAssistantReply.includes('（用户已中止）') && !finalAssistantReply.startsWith('错误：');
-        if (requestSucceededWithContent && filesToActuallySend.length > 0) { uploadedFilesData = []; renderFilePreview(); }
-        const messagesContainerForScroll = document.getElementById('messages');
+        if (requestSucceededWithContent && filesToActuallySend.length > 0) { 
+            uploadedFilesData.length = 0; // ★★★ 核心修正：使用这种方式就地清空数组 ★★★
+            renderFilePreview(); 
+        }        const messagesContainerForScroll = document.getElementById('messages');
         if (messagesContainerForScroll && currentConversationId === conversationIdAtRequestTime) { requestAnimationFrame(() => { messagesContainerForScroll.scrollTop = messagesContainerForScroll.scrollHeight; }); }
         console.log("======================= send() function FINISHED =======================\n\n");
     }
@@ -3195,6 +3216,7 @@ if (showPresetPromptsBtn && presetPromptsListPanel && presetPromptsUl) {
     temperatureValueDisplayInline = document.getElementById('temperature-value-inline');
     thinkModeToggle = document.getElementById('think-mode-toggle');
     const sidebarHeader = document.getElementById('sidebar-header');
+    filePreviewArea = document.getElementById('file-preview-area');
 const logoDisplay = document.getElementById('logo-display');
 const searchInput = document.getElementById('search-conversations');
 const searchWrapper = document.getElementById('search-wrapper');
@@ -3650,6 +3672,7 @@ if (sidebarHeader && logoDisplay && searchInput && searchWrapper) {
     clearCurrentBtn.addEventListener('click', clearCurrentConversation);
   }
 
+  
     const modelSelect = document.getElementById('model');
     if (modelSelect) {
     modelSelect.addEventListener('change', (e) => {

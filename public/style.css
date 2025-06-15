@@ -670,11 +670,9 @@ body.dark-theme .message .text tbody tr:nth-of-type(even) {
   background: var(--bg-color);
   border-top: 1px solid var(--border-color);
   display: flex;
-  flex-direction: column; /* 新增：让子元素垂直堆叠 */
-  /* align-items: flex-end; */ /* 当 flex-direction 为 column 时，此属性控制交叉轴（水平）对齐，
-                                  如果子元素有 width: 100%，则此行影响不大，可以设为 stretch (默认) 或移除 */
-  align-items: stretch; /* 或者移除此行，让子元素默认拉伸（如果它们没有设置宽度）*/
-  gap: 8px; /* 这将成为 #file-preview-area 和 .input-main-row 之间的垂直间距 */
+  flex-direction: column; /* ★ 核心：让子元素垂直堆叠 */
+  align-items: stretch;
+  gap: 8px; /* 这是预览区和输入行之间的垂直间距 */
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
@@ -1724,17 +1722,17 @@ button.secondary:hover,
 
 /* 文件预览区域 */
 .file-preview-area {
-    display: flex;
+    display: flex; /* JS 会在有文件时将其设为 flex */
     flex-wrap: wrap;
-    gap: 8px; /* 统一间距 */
+    gap: 8px;
     padding: 8px;
-    border: 1px dashed var(--border-color); /* 虚线边框 */
+    border: 1px dashed var(--border-color);
     border-radius: var(--border-radius-md);
     max-height: 120px;
     overflow-y: auto;
     width: 100%;
     box-sizing: border-box;
-    background-color: rgba(var(--primary-rgb), 0.02); /* 非常浅的背景 */
+    background-color: rgba(var(--primary-rgb), 0.02);
 }
 .file-preview-item-sleek { /* 单个预览文件 */
     display: inline-flex;
@@ -2525,4 +2523,32 @@ body.dark-theme .toast.toast-error {
     font-weight: 300;
     /* 同样移除它自己的 margin */
     margin: 0; 
+}
+
+.message.user .user-attachments-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px; /* 多个附件之间的间距 */
+    margin-bottom: 10px; /* 附件和下方文字之间的间距 */
+    padding: 10px;
+    background-color: rgba(0, 0, 0, 0.05); /* 给附件区域一个浅色背景 */
+    border-radius: 8px;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.dark-theme .message.user .user-attachments-container {
+    background-color: rgba(255, 255, 255, 0.07);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.attachment-item {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* 图标和文字的间距 */
+    font-size: 0.9em;
+    color: var(--text-color-secondary); /* 使用你已有的次要文本颜色变量 */
+}
+
+.attachment-item svg {
+    flex-shrink: 0; /* 防止图标被压缩 */
 }

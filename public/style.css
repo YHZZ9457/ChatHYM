@@ -204,7 +204,7 @@ body.sidebar-collapsed .sidebar {
   overflow-y: auto;
   display: flex; /* 由JS控制显隐 */
   flex-direction: column;
-  gap: 0; /* ★ 将gap移到setting-item的margin上，以便分隔线能撑满 */
+  gap: 16px; /* ★ 将gap移到setting-item的margin上，以便分隔线能撑满 */
   padding: 24px 32px;
   min-height: 0;
 }
@@ -217,15 +217,19 @@ body.sidebar-collapsed .sidebar {
   border-bottom: 1px solid var(--border-color);
 }
 
-/* ★ 增强 .setting-item 的通用布局 ★ */
 .setting-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 16px;
-  /* ★ 这里定义了您希望在设置页面看到的上下间距和分隔线 ★ */
-  padding: 12px 0; 
-  border-bottom: 1px solid rgba(var(--primary-dark-rgb, 255, 255, 255), 0.05);
+  
+  /* ▼▼▼ 核心修改 ▼▼▼ */
+  padding: 12px 16px; /* 定义每个条目自身的内边距，让内容有呼吸感 */
+  border: 1px solid var(--border-color); /* 给每个条目一个清晰的边框 */
+  border-radius: var(--border-radius-lg); /* 使用大圆角，看起来更现代 */
+  background-color: var(--bg-secondary); /* 使用次要背景色，与主背景区分 */
+
+  min-height: 55px; /* 设置一个合适的最小高度，例如 52px */
+  box-sizing: border-box; /* 确保 padding 和 border 包含在高度内 */
 }
 
 /* 最后一个设置项不需要分隔线 */
@@ -444,6 +448,12 @@ body.light-theme .setting-item input:checked + .slider {
   background: rgba(var(--primary-rgb), 0.1);
   border-color: var(--primary);
   color: var(--primary);
+  box-shadow: var(--shadow-md);
+}
+
+/* 清空按钮的悬浮效果 */
+#clear-current-btn:hover{
+  background: #c53030;
   box-shadow: var(--shadow-md);
 }
 
@@ -1895,11 +1905,23 @@ body.dark-theme .reasoning-content code { /* 深色主题行内代码 */
     text-align: left;
 }
 .inline-chat-settings-panel .setting-item {
-  /* ▼▼▼ 在这里覆盖掉我们不想要的样式 ▼▼▼ */
   
-  padding: 0;           /* 移除上下内边距 */
-  border-bottom: none;  /* 移除底部分隔线 */
-  margin-bottom: 12px;  /* 用 margin-bottom 来控制行间距，效果更稳定 */
+  /* a. 移除卡片式样式 */
+  border: none;           /* 移除边框 */
+  background-color: transparent; /* 背景设为透明 */
+  padding: 0;             /* 移除内边距 */
+  border-radius: 0;       /* 移除圆角 */
+  
+  /* b. 核心修复：取消最小高度限制 */
+  min-height: auto !important; /* 或者 min-height: 0; */
+  
+  /* c. 设置合适的垂直间距 */
+  margin-bottom: 12px; /* 用 margin-bottom 来控制行与行之间的间距 */
+}
+
+/* 2. 确保最后一个项目没有多余的下边距 */
+.inline-chat-settings-panel .setting-item:last-child {
+  margin-bottom: 0;
 }
 
 /* 最后一个条目不需要下外边距 */
@@ -2272,25 +2294,6 @@ border: 1px solid var(--border-color);
 
 
 
-.message-meta-info {
-    font-size: 0.8em;
-    color: var(--text-secondary);
-    margin-top: 8px;
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    
-}
-
-.model-note {
-    margin-right: 8px;
-}
-
-.token-count-note {
-    font-style: italic;
-    font-weight: 300; /* Light */
-}
-
 
 .message-actions-container {
     display: flex;
@@ -2493,4 +2496,33 @@ body.dark-theme .toast.toast-error {
   opacity: 0;
   transform: scale(0.95);
   pointer-events: none;
+}
+
+
+/* 1. 修改元信息容器，让它变成一个 flex 容器 */
+.message-meta-info {
+    font-size: 0.85em;
+    color: var(--text-secondary);
+    margin-top: 2px; /* 与消息主要内容隔开 */
+    padding-top: 6px;
+    
+    /* ▼▼▼ 核心修改 ▼▼▼ */
+    display: flex;                /* 使用 Flexbox 布局 */
+    justify-content: space-between; /* 子元素两端对齐 */
+    align-items: center;          /* 垂直居中 */
+    flex-wrap: wrap;              /* 如果空间不足，允许换行 */
+    gap: 12px;                    /* 子元素之间的最小间距 */
+}
+
+/* 2. 确保模型注释和 Token 注释能很好地在 flex 容器中工作 */
+.model-note {
+    /* 移除它自己的 margin，让父容器的 gap 来控制间距 */
+    margin: 0; 
+}
+
+.token-count-note {
+    font-style: italic;
+    font-weight: 300;
+    /* 同样移除它自己的 margin */
+    margin: 0; 
 }

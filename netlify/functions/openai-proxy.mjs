@@ -1,148 +1,71 @@
+// =====================================================================
+// START: 终极健壮版 openai-proxy.mjs (请完整替换)
+// =====================================================================
+
 // netlify/functions/openai-proxy.mjs
+console.log("OpenAI Proxy Function Loaded (v-Final - Robust Manual Pumping)");
 
+const API_KEY = process.env.OPENAI_API_KEY_SECRET;
+const API_URL = 'https://api.openai.com/v1/chat/completions';
 
-
-// A helper function to validate and clean a single message object.
-function validateAndCleanMessage(message, index) {
-  if (!message || typeof message !== 'object') {
-    console.warn(`[Proxy Validator] Message #${index} is not a valid object. Ignoring.`);
-    return null;
-  }
-  const { role, content, tool_call_id } = message;
-  const validRoles = ['user', 'assistant', 'system', 'tool'];
-  if (!role || !validRoles.includes(role)) {
-    console.warn(`[Proxy Validator] Message #${index} has an invalid or missing role: "${role}". Ignoring.`);
-    return null;
-  }
-  if (content === undefined || content === null) {
-    if (role === 'tool' && tool_call_id) {
-      message.content = "tool call result"; // OpenAI's tool role requires a string content.
-      return message;
-    }
-    console.warn(`[Proxy Validator] Message #${index} has null or undefined content. Ignoring.`);
-    return null;
-  }
-  if (typeof content === 'string') {
-    if (content.trim() === '') {
-      message.content = ' '; // OpenAI API rejects empty strings.
-    }
-  } else if (Array.isArray(content)) {
-    if (content.length === 0) {
-      console.warn(`[Proxy Validator] Message #${index} content is an empty array. Ignoring.`);
-      return null;
-    }
-    const cleanedParts = content.filter(part =>
-      part &&
-      typeof part.type === 'string' &&
-      ( (part.type === 'text' && typeof part.text === 'string' && part.text.trim() !== '') ||
-        (part.type === 'image_url' && part.image_url && typeof part.image_url.url === 'string') )
-    );
-    if (cleanedParts.length === 0) {
-      console.warn(`[Proxy Validator] Message #${index} content array is empty after cleaning. Ignoring.`);
-      return null;
-    }
-    message.content = cleanedParts;
-  } else {
-    console.warn(`[Proxy Validator] Message #${index} has an invalid content type: ${typeof content}. Ignoring.`);
-    return null;
-  }
-  return message;
-}
-
-
-export default async function handler(request, context) {
-  // 1. Handle CORS Preflight (OPTIONS) Request
+export default async function handler(request) {
+  // 1. CORS 预检
   if (request.method === 'OPTIONS') {
     return new Response(null, {
       status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      },
+      headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization' },
     });
   }
 
-  // 2. Reject non-POST requests
-  if (request.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
-  }
+  // 2. 检查方法和 API Key
+  if (request.method !== 'POST') { return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405 }); }
+  if (!API_KEY) { return new Response(JSON.stringify({ error: 'Server Config Error: API Key not set.' }), { status: 500 }); }
 
   try {
-    // 3. Securely get API Key from environment variables
-    const API_KEY = process.env.OPENAI_API_KEY_SECRET;
-    if (!API_KEY) {
-      console.error("CRITICAL: OPENAI_API_KEY_SECRET is not configured in environment variables.");
-      return new Response(JSON.stringify({ error: 'Server configuration error.' }), { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
-    }
+    const requestBody = await request.json();
+    const isStream = requestBody.stream || false;
 
-    // 4. Parse and validate the request body from the frontend
-    const { model, messages, temperature, max_tokens, stream } = await request.json();
-    if (!model || !Array.isArray(messages) || messages.length === 0) {
-      return new Response(JSON.stringify({ error: 'Bad Request: "model" is required and "messages" must be a non-empty array.' }), { status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
-    }
-
-    // 5. Sanitize and prepare the 'messages' array
-    const cleanedMessages = messages.map(validateAndCleanMessage).filter(Boolean);
-    if (cleanedMessages.length === 0) {
-      return new Response(JSON.stringify({ error: 'Bad Request: No valid messages left after validation.' }), { status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
-    }
-    
-    // 6. Construct the final payload for the OpenAI API
-    const openaiPayload = {
-      model,
-      messages: cleanedMessages,
-      temperature: typeof temperature === 'number' ? temperature : 0.7,
-      stream: !!stream,
-    };
-
-    // 7. Intelligently adapt the token limit parameter based on the model
-    if (typeof max_tokens === 'number' && max_tokens > 0) {
-      const modelsRequiringNewParam = ['o3', 'o3-2025-04-16'];
-      if (modelsRequiringNewParam.includes(model)) {
-        openaiPayload.max_completion_tokens = max_tokens;
-        console.log(`[Proxy] Adapting to 'max_completion_tokens' for model: ${model}`);
-      } else {
-        openaiPayload.max_tokens = max_tokens;
-      }
-    }
-
-    console.log("[Proxy] Sending final payload to OpenAI:", JSON.stringify(openaiPayload, null, 2));
-
-    // 8. Forward the request to the OpenAI API
-    const apiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    // 3. 请求 OpenAI API
+    const apiResponse = await fetch(API_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`,
-      },
-      body: JSON.stringify(openaiPayload),
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
+      body: JSON.stringify(requestBody),
     });
 
-    // 9. Efficiently proxy the response (success or error) back to the client
-    // This approach correctly handles streams and avoids "body already read" errors.
-    const responseHeaders = {
-      'Content-Type': apiResponse.headers.get('Content-Type') || 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      ...(openaiPayload.stream && {
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-      }),
-    };
-
-    return new Response(apiResponse.body, {
-      status: apiResponse.status,
-      statusText: apiResponse.statusText,
-      headers: responseHeaders,
-    });
-
-  } catch (error) {
-    console.error('[Proxy] An unexpected error occurred:', error);
-    // Handle JSON parsing errors from the request body
-    if (error instanceof SyntaxError) {
-        return new Response(JSON.stringify({ error: 'Bad Request: Invalid JSON format.' }), { status: 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }});
+    // 4. 处理 API 返回的错误
+    if (!apiResponse.ok) {
+      const errorBody = await apiResponse.text();
+      console.error(`[OpenAI Proxy] API Error: ${apiResponse.status}`, errorBody);
+      return new Response(errorBody, { status: apiResponse.status, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }});
     }
-    // Handle other errors (e.g., network issues connecting to OpenAI)
-    return new Response(JSON.stringify({ error: 'Internal Server Error', details: error.message }), { status: 502, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+
+    // 5. ★★★ 可靠的流式处理 ★★★
+    if (isStream && apiResponse.body) {
+        const { readable, writable } = new TransformStream();
+        const pump = async () => {
+            const reader = apiResponse.body.getReader();
+            const writer = writable.getWriter();
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) { writer.close(); break; }
+                    await writer.write(value);
+                }
+            } catch (e) { console.error("[OpenAI Proxy] Stream Pumping Error:", e); writer.abort(e); }
+        };
+        pump();
+        return new Response(readable, {
+            status: 200,
+            headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', 'Access-Control-Allow-Origin': '*' },
+        });
+    } else {
+        // 6. 处理非流式响应
+        const json = await apiResponse.json();
+        return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }});
+    }
+
+  } catch (err) {
+    console.error('[OpenAI Proxy] Network/internal error', err);
+    return new Response(JSON.stringify({ error: 'Proxy internal error', details: err.message }), { status: 502 });
   }
 }

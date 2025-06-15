@@ -1,152 +1,135 @@
-// netlify/functions/gemini-proxy.mjs
-console.log("Gemini Proxy Function Loaded (Streaming Support Enabled). Reading GEMINI_API_KEY_SECRET from env.");
+// netlify/functions/gemini-proxy-debug.mjs
+// Debug-Enhanced Gemini Proxy Function with Stream Chunk Logging
 
-export default async function handler(request, context) {
-  const API_KEY = process.env.GEMINI_API_KEY_SECRET;
-  const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
+console.log("▶️ [Init] Gemini Proxy Function Loaded (Debug Mode) at", new Date().toISOString());
 
-  // 1. CORS 预检处理
+const CORS_COMMON = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+export default async function handler(request) {
+  console.log(`▶️ [Handler] Invoked - Method: ${request.method}, URL: ${request.url}, Time: ${new Date().toISOString()}`);
+
+  // CORS preflight
   if (request.method === 'OPTIONS') {
-    return new Response(null, {
-      status: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type',
-      }
-    });
+    console.log('▶️ [CORS] Preflight request');
+    return new Response(null, { status: 204, headers: CORS_COMMON });
   }
 
-  // 2. 只允许 POST
+  // Only allow POST
   if (request.method !== 'POST') {
+    console.warn(`⚠️ [Method] Not Allowed: ${request.method}`);
     return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
       status: 405,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      headers: { ...CORS_COMMON, 'Content-Type': 'application/json' },
     });
   }
 
-  // 3. 检查 API Key
+  // Check API key
+  const API_KEY = process.env.GEMINI_API_KEY_SECRET;
   if (!API_KEY) {
-    console.error("Gemini API Key 未在环境变量中配置 (GEMINI_API_KEY_SECRET)!");
-    return new Response(JSON.stringify({ error: 'Server Configuration Error: Gemini API Key not set.' }), {
+    console.error('❌ [Config] Missing GEMINI_API_KEY_SECRET');
+    return new Response(JSON.stringify({ error: 'Server Config Error: Missing API Key' }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      headers: { ...CORS_COMMON, 'Content-Type': 'application/json' },
     });
   }
 
-  // 4. 解析前端请求体
-  let requestBodyFromFrontend;
+  // Parse JSON body
+  let body;
   try {
-    requestBodyFromFrontend = await request.json();
-  } catch (error) {
-    console.error("无法解析前端请求体:", error);
-    return new Response(JSON.stringify({ error: 'Bad Request: Invalid JSON body' }), {
+    body = await request.json();
+    console.log('▶️ [Body] Parsed JSON:', body);
+  } catch (err) {
+    console.error('❌ [Body] Invalid JSON:', err.message);
+    return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      headers: { ...CORS_COMMON, 'Content-Type': 'application/json' },
     });
   }
 
-  const { model, contents, generationConfig } = requestBodyFromFrontend;
-
-  if (!model || !contents) {
-    return new Response(JSON.stringify({ error: 'Bad Request: "model" and "contents" are required.' }), {
+  const { model, contents, generationConfig = {}, stream } = body;
+  if (!model || !Array.isArray(contents)) {
+    console.error('❌ [Request] Bad Request - model or contents missing or invalid');
+    return new Response(JSON.stringify({ error: 'Bad Request: model and contents are required' }), {
       status: 400,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      headers: { ...CORS_COMMON, 'Content-Type': 'application/json' },
     });
   }
 
-  // 5. 构建发送给 Gemini API 的流式端点和请求体
-  //    前端的 shouldUseStreaming 标志现在决定了这里是否使用流式端点
-  //    在您的前端 send 函数中，对于 Gemini，shouldUseStreaming 应该是 true。
-  const geminiEndpoint = `${GEMINI_API_BASE_URL}${model}:streamGenerateContent?key=${API_KEY}&alt=sse`; // 使用 SSE 流式端点
-
-  const geminiPayload = {
-    contents: contents,
-    generationConfig: generationConfig || { temperature: 0.7 },
-    // safetySettings: [...] // 可选，根据需要添加安全设置
-  };
-
-  console.log(`[Gemini Proxy] Attempting to stream from Gemini API (${geminiEndpoint}) with payload:`, JSON.stringify(geminiPayload, null, 2).substring(0, 500) + "...");
+  // Build endpoint
+  const baseBeta = 'https://generativelanguage.googleapis.com/v1beta/models';
+  const endpoint = `${baseBeta}/${model}:generateContent?key=${API_KEY}`;
+  console.log(`▶️ [Fetch] Endpoint: ${endpoint}`);
+  console.log('▶️ [Fetch] Payload:', { contents, generationConfig });
 
   try {
-    const apiResponse = await fetch(geminiEndpoint, {
+    const apiResponse = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(geminiPayload),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contents, generationConfig }),
     });
+    console.log(`▶️ [Fetch] Received status ${apiResponse.status}`);
 
-    console.log("[Gemini Proxy] Gemini API initial response status:", apiResponse.status);
-
-    if (!apiResponse.ok) {
-      const errorText = await apiResponse.text();
-      console.error("[Gemini Proxy] Gemini API Error (initial response):", apiResponse.status, errorText);
-      let errorJson = { error: `Gemini API Error: ${apiResponse.status}`, details: errorText };
-      try { errorJson = JSON.parse(errorText); } catch (e) { /* ignore parse error if not json */ }
-      return new Response(JSON.stringify(errorJson), {
-        status: apiResponse.status,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
-    }
-
-    // ★★★ 处理流式响应 ★★★
-    // Netlify Functions 支持返回 ReadableStream
-    const { readable, writable } = new TransformStream();
-    const writer = writable.getWriter();
-    const encoder = new TextEncoder();
-    const decoder = new TextDecoder();
-
-    // 将 Gemini API 的流式响应体泵送到我们的 TransformStream
-    // Gemini 的 streamGenerateContent?alt=sse 返回的是 Server-Sent Events (SSE) 格式
-    // 它本身就是 application/json，但每个 JSON 对象块由换行符分隔。
-    // 前端期望的是 application/json 流，每个 JSON 块是独立的。
-    // 如果 Gemini 返回的是 SSE (event: ..., data: ...)，我们需要提取 data 部分。
-    // 但是 Gemini 的 streamGenerateContent?alt=sse 端点返回的不是标准 SSE 格式，
-    // 而是 Content-Type: application/json，每个 JSON 块用换行符分隔。
-    // 这正是您前端 split('\n') 逻辑所期望的。
-
-    if (apiResponse.body) {
-      const reader = apiResponse.body.getReader();
-      (async () => {
-        try {
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              console.log("[Gemini Proxy] Stream from Gemini API finished.");
-              break;
-            }
-            // value 是 Uint8Array，直接将其写入 writable 端
-            // 前端会接收到这些原始的字节块，然后用 TextDecoder 解码并按 '\n' 分割
-            // console.log("[Gemini Proxy] Piping chunk to client:", decoder.decode(value, {stream: true}).substring(0,100) + "...");
-            await writer.write(value);
-          }
-        } catch (streamError) {
-          console.error("[Gemini Proxy] Error while reading stream from Gemini API:", streamError);
-          await writer.abort(streamError);
-        } finally {
-          await writer.close();
-        }
-      })(); // 立即执行这个异步泵送函数
+    // Prepare response headers
+    const responseHeaders = new Headers();
+    // Copy common and CORS headers
+    Object.entries(CORS_COMMON).forEach(([k, v]) => responseHeaders.set(k, v));
+    if (stream) {
+      responseHeaders.set('Content-Type', 'text/event-stream');
+      responseHeaders.set('Cache-Control', 'no-cache');
+      responseHeaders.set('Connection', 'keep-alive');
     } else {
-        console.error("[Gemini Proxy] Gemini API response body is null for streaming.");
-        await writer.close(); // 确保关闭
+      responseHeaders.set('Content-Type', 'application/json');
     }
 
-    return new Response(readable, {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/json', // Gemini streamGenerateContent 返回这个类型
-        'Access-Control-Allow-Origin': '*',
-        'X-Content-Type-Options': 'nosniff' // 推荐，防止浏览器猜测MIME类型
-      }
+    // Non-stream: log full body and return
+    const text = await apiResponse.text();
+    console.log('▶️ [Response] Body Text (forced non-stream):', text);
+    
+    // 确保响应头是 application/json
+    responseHeaders.set('Content-Type', 'application/json');
+
+    return new Response(text, {
+        status: apiResponse.status,
+        statusText: apiResponse.statusText,
+        headers: responseHeaders,
+    });
+    
+
+      const { readable, writable } = new TransformStream({
+        transform(chunk, controller) {
+            // chunk 是 Uint8Array 格式的原始数据
+            const decodedChunk = new TextDecoder().decode(chunk);
+            console.log('▶️ [Stream Chunk]:', decodedChunk);
+            // 将原始数据块转发出去
+            controller.enqueue(chunk);
+        },
+        flush(controller) {
+            console.log('▶️ [Stream] Finished flushing.');
+            controller.terminate();
+        }
     });
 
-  } catch (error) {
-    console.error('[Gemini Proxy] Network or other error calling Gemini API:', error);
-    return new Response(JSON.stringify({ error: 'Proxy failed to fetch from Gemini API', details: error.message }), {
+    // ★★★ 核心修复：使用 pipeTo 并等待它完成 ★★★
+    // pipeTo 会自动处理流的读取、写入和关闭，并返回一个 Promise
+    // 整个 handler 函数会等待这个 Promise 完成，确保流被完整传输
+    apiResponse.body.pipeTo(writable);
+
+    // 返回 TransformStream 的可读端
+    return new Response(readable, {
+        status: apiResponse.status,
+        statusText: apiResponse.statusText,
+        headers: responseHeaders,
+    });
+
+  } catch (err) {
+    console.error('❌ [Proxy] Network/internal error:', err.message);
+    return new Response(JSON.stringify({ error: 'Proxy internal error', details: err.message }), {
       status: 502,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      headers: { ...CORS_COMMON, 'Content-Type': 'application/json' },
     });
   }
 }

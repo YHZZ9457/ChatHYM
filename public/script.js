@@ -3696,28 +3696,7 @@ if (sidebarHeader && logoDisplay && searchInput && searchWrapper) {
     clearCurrentBtn.addEventListener('click', clearCurrentConversation);
   }
 
-    promptTextarea = document.getElementById('prompt');
-    const clearPromptBtn = document.getElementById('clear-prompt-btn');
-
-    if (promptTextarea && clearPromptBtn) {
-    // 监听输入事件
-    promptTextarea.addEventListener('input', () => {
-        if (promptTextarea.value.length > 0) {
-            clearPromptBtn.style.display = 'block'; // 有内容时显示
-        } else {
-            clearPromptBtn.style.display = 'none'; // 无内容时隐藏
-        }
-    });
-
-    // 绑定清空事件
-    clearPromptBtn.addEventListener('click', () => {
-        promptTextarea.value = '';
-        clearPromptBtn.style.display = 'none';
-        promptTextarea.focus();
-        // 触发输入事件，让输入框高度自动调整
-        promptTextarea.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    }
+    
 
     const modelSelect = document.getElementById('model');
     if (modelSelect) {

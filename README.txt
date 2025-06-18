@@ -1,11 +1,11 @@
-ChatHYM v1.1.10
+ChatHYM v1.2
 
 一个可以运行多种生成式AI的API的小程序，有简单的界面。支持选择多种模型。另外还支持了ollama。
 
 使用前需要在env.exmaple.txt里面自己填入对应版本的API-Keys，然后保存为.env。
 或者也可以使用设置API-Keys.py，取决于你有没有Python。
 
-需要先下载Node.js并且点start安装服务才可以使用。
+需要先下载Node.js并且点start安装Netlify CLI服务才可以使用。
 
 注：本项目全部是用AI写的，除了这个README之外没有一点人工的成分
 
@@ -13,5 +13,6 @@ ChatHYM v1.1.10
 
 更新说明：
 
+v1.2：增加了流式/非流式切换，增加了token用量显示（支持的情况下）
 v1.1：增加了火山引擎的支持，重写和优化了部分逻辑
 v1.0.x:基于此前的LocalGPT项目开发，有小幅度改动。

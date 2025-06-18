@@ -1,4 +1,4 @@
-// --- START OF FILE netlify/functions/gemini-proxy.mjs (最终、最务实的 Gemini 思考控制版) ---
+// --- START OF FILE netlify/functions/gemini-proxy.mjs (最终、最安全、只增不减的修复版) ---
 
 /**
  * 将内部对话历史映射为 Gemini API 所需的、严格交替角色的 `contents` 格式。
@@ -53,6 +53,16 @@ export default async (request, context) => {
     const requestBody = await request.json();
     const { model, messages, stream, temperature, max_tokens, isManualThinkModeEnabled } = requestBody;
 
+    // ★★★ 核心修复：在这里增加一个防御性检查 ★★★
+    if (!Array.isArray(messages)) {
+        console.error('[Gemini Proxy] "messages" field is missing or not an array in the request body.');
+        return Response.json({ error: { message: 'Bad Request: "messages" field is required and must be an array.' } }, {
+            status: 400,
+            headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' }
+        });
+    }
+    // ★★★ 增加结束 ★★★
+
     const geminiContents = mapMessagesForGemini(messages);
 
     const geminiPayload = {
@@ -60,7 +70,7 @@ export default async (request, context) => {
       generationConfig: {
         ...(temperature !== undefined && { temperature }),
         ...(max_tokens !== undefined && { maxOutputTokens: max_tokens }),
-        thinkingConfig: {}, // 先创建一个空对象
+        thinkingConfig: {},
       },
     };
 
@@ -78,15 +88,12 @@ export default async (request, context) => {
     }
     
     if (stream) {
+        // --- 流式处理 (您的完整代码，保持不变) ---
         const geminiEndpoint = `${GEMINI_API_BASE_URL}${model}:streamGenerateContent?key=${API_KEY}&alt=sse`;
         console.log(`[Gemini Proxy] Requesting to STREAMING endpoint: ${model}`);
         console.log('[Gemini Proxy] Final Payload:', JSON.stringify(geminiPayload, null, 2));
         
-        const apiResponse = await fetch(geminiEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(geminiPayload),
-        });
+        const apiResponse = await fetch(geminiEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiPayload) });
 
         if (!apiResponse.ok) {
             const errorData = await apiResponse.json();
@@ -123,15 +130,12 @@ export default async (request, context) => {
         return new Response(readable, { status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' } });
 
     } else {
+        // --- 非流式处理 (您的完整代码，保持不变) ---
         const geminiEndpoint = `${GEMINI_API_BASE_URL}${model}:generateContent?key=${API_KEY}`;
         console.log(`[Gemini Proxy] Requesting to NON-STREAMING endpoint: ${model}`);
         console.log('[Gemini Proxy] Final Payload:', JSON.stringify(geminiPayload, null, 2));
 
-        const apiResponse = await fetch(geminiEndpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(geminiPayload),
-        });
+        const apiResponse = await fetch(geminiEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiPayload) });
 
         const responseText = await apiResponse.text();
         const headers = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };

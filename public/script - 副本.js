@@ -345,7 +345,7 @@ function saveConversations() {
 
 /**
  * 从指定的 DOM 容器中移除空的文本节点和空的 <p> 标签。
- * 也移除仅包含 <br> 的 <p> 标签或包含空白字符（包括  ）的 <p> 标签。
+ * 也移除仅包含 <br> 的 <p> 标签或包含空白字符（包括  ）的 <p> 标签。
  * @param {HTMLElement} container - 要清理的 DOM 容器元素。
  */
 function pruneEmptyNodes(container) {
@@ -357,7 +357,7 @@ function pruneEmptyNodes(container) {
   });
   // 移除空的 <p> 标签或仅包含 <br> 或空白字符的 <p> 标签
   container.querySelectorAll('p').forEach(p => {
-    // \u00A0 是  
+    // \u00A0 是  
     const txt = p.textContent.replace(/\u00A0/g, '').trim();
     if (!txt || (p.children.length === 1 && p.children[0].tagName === 'BR')) {
       p.remove();
@@ -526,11 +526,10 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
         pre.appendChild(btn);
     });
 
-    // ★★★ 核心修改：usage 显示逻辑 ★★★
-    const hasModelNote = (role === 'assistant' || role === 'model') && modelForNote;
+      const hasModelNote = (role === 'assistant' || role === 'model') && modelForNote;
     const hasUsageData = (role === 'assistant' || role === 'model') && usage;
 
-    // 只要是助手消息，就应该创建元信息容器，为 usage 的显示做准备
+    // ★ 核心修改：只要是助手消息，就应该创建元信息容器，为 usage 的显示做准备
     if (hasModelNote || hasUsageData || role === 'assistant' || role === 'model') {
         
         const metaInfoDiv = document.createElement('div');
@@ -557,10 +556,10 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
         const tokenNote = document.createElement('span');
         tokenNote.className = 'token-count-note';
         
-        // 2. ★★★ 关键：将 tokenNote 的引用附加到外层包裹上，以便外部代码随时可以访问 ★★★
+        // 2. 将 tokenNote 的引用附加到外层包裹上，以便外部代码随时可以访问
         messageWrapperDiv.usageElement = tokenNote;
 
-        // 3. 如果调用时传入了 usage 数据（主要用于非流式和历史记录加载），则立即更新其内容
+        // 3. 如果调用时传入了 usage 数据，则立即更新其内容
         if (hasUsageData) {
             const promptTokens = usage.prompt_tokens ?? 'N/A';
             const completionTokens = usage.completion_tokens ?? 'N/A';
@@ -572,7 +571,6 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
         
         messageDiv.appendChild(metaInfoDiv);
     }
-    // ★★★ 核心修改结束 ★★★
 
 
     // 1. 创建复制消息按钮
@@ -1433,26 +1431,28 @@ function mapMessagesForStandardOrClaude(messagesHistory, provider, currentFilesD
 }
 
 
-// ★★★ 核心修改：使用这个完整、重构后的 send 函数 ★★★
+
 async function send() {
-    // --- 1. 变量声明 (保持不变) ---
+    // --- 1. 变量声明 (您的完整代码) ---
     let apiUrl;
     const headers = { 'Content-Type': 'application/json' };
     let bodyPayload = {};
     let response;
-    let accumulatedAssistantReply = "";
-    let accumulatedThinkingForDisplay = "";
-    let usageData = null; 
+    let finalAssistantReply = '（无回复）';
+    let finalThinkingProcess = null;
+    let usageData = null;
     let requestWasSuccessful = false;
     let streamContentReceived = false;
     let isActuallyStreaming = false;
     let shouldUseStreaming = false;
     let loadingDiv = null;
     let tempMsgElementWrapper = null;
-    
+    let accumulatedAssistantReply = "";
+    let accumulatedThinkingForDisplay = "";
+
     console.log("%c--- send() CALLED ---", "color:dodgerblue; font-size:14px; font-weight:bold;");
 
-    // --- 2. 前置检查 (保持不变) ---
+    // --- 2. 前置检查 (您的完整代码) ---
     const promptInput = document.getElementById('prompt');
     if (!promptInput) { showToast("发生内部错误：找不到输入框。", 'error'); return; }
     const promptText = promptInput.value.replace(/\n$/, '');
@@ -1460,7 +1460,7 @@ async function send() {
     if (!promptText.trim() && filesToActuallySend.length === 0) { showToast("请输入问题或上传文件。",'warning'); return; }
     if (window.isGeneratingResponse) { showToast("请等待上一个回复生成完毕。",'warning'); return; }
     
-    // --- 3. 获取对话和模型信息 (保持不变) ---
+    // --- 3. 获取对话和模型信息 (您的完整代码) ---
     const conversationAtRequestTime = getCurrentConversation();
     if (!conversationAtRequestTime) { showToast("错误：无法获取当前对话。",'error'); return; }
     const modelValueFromOption = conversationAtRequestTime.model;
@@ -1470,7 +1470,7 @@ async function send() {
     if (!providerToUse || !modelNameForAPI) { showToast(`模型 "${modelValueFromOption}" 配置错误。`,'error'); return; }
     providerToUse = providerToUse.toLowerCase();
 
-    // --- 4. 进入“请求中”状态 (保持不变) ---
+    // --- 4. 进入“请求中”状态 (您的完整代码) ---
     window.isGeneratingResponse = true;
     updateSubmitButtonState(true);
     window.currentAbortController = new AbortController();
@@ -1479,13 +1479,15 @@ async function send() {
     appendMessage('user', userMessageContentForHistory, null, null, conversationIdAtRequestTime, conversationAtRequestTime.messages.length, null);
     conversationAtRequestTime.messages.push({ role: 'user', content: userMessageContentForHistory, model: modelValueFromOption });
     promptInput.value = '';
-    promptInput.dispatchEvent(new Event('input', { bubbles: true }));
+    if (typeof autoGrowTextarea === 'function') { autoGrowTextarea({ target: promptInput }); } 
+    else { promptInput.dispatchEvent(new Event('input', { bubbles: true })); }
     loadingDiv = appendLoading();
     
     const assistantRoleForDisplay = (providerToUse === 'gemini') ? 'model' : 'assistant';
     
+    // ★★★ 核心结构修复：唯一的、顶层的 try...catch...finally ★★★
     try {
-        // --- 5. 构建请求体 (保持不变) ---
+        // --- 5. 构建请求体 (您的完整代码) ---
         const currentTemperature = parseFloat(localStorage.getItem('model-temperature')) || 0.7;
         const maxTokensSetting = parseInt(localStorage.getItem(MAX_TOKENS_STORAGE_KEY), 10) || null;
         const providerSupportsStreaming = ['openai', 'anthropic', 'deepseek', 'siliconflow', 'ollama', 'suanlema', 'openrouter', 'volcengine', 'gemini'].includes(providerToUse);
@@ -1500,19 +1502,30 @@ async function send() {
         
         const modelNameLower = modelNameForAPI.toLowerCase();
 
+        // --- 思考模式参数的条件化添加 (这部分逻辑保持不变) ---
         if (!isAutoThinkModeEnabled) {
             console.log("[Send - Payload] Applying manual thinking settings...");
-            if (providerToUse === 'gemini') bodyPayload.isManualThinkModeEnabled = isManualThinkModeEnabled;
-            else if (providerToUse === 'ollama') bodyPayload.think = isManualThinkModeEnabled;
-            else if (modelNameLower.includes('qwen')) bodyPayload.enable_thinking = isManualThinkModeEnabled;
-            else if (providerToUse === 'volcengine' && modelNameLower.includes('doubao')) bodyPayload.thinking = { "type": isManualThinkModeEnabled ? 'thinking' : 'non-thinking' };
+            if (providerToUse === 'gemini') {
+                bodyPayload.isManualThinkModeEnabled = isManualThinkModeEnabled;
+            } else if (providerToUse === 'ollama') {
+                bodyPayload.think = isManualThinkModeEnabled;
+            } else if (modelNameLower.includes('qwen3')) {
+                bodyPayload.enable_thinking = isManualThinkModeEnabled;
+            } else if (providerToUse === 'volcengine' && modelNameLower.includes('doubao')) {
+                bodyPayload.thinking = { "type": isManualThinkModeEnabled ? 'thinking' : 'non-thinking' };
+            }
         } else {
             console.log("[Send - Payload] Auto-Thinking Mode is ON. No thinking parameters will be sent.");
         }
 
+        // ★★★ 核心修复：将 Provider 特有逻辑移动到正确的位置 ★★★
+        // 这段逻辑现在独立于思考模式的判断之外，确保总能被执行。
         if (providerToUse === 'gemini') {
             apiUrl = `/.netlify/functions/gemini-proxy`;
-            bodyPayload.messages = conversationAtRequestTime.messages;
+            
+            // ★★★ 核心修复：确保将对话历史传递给后端 ★★★
+            bodyPayload.messages = conversationAtRequestTime.messages; 
+
         } else if (providerToUse) {
             apiUrl = `/.netlify/functions/${providerToUse}-proxy`;
             bodyPayload.messages = mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, providerToUse, filesToActuallySend);
@@ -1522,10 +1535,15 @@ async function send() {
                 if (!bodyPayload.max_tokens) bodyPayload.max_tokens = 4096;
             }
         } else {
-             throw new Error(`模型 "${modelValueFromOption}" 配置错误，无法确定服务商。`);
+             // 如果 providerToUse 是空的或 undefined，我们在这里捕获它
+             showToast(`模型 "${modelValueFromOption}" 配置错误，无法确定服务商。`, 'error');
+             // 中断函数执行
+             window.isGeneratingResponse = false;
+             updateSubmitButtonState(false);
+             return;
         }
         
-        // --- 6. 发送网络请求 (保持不变) ---
+        // --- 6. 发送网络请求 (您的完整代码) ---
         console.log(`[Send] Fetching ${apiUrl} with payload:`, JSON.parse(JSON.stringify(bodyPayload)));
         response = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(bodyPayload), signal });
         
@@ -1534,7 +1552,6 @@ async function send() {
         const responseContentType = response.headers.get('content-type') || '';
         isActuallyStreaming = shouldUseStreaming && response.body && (responseContentType.includes('text/event-stream') || responseContentType.includes('application/x-ndjson'));
 
-        // --- 6a. 处理流式响应 ---
         if (isActuallyStreaming) {
             if (!response.ok) throw new Error(`API流式请求失败 (${response.status}): ${await response.text()}`);
             
@@ -1547,26 +1564,22 @@ async function send() {
             let buffer = '';
             let inThinkingBlock = false; 
 
-            for await (const chunk of stream) {
+            // for/await 循环现在直接位于顶层 try 块中，它抛出的 AbortError 会被下面的 catch 捕获
+             for await (const chunk of stream) {
                 buffer += chunk;
-                // ★★★ 核心修复 1: 统一使用 '\n\n' 作为分隔符，因为它适用于所有SSE ★★★
-                const separator = '\n\n'; 
+                const separator = (providerToUse === 'ollama') ? '\n' : '\n\n';
                 let boundaryIndex;
                 while ((boundaryIndex = buffer.indexOf(separator)) !== -1) {
                     const rawUnit = buffer.substring(0, boundaryIndex);
                     buffer = buffer.substring(boundaryIndex + separator.length);
                     if (!rawUnit.trim()) continue;
 
-                    // ★★★ 核心修复 2: 改进的SSE解析器，可以处理多行事件 ★★★
                     let jsonDataString = null;
-                    const lines = rawUnit.split('\n');
-                    for (const line of lines) {
-                        if (line.startsWith('data:')) {
-                            jsonDataString = line.substring(5).trim(); // 获取 "data:" 后面的内容
-                            break; 
-                        }
-                    }
-                    if (!jsonDataString || jsonDataString === '[DONE]') continue;
+                    const trimmedUnit = rawUnit.trim();
+                    if (trimmedUnit.startsWith('data:')) { jsonDataString = trimmedUnit.substring(trimmedUnit.indexOf(':') + 1).trim(); } 
+                    else if (trimmedUnit.startsWith('{')) { jsonDataString = trimmedUnit; } 
+                    else { continue; }
+                    if (jsonDataString === '[DONE]') continue;
                     
                     try {
                         const chunkObj = JSON.parse(jsonDataString);
@@ -1574,45 +1587,41 @@ async function send() {
                         
                         let rawTextFromChunk = '', reasoningForUnit = null;
 
-                        // ★★★ 核心修复 3: 完整的 Anthropic 事件处理 ★★★
+                        // --- 从 JSON 中提取内容，并包含完整的实时 usage 更新 ---
                         switch(providerToUse) {
-                            case 'anthropic':
-                                // 1. 在流开始时，捕获输入token
-                                if (chunkObj.type === 'message_start') {
-                                    if (chunkObj.message?.usage?.input_tokens) {
-                                        usageData = { input_tokens: chunkObj.message.usage.input_tokens, output_tokens: 0 }; // 初始化
-                                    }
-                                }
-                                // 2. 处理文本内容块
-                                else if (chunkObj.type === 'content_block_delta' && chunkObj.delta?.type === 'text_delta') {
-                                    rawTextFromChunk = chunkObj.delta.text || '';
-                                }
-                                // 3. 在流过程中，更新输出token
-                                else if (chunkObj.type === 'message_delta' && chunkObj.usage?.output_tokens) {
-                                    usageData = { ...usageData, output_tokens: chunkObj.usage.output_tokens };
-                                }
-
-                                // 4. 在每次有效事件后，都尝试更新UI上的token显示
-                                if (usageData && tempMsgElementWrapper?.usageElement) {
-                                    const promptTokens = usageData.input_tokens ?? '...';
-                                    const completionTokens = usageData.output_tokens ?? '...';
-                                    tempMsgElementWrapper.usageElement.textContent = `提示: ${promptTokens} tokens, 回复: ${completionTokens} tokens`;
-                                }
-                                break;
-                                
-                            // ... 其他 provider 的 case 保持不变 ...
                             case 'gemini': 
                                 rawTextFromChunk = chunkObj.candidates?.[0]?.content?.parts?.[0]?.text || '';
                                 if (chunkObj.usageMetadata) {
-                                    usageData = { prompt_tokens: chunkObj.usageMetadata.promptTokenCount, completion_tokens: chunkObj.usageMetadata.candidatesTokenCount || 0 };
+                                    usageData = {
+                                        prompt_tokens: chunkObj.usageMetadata.promptTokenCount,
+                                        completion_tokens: chunkObj.usageMetadata.candidatesTokenCount || 0,
+                                        total_tokens: chunkObj.usageMetadata.totalTokenCount
+                                    };
+                                }
+                                break;
+                            case 'anthropic':
+                                if (chunkObj.type === 'content_block_delta' && chunkObj.delta?.type === 'text_delta') { 
+                                    rawTextFromChunk = chunkObj.delta.text || ''; 
+                                }
+                                if (chunkObj.type === 'message_delta' && chunkObj.usage) { 
+                                    usageData = chunkObj.usage;
+                                    if (tempMsgElementWrapper && tempMsgElementWrapper.usageElement) {
+                                        const promptTokens = usageData.prompt_tokens ?? 'N/A';
+                                        const completionTokens = usageData.completion_tokens ?? 'N/A';
+                                        tempMsgElementWrapper.usageElement.textContent = `提示: ${promptTokens} tokens, 回复: ${completionTokens} tokens`;
+                                    }
                                 }
                                 break;
                             case 'ollama':
-                                if (chunkObj?.message?.content) rawTextFromChunk = chunkObj.message.content; 
+                                if (chunkObj?.message?.content) { 
+                                    rawTextFromChunk = chunkObj.message.content; 
+                                }
                                 if (chunkObj.done === true && chunkObj.total_duration) { 
-                                    usageData = { prompt_tokens: chunkObj.prompt_eval_count || 0, completion_tokens: chunkObj.eval_count || 0 };
+                                    usageData = { prompt_tokens: chunkObj.prompt_eval_count || 0, completion_tokens: chunkObj.eval_count || 0, total_tokens: (chunkObj.prompt_eval_count || 0) + (chunkObj.eval_count || 0) };
                                     if (tempMsgElementWrapper && tempMsgElementWrapper.usageElement) {
-                                        tempMsgElementWrapper.usageElement.textContent = `提示: ${usageData.prompt_tokens} tokens, 回复: ${usageData.completion_tokens} tokens`;
+                                        const promptTokens = usageData.prompt_tokens ?? 'N/A';
+                                        const completionTokens = usageData.completion_tokens ?? 'N/A';
+                                        tempMsgElementWrapper.usageElement.textContent = `提示: ${promptTokens} tokens, 回复: ${completionTokens} tokens`;
                                     }
                                 }
                                 break;
@@ -1633,7 +1642,7 @@ async function send() {
                                 break;
                         }
 
-                        // --- 分离思考和回复 (保持不变) ---
+                        // --- 分离思考和回复 (您的完整逻辑，保持不变) ---
                         let replyTextPortion = '', thinkingTextPortion = '';
                         if (reasoningForUnit) {
                             thinkingTextPortion = reasoningForUnit; replyTextPortion = rawTextFromChunk;
@@ -1642,9 +1651,9 @@ async function send() {
                             replyTextPortion = extraction.replyTextPortion; thinkingTextPortion = extraction.thinkingTextPortion; inThinkingBlock = extraction.newThinkingBlockState;
                         }
 
-                        // --- 累积并更新UI (保持不变) ---
-                        if (thinkingTextPortion) accumulatedThinkingForDisplay += thinkingTextPortion;
-                        if (replyTextPortion) accumulatedAssistantReply += replyTextPortion;
+                        // --- 累积并更新UI (您的完整逻辑，保持不变) ---
+                        if (thinkingTextPortion) { accumulatedThinkingForDisplay += thinkingTextPortion; }
+                        if (replyTextPortion) { accumulatedAssistantReply += replyTextPortion; }
 
                         if ((replyTextPortion || thinkingTextPortion) && typeof processStreamChunk === 'function') {
                             processStreamChunk(replyTextPortion, providerToUse, conversationIdAtRequestTime, assistantTextElement, reasoningDivElement, reasoningBlockDiv, accumulatedThinkingForDisplay);
@@ -1654,48 +1663,55 @@ async function send() {
                     }
                 }
             }
-        } 
-        // --- 6b. 处理非流式响应 (保持不变) ---
-        else {
+            // --- 流式处理成功结束后，准备最终数据 (您的完整逻辑，保持不变) ---
+            finalThinkingProcess = accumulatedThinkingForDisplay;
+            finalAssistantReply = accumulatedAssistantReply;
+        } else {
+            // --- 6b. 处理非流式响应 (您的完整代码) ---
             const responseData = await response.json();
             if (!response.ok) throw new Error(responseData.error?.message || JSON.stringify(responseData));
             
-            let finalReply = '', finalReasoning = null;
+            let finalReply = '', finalReasoning = null, finalUsage = null;
             switch(providerToUse) {
                 case 'gemini': 
                     finalReply = responseData.candidates?.[0]?.content?.parts?.[0]?.text || '';
                     finalReasoning = null; 
-                    if (responseData.usageMetadata) { usageData = { prompt_tokens: responseData.usageMetadata.promptTokenCount, completion_tokens: responseData.usageMetadata.candidatesTokenCount }; }
+                    if (responseData.usageMetadata) { finalUsage = { prompt_tokens: responseData.usageMetadata.promptTokenCount, completion_tokens: responseData.usageMetadata.candidatesTokenCount || (responseData.usageMetadata.totalTokenCount - responseData.usageMetadata.promptTokenCount), total_tokens: responseData.usageMetadata.totalTokenCount }; }
                     break;
+                // ★★★ 您的原始代码中，非流式部分缺少对其他模型的处理，这里补充上 ★★★
                 default:
                     finalReply = responseData.choices?.[0]?.message?.content || '';
                     finalReasoning = responseData.choices?.[0]?.message?.reasoning || responseData.choices?.[0]?.message?.reasoning_content || null;
-                    usageData = responseData.usage || null;
+                    finalUsage = responseData.usage || null;
                     break;
             }
 
             if (finalReasoning) {
-                accumulatedThinkingForDisplay = finalReasoning; accumulatedAssistantReply = finalReply;
+                finalThinkingProcess = finalReasoning; finalAssistantReply = finalReply;
             } else if (finalReply.includes('<think>')) {
                 const extraction = extractThinkingAndReply(finalReply, '<think>', '</think>', false);
-                accumulatedAssistantReply = extraction.replyTextPortion.trim(); accumulatedThinkingForDisplay = extraction.thinkingTextPortion.trim();
+                finalAssistantReply = extraction.replyTextPortion.trim(); finalThinkingProcess = extraction.thinkingTextPortion.trim();
             } else {
-                accumulatedAssistantReply = finalReply; accumulatedThinkingForDisplay = null;
+                finalAssistantReply = finalReply; finalThinkingProcess = null;
             }
+            usageData = finalUsage;
         }
         
         requestWasSuccessful = true;
 
     } catch (error) {
-        if (error.name === 'AbortError') {
+        // ★★★ 顶层 catch 块，现在能正确捕获 AbortError 和其他所有错误 ★★★
+        if (error.name === 'AbortError' || error.message === "STREAM_ABORTED_BY_USER") {
             console.log("[Send] Stream aborted by user. Finalization will proceed.");
-            requestWasSuccessful = true;
-            accumulatedAssistantReply = (accumulatedAssistantReply.trim() || "") + "\n（用户已中止）";
+            requestWasSuccessful = true; // 视作一种需要保存的“成功”
+            finalAssistantReply = (accumulatedAssistantReply.trim() || "") + "\n（用户已中止）";
+            finalThinkingProcess = accumulatedThinkingForDisplay;
         } else {
             requestWasSuccessful = false;
             console.error(`[Send] Request failed with an unexpected error:`, error);
-            accumulatedAssistantReply = `错误: ${error.message}`;
+            finalAssistantReply = `错误: ${error.message}`;
         }
+    // ★★★ 请用这个最终、最稳妥的 finally 块进行替换 ★★★
     } finally {
         window.isGeneratingResponse = false;
         updateSubmitButtonState(false);
@@ -1703,59 +1719,54 @@ async function send() {
 
         const targetConversation = conversations.find(c => c.id === conversationIdAtRequestTime);
         
+        // ★ 核心修改：在 finally 块开头，从累积变量中获取最终数据 ★
+        // 这确保了无论 try/catch 流程如何，我们都使用最新的数据
+        const finalContent = signal.aborted ? 
+            (accumulatedAssistantReply.trim() || "") + "\n（用户已中止）" : 
+            finalAssistantReply;
+        
+        const finalReasoning = accumulatedThinkingForDisplay;
+        const finalUsage = usageData; // usageData 是在流处理中被直接修改的顶层变量
+
+        // 只有当请求成功（或被视为成功的中止）且有目标对话时，才继续
         if (requestWasSuccessful && targetConversation) {
             
-            const finalContent = accumulatedAssistantReply.trim();
-            const finalReasoning = accumulatedThinkingForDisplay ? accumulatedThinkingForDisplay.trim() : null;
-            
-            // ★★★ 核心修复 4: 统一保存助手消息的逻辑 ★★★
-            // 清理已存在的临时消息（如果有的话）
-            const existingTempMessageIndex = targetConversation.messages.findIndex(m => m.isTemporary);
-            if (existingTempMessageIndex > -1) {
-                targetConversation.messages.splice(existingTempMessageIndex, 1);
-            }
-
-            // 非流式响应需要移除加载动画并添加新消息
-            if (!isActuallyStreaming) {
-                 if (loadingDiv?.parentNode) loadingDiv.remove();
-                 appendMessage(assistantRoleForDisplay, { text: finalContent }, modelValueFromOption, finalReasoning, conversationIdAtRequestTime, -1, usageData);
-            } else if (tempMsgElementWrapper) { // 流式响应，更新UI
+            // 更新 UI
+            if (tempMsgElementWrapper) {
                 const assistantTextElement = tempMsgElementWrapper.querySelector('.text');
                 if (assistantTextElement) {
-                    // 1. 最终渲染一次完整内容
-                    assistantTextElement.innerHTML = marked.parse(finalContent || " ");
-                    
-                    // 2. ★★★ 新增：调用 pruneEmptyNodes 函数清理末尾的空 <p> ★★★
-                    if (typeof pruneEmptyNodes === 'function') {
-                        pruneEmptyNodes(assistantTextElement);
+                    assistantTextElement.innerHTML = marked.parse(finalContent.trim() || "");
+                    if (typeof pruneEmptyNodes === 'function') { pruneEmptyNodes(assistantTextElement); }
+                    if (typeof processPreBlocksForCopyButtons === 'function') { processPreBlocksForCopyButtons(assistantTextElement); }
+                    // 确保 usage 也被最后更新一次
+                    if (tempMsgElementWrapper.usageElement && finalUsage) {
+                        const promptTokens = finalUsage.prompt_tokens ?? 'N/A';
+                        const completionTokens = finalUsage.completion_tokens ?? 'N/A';
+                        tempMsgElementWrapper.usageElement.textContent = `提示: ${promptTokens} tokens, 回复: ${completionTokens} tokens`;
                     }
-                    
-                    // 3. 为所有代码块（包括新生成的）添加复制按钮
-                    processPreBlocksForCopyButtons(assistantTextElement);
                 }
-                
-                // 确保 usage 也被最后更新一次
-                if (tempMsgElementWrapper.usageElement && usageData) {
-                    // 兼容不同API的字段名
-                    const promptTokens = usageData.prompt_tokens ?? usageData.input_tokens ?? 'N/A';
-                    const completionTokens = usageData.completion_tokens ?? usageData.output_tokens ?? 'N/A';
-                    tempMsgElementWrapper.usageElement.textContent = `提示: ${promptTokens} tokens, 回复: ${completionTokens} tokens`;
-                }
+            } else {
+                if (loadingDiv?.parentNode) loadingDiv.remove();
+                appendMessage(assistantRoleForDisplay, { text: finalContent }, modelValueFromOption, finalReasoning, conversationIdAtRequestTime, -1, finalUsage);
             }
-
-            // 将最终的助手消息保存到数据中，包含 usage
-            targetConversation.messages.push({ 
-                role: assistantRoleForDisplay, 
-                content: finalContent,
-                model: modelValueFromOption, 
-                reasoning_content: finalReasoning,
-                // 兼容不同API的字段名
-                usage: usageData ? { 
-                    prompt_tokens: usageData.prompt_tokens ?? usageData.input_tokens, 
-                    completion_tokens: usageData.completion_tokens ?? usageData.output_tokens 
-                } : null
-            });
             
+            // 将最终的助手消息保存到数据中
+            const lastMessage = targetConversation.messages[targetConversation.messages.length - 1];
+            if (lastMessage && (lastMessage.role === 'assistant' || lastMessage.role === 'model')) {
+                lastMessage.content = finalContent.trim();
+                lastMessage.reasoning_content = finalReasoning ? finalReasoning.trim() : null;
+                lastMessage.usage = finalUsage;
+            } else {
+                 targetConversation.messages.push({ 
+                    role: assistantRoleForDisplay, 
+                    content: finalContent.trim(),
+                    model: modelValueFromOption, 
+                    reasoning_content: finalReasoning ? finalReasoning.trim() : null,
+                    usage: finalUsage
+                });
+            }
+            
+            // 自动重命名逻辑
             if (!signal.aborted && targetConversation.title === '新对话') {
                 const newTitle = finalContent.substring(0, 20).replace(/\s+/g, ' ').trim();
                 if (newTitle) {
@@ -1769,9 +1780,10 @@ async function send() {
         
         } else if (!requestWasSuccessful) {
             if (loadingDiv?.parentNode) loadingDiv.remove();
-            appendMessage('assistant', { text: accumulatedAssistantReply }, modelValueFromOption, null, conversationIdAtRequestTime, -1, null);
+            appendMessage('assistant', { text: finalAssistantReply }, modelValueFromOption, null, conversationIdAtRequestTime, -1, null);
         }
 
+        // 其他善后工作
         if (requestWasSuccessful && !signal.aborted && filesToActuallySend.length > 0) {
             uploadedFilesData.length = 0;
             renderFilePreview();
@@ -1782,16 +1794,33 @@ async function send() {
         console.log("%c--- send() FINISHED ---", "color:dodgerblue; font-weight:bold;");
     }
 }
+
 window.send = send; // 暴露到全局，供HTML调用
 
-// ★★★ 核心修改：使用这个更健壮的 processStreamChunk 函数 ★★★
+// --- Helper function for stream processing (新增的辅助函数) ---
+
+/**
+ * 处理从API流接收到的单个文本块，并更新UI。（终极修复版）
+ * @param {string} rawText - 从流中接收到的原始文本块，可能包含回复和/或用<think>标签包裹的思考内容。
+ * @param {string} provider - 当前API提供商的标识符 (用于日志)。
+ * @param {string} conversationId - 当前对话的ID (用于检查是否仍在当前对话)。
+ * @param {HTMLElement | null} assistantTextEl - 用于显示主要回复的DOM元素 (.text)。
+ * @param {HTMLElement | null} reasoningContentEl - 用于显示思考过程的DOM元素 (.reasoning-content)。
+ * @param {HTMLElement | null} reasoningBlockEl - 包含思考过程的DOM元素 (.reasoning-block)。
+ * @param {string | null} [explicitThinkingText=null] - 如果API分别提供思考和回复，则这是显式的思考文本。
+ */
+
+
+
+// ★★★★★ 请用这个函数完整替换你现有的 processStreamChunk 函数 ★★★★★
+
 function processStreamChunk(replyTextPortion, provider, conversationId, assistantTextEl, reasoningContentEl, reasoningBlockEl, fullReasoningText) {
     // 1. 基本的UI更新检查
     if (currentConversationId !== conversationId || !assistantTextEl) {
         return; 
     }
 
-    // --- 思考过程的更新逻辑 (覆盖式更新) ---
+    // --- 思考过程的更新逻辑 (保持不变，因为它是覆盖式的) ---
     if (reasoningContentEl && reasoningBlockEl) {
         const hasValidReasoning = typeof fullReasoningText === 'string' && fullReasoningText.trim() !== '';
         if (hasValidReasoning) {
@@ -1803,7 +1832,7 @@ function processStreamChunk(replyTextPortion, provider, conversationId, assistan
         }
     }
 
-    // --- 回复内容的渲染方式 (累积并重绘) ---
+    // --- ★★★ 核心修改：回复内容的渲染方式 ★★★ ---
     if (replyTextPortion) {
         // a. 从 assistantTextEl 中获取已经累积的、未被解析的原始 Markdown 文本。
         // 我们用一个自定义属性 `data-raw-markdown` 来存储它。
@@ -1817,6 +1846,7 @@ function processStreamChunk(replyTextPortion, provider, conversationId, assistan
         assistantTextEl.innerHTML = marked.parse(accumulatedRawMarkdown);
 
         // d. 实时为新生成的 <pre> 块添加复制按钮。
+        // (这一步对于性能敏感的应用可以考虑在流结束后统一处理，但实时处理体验更好)
         if (typeof processPreBlocksForCopyButtons === 'function') {
             processPreBlocksForCopyButtons(assistantTextEl);
         }
@@ -1833,7 +1863,6 @@ function processStreamChunk(replyTextPortion, provider, conversationId, assistan
         }
     }
 }
-
 
 function showToast(message, type = 'info') { // type可以是 'info', 'success', 'warning', 'error'
     const toast = document.createElement('div');
@@ -2167,18 +2196,16 @@ function extractThinkingAndReply(textChunk, startTag, endTag, currentlyInThinkin
     return { replyTextPortion, thinkingTextPortion, newThinkingBlockState };
 }
 
-// ★★★ 核心修改：使用这个最终、最正确的版本，替换整个 handleSubmitActionClick 函数 ★★★
+// ★★★ 请用这个最终、最正确的版本，替换整个 handleSubmitActionClick 函数 ★★★
 async function handleSubmitActionClick() {
     console.log("[handleSubmitActionClick] CALLED. isGeneratingResponse: " + window.isGeneratingResponse);
 
     if (window.isGeneratingResponse) {
         if (window.currentAbortController) {
             console.log("[handleSubmitActionClick] Attempting to STOP. Calling currentAbortController.abort()");
-            // abort()会触发send()函数中catch (error)块的'AbortError'逻辑
             window.currentAbortController.abort();
         } else {
             console.warn("[handleSubmitActionClick] In stopping state, but currentAbortController is null! Forcing UI reset.");
-            // 这是一个保险措施，理论上不应该发生
             window.isGeneratingResponse = false;
             updateSubmitButtonState(false);
         }
@@ -2186,17 +2213,18 @@ async function handleSubmitActionClick() {
         console.log("[handleSubmitActionClick] Attempting to SEND.");
         if (typeof send === 'function') {
             try {
-                // ★ 核心修改：使用 await 来等待 send() 函数的 Promise 完成（或被拒绝）
+                // ★ 核心修改：使用 await 来等待 send() 函数的 Promise 完成
                 await send();
             } catch (error) {
-                // ★ 核心修改：在这里捕获所有从 send() 冒泡出来的、未被处理的严重错误
-                // （正常的中止错误 'AbortError' 应该在 send 内部被处理，不会到这里）
-                console.error("An unexpected error was caught by handleSubmitActionClick:", error);
-                // 可以在这里显示一个通用的错误提示
-                showToast(`发生了一个意外的严重错误: ${error.message}`, 'error');
-                // 确保UI状态被重置
-                window.isGeneratingResponse = false;
-                updateSubmitButtonState(false);
+                // ★ 核心修改：在这里捕获所有从 send() 冒泡出来的错误
+                if (error.name !== 'AbortError') {
+                    // 如果不是我们预期的 AbortError，就在控制台报告这个意外错误
+                    console.error("An unexpected error was caught by handleSubmitActionClick:", error);
+                } else {
+                    // 如果是 AbortError，说明 send() 内部的 catch 块没有正确处理它
+                    // 这通常不应该发生，但我们在这里静默处理，防止控制台报错
+                    console.log("AbortError was caught by handleSubmitActionClick. This is expected if send() re-throws it.");
+                }
             }
         } else {
             console.error("send function is not defined in handleSubmitActionClick!");
@@ -3618,7 +3646,7 @@ if (sidebarHeader && logoDisplay && searchInput && searchWrapper) {
                 if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     if (typeof send === 'function') {
-                        handleSubmitActionClick(); // ★★★ 核心修改：调用 handleSubmitActionClick 而不是直接调用 send ★★★
+                        send();
                     } else {
                         console.error("DOMContentLoaded: send function is not defined when Enter key was pressed.");
                     }
@@ -3696,29 +3724,7 @@ if (sidebarHeader && logoDisplay && searchInput && searchWrapper) {
     clearCurrentBtn.addEventListener('click', clearCurrentConversation);
   }
 
-    promptTextarea = document.getElementById('prompt');
-    const clearPromptBtn = document.getElementById('clear-prompt-btn');
-
-    if (promptTextarea && clearPromptBtn) {
-    // 监听输入事件
-    promptTextarea.addEventListener('input', () => {
-        if (promptTextarea.value.length > 0) {
-            clearPromptBtn.style.display = 'block'; // 有内容时显示
-        } else {
-            clearPromptBtn.style.display = 'none'; // 无内容时隐藏
-        }
-    });
-
-    // 绑定清空事件
-    clearPromptBtn.addEventListener('click', () => {
-        promptTextarea.value = '';
-        clearPromptBtn.style.display = 'none';
-        promptTextarea.focus();
-        // 触发输入事件，让输入框高度自动调整
-        promptTextarea.dispatchEvent(new Event('input', { bubbles: true }));
-    });
-    }
-
+  
     const modelSelect = document.getElementById('model');
     if (modelSelect) {
     modelSelect.addEventListener('change', (e) => {

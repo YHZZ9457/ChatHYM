@@ -796,28 +796,69 @@ body.dark-theme .input-area textarea#prompt:focus {
   background-color: #c53030; /* 红色背景 hover */
 }
 
+/* 1. 定义基础结构和布局 */
+.header-model-selector select#model {
+  /* --- 定位与层级 --- */
+  z-index: 10;
 
-
-/* 模型切换下拉 (位于头部) - 保持原始选择器，参考图片调整 */
-.header-model-selector select#model { /* 之前分散，现在统一 */
-  z-index:10; /* 确保在头部不被遮挡 */
-  background:var(--input-bg); /* 使用输入框背景 */
-  color:var(--text-color);
-  border:1px solid var(--border-color);
-  border-radius:var(--border-radius-md);
-  padding: 7px 30px 7px 10px; /* 调整padding以适应箭头 */
-  appearance: none; /* 移除原生下拉箭头 */
-  -webkit-appearance: none;
-  background-image: url("data:image/svg+xml;charset=UTF-8,<svg width='10' height='6' viewBox='0 0 10 6' xmlns='http://www.w3.org/2000/svg'><path d='M0 0l5 6 5-6z' fill='%239CA3AF'/></svg>"); /* 灰色箭头 */
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  background-size: 10px 6px;
-  font-size: 0.9rem;
-  min-width: 180px; /* 最小宽度，参考图片 */
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  /* --- 尺寸与内边距 --- */
+  min-width: 180px;
+  padding: 7px 40px 7px 12px; /* 上下7, 右40(为箭头留足空间), 左12 */
   
+  /* --- 字体 --- */
+  font-size: 0.95rem;
+  font-family: inherit; /* 继承页面字体 */
+  
+  /* --- 移除原生外观 --- */
+  appearance: none;
+  -webkit-appearance: none;
+
+  /* --- 边框与背景 --- */
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-color);
+  background-color: var(--input-bg);
+  color: var(--text-color);
+
+  /* --- 自定义下拉箭头 --- */
+  background-repeat: no-repeat;
+  background-position: right 0.8rem center; /* 箭头位置 */
+  background-size: 1em; /* 箭头大小 */
+
+  /* --- 过渡效果 --- */
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 
+/* 2. 定义不同主题下的颜色和箭头 */
+
+/* --- 浅色主题 (Light Theme) --- */
+body.light-theme .header-model-selector select#model {
+  /* 箭头颜色 (深色箭头) */
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+}
+/* 浅色主题下的下拉选项 */
+body.light-theme .header-model-selector select#model option {
+  background: var(--bg-light);
+  color: var(--text-light);
+}
+
+/* --- 深色主题 (Dark Theme) --- */
+body.dark-theme .header-model-selector select#model {
+  /* 箭头颜色 (浅色箭头) */
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23a0aec0' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
+}
+/* 深色主题下的下拉选项 */
+body.dark-theme .header-model-selector select#model option {
+  background: var(--bg-dark); /* 或一个更深的颜色如 #1a202c */
+  color: var(--text-dark);
+}
+
+
+/* 3. 定义通用的焦点样式 */
+.header-model-selector select#model:focus {
+  outline: none;
+  border-color: var(--primary); /* 焦点时边框变为主题色 */
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2); /* 现代辉光效果 */
+}
 .header-actions {
   margin-left: auto; /* 这会将按钮组推到最右边 */
   display: flex;    /* 让内部按#archive-current-btn,钮水平排列 */
@@ -1841,11 +1882,14 @@ body.dark-theme .reasoning-content code { /* 深色主题行内代码 */
     left: 0;                  
     max-width: 280px;
     width: auto;
-    min-width: 200;
+    min-width: 200px;
     background: rgba(38, 40, 45, 0.95); 
     backdrop-filter: blur(10px);        
     border: 1px solid #303238;         
-    border-radius: 10px;                
+    border-radius: 10px;      
+    display: flex;
+    flex-direction: column; /* 让所有子元素垂直排列 */
+    gap: 14px;              /* ★ 定义所有子元素之间的统一垂直间距 */          
     padding: 12px 15px; /* 稍微调整内边距 */
     box-shadow: 0 6px 20px rgba(0,0,0,0.3), 0 2px 6px rgba(0,0,0,0.2); 
     z-index: 1070;                      
@@ -1855,41 +1899,33 @@ body.dark-theme .reasoning-content code { /* 深色主题行内代码 */
     transition: opacity 0.2s ease-in-out, transform 0.2s ease-in-out; 
 }
 
-/* 面板标题 - (保持不变) */
-.inline-chat-settings-panel h4.inline-settings-title {
-    margin: 0 0 12px 0;
-    font-size: 0.9em; 
-    color: #c0c8d8; 
-    font-weight: 500;
-    border-bottom: 1px solid #383a40;
-    padding-bottom: 10px;
-    text-align: left;
-}
+
 .inline-chat-settings-panel .setting-item {
-  
-  /* a. 移除卡片式样式 */
-  border: none;           /* 移除边框 */
-  background-color: transparent; /* 背景设为透明 */
-  padding: 0;             /* 移除内边距 */
-  border-radius: 0;       /* 移除圆角 */
-  
-  /* b. 核心修复：取消最小高度限制 */
-  min-height: auto !important; /* 或者 min-height: 0; */
-  
-  /* c. 设置合适的垂直间距 */
-  margin-bottom: 12px; /* 用 margin-bottom 来控制行与行之间的间距 */
-}
-
-/* 2. 确保最后一个项目没有多余的下边距 */
-.inline-chat-settings-panel .setting-item:last-child {
+  display: flex;
+  justify-content: space-between; /* 保持：让子元素两端对齐 */
+  align-items: center;          /* 保持：垂直居中 */
+  width: 100%;
   margin-bottom: 0;
+  /* 移除之前可能添加的 border, padding, min-height 等，让它成为一个纯粹的布局容器 */
+  border: none;
+  background-color: transparent;
+  padding: 0;
+  min-height: auto;
 }
 
-/* 最后一个条目不需要下外边距 */
-.inline-chat-settings-panel .setting-item:last-child {
-  margin-bottom: 0;
+.inline-chat-settings-panel .setting-item label:first-child { 
+    font-size: 0.9em;
+    color: #b0bac8; 
+    white-space: nowrap; 
+    
+    /* ★★★ 核心修改：让标签占据所有可用空间 ★★★ */
+    flex-grow: 1;
+    
+    /* (可选) 确保它不是一个 switch 的标签 */
+    &:not(.switch) {
+      margin-right: 12px; /* 给非开关标签和控件之间一点距离 */
+    }
 }
-
 .inline-chat-settings-panel .setting-item.inline-setting-item { 
     display: flex;          
     align-items: center;    
@@ -1921,6 +1957,7 @@ body.dark-theme .reasoning-content code { /* 深色主题行内代码 */
     font-size: 0.9em; /* 与标签字体大小一致 */
     text-align: center; 
     outline: none;
+    flex-shrink: 0;
     transition: border-color 0.15s, background-color 0.15s;
     -moz-appearance: textfield; 
     
@@ -1942,9 +1979,15 @@ body:not(.dark-theme) .inline-chat-settings-panel {
     border-color: #ced4da;
     box-shadow: 0 6px 20px rgba(0,0,0,0.1), 0 2px 6px rgba(0,0,0,0.08);
 }
-body:not(.dark-theme) .inline-chat-settings-panel h4.inline-settings-title {
-    color: #343a40;
-    border-bottom-color: #dee2e6;
+/* 面板标题 (深色主题/默认) */
+.inline-chat-settings-panel h4.inline-settings-title {
+    margin: 0 !important;
+    padding: 4px 0 12px 0; /* 上、左右、下 */
+    font-size: 0.9em; 
+    color: #c0c8d8; 
+    font-weight: 500;
+    text-align: left;
+
 }
 body:not(.dark-theme) .inline-chat-settings-panel .setting-item label {
     color: #495057;
@@ -2067,13 +2110,6 @@ body:not(.dark-theme) .inline-chat-settings-panel .setting-item input[type="numb
     text-align: left;
 }
 
-/* 预设列表项 (深色主题/默认 - 你可能还有 .preset-prompt-item 的样式，这里只改面板和标题) */
-/* .preset-prompts-panel .preset-prompt-item { ... } */
-/* .preset-prompts-panel .preset-prompt-item:hover { ... } */
-
-
-/* ===== 新增：浅色主题适配 ===== */
-/* 使用 body:not(.dark-theme) 或者 body.light-theme 作为浅色主题的选择器前缀 */
 
 body:not(.dark-theme) .preset-prompts-panel {
     /* 浅色主题背景和颜色 */
@@ -2085,12 +2121,13 @@ body:not(.dark-theme) .preset-prompts-panel {
     /* backdrop-filter: none; */
 }
 
-/* 浅色主题下的面板标题 */
-body:not(.dark-theme) .preset-prompts-panel .preset-prompts-title {
-    /* 浅色主题标题颜色 */
-    color: var(--text-secondary-light); /* 或一个具体的深灰色如 #343a40 */
-    /* 浅色主题分隔线颜色 */
-    border-bottom-color: var(--border-light);
+body:not(.dark-theme) .inline-chat-settings-panel h4.inline-settings-title {
+    color: #343a40; /* 设置浅色主题下的文字颜色 */
+    
+    /* ★★★ 核心修复：只覆盖颜色，不覆盖样式和宽度 ★★★ */
+    border-bottom-color: #dee2e6; /* 设置浅色主题下的分割线颜色 */
+
+    /* ★★★ 移除所有其他属性 (margin, padding, border-bottom) ★★★ */
 }
 
 /* 浅色主题下的预设列表项 (如果 .preset-prompt-item 的默认颜色不适合浅色主题) */
@@ -2116,6 +2153,9 @@ body:not(.dark-theme) .preset-prompts-panel::-webkit-scrollbar-thumb {
     background-color: #bbb; /* 浅灰色滑块 */
     border-radius: 3px;
 }
+
+
+
 /* 预设列表 */
 #preset-prompts-ul {
     list-style: none;
@@ -2561,4 +2601,40 @@ body.dark-theme .toast.toast-error {
 @keyframes loading-pulse {
   0%, 100% { opacity: 0.9; }
   50% { opacity: 0.5; }
+}
+
+/* 1. 让新的包裹容器 flex 布局，并占据可用空间 */
+.textarea-wrapper {
+    position: relative; /* 这是让内部按钮可以绝对定位的关键！ */
+    flex-grow: 1;      /* 允许它伸展并填充 input-main-row 中的剩余空间 */
+    display: flex;     /* 内部元素（textarea）可以更好地控制 */
+}
+
+/* 2. 确保 textarea 填满新的包裹容器 */
+.textarea-wrapper textarea {
+    width: 100%; /* 宽度占满父容器 */
+    /* 你的 textarea 其他样式，比如 padding, border, etc. */
+    /* ★ 关键：为右侧的按钮留出空间，避免文字被遮挡 */
+    padding-right: 35px !important; 
+}
+
+/* 3. 定位清空按钮 */
+#clear-prompt-btn {
+    position: absolute; /* 相对于 .textarea-wrapper 定位 */
+    right: 8px;         /* 距离右边框 8px */
+    top: 50%;           /* 垂直居中 */
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--text-color-secondary);
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
+    display: none; /* JS 会控制它的显示/隐藏 */
+    z-index: 5;    /* 确保它在 textarea 上方 */
+}
+
+#clear-prompt-btn:hover {
+    background-color: var(--background-color-tertiary);
+    color: var(--text-color-primary);
 }

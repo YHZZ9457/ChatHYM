@@ -1,9 +1,9 @@
 // =====================================================================
-// START: 终极健壮版 siliconflow-proxy.mjs (请完整替换)
+// START: 终极健壮版 siliconflow-proxy.mjs (带增强日志)
 // =====================================================================
 
 // netlify/functions/siliconflow-proxy.mjs
-console.log("SiliconFlow Proxy Function Loaded (v-Final - Robust Manual Pumping)");
+console.log("SiliconFlow Proxy Function Loaded (v-Final - Robust Manual Pumping with Logging)");
 
 const API_KEY = process.env.SILICONFLOW_API_KEY_SECRET;
 const API_URL = 'https://api.siliconflow.cn/v1/chat/completions';
@@ -19,18 +19,25 @@ export default async function handler(request) {
 
   // 2. 检查方法和 API Key
   if (request.method !== 'POST') { return new Response(JSON.stringify({ error: 'Method Not Allowed' }), { status: 405 }); }
-  if (!API_KEY) { return new Response(JSON.stringify({ error: 'Server Config Error: API Key not set.' }), { status: 500 }); }
+  if (!API_KEY) {
+    console.error("[SiliconFlow Proxy] CRITICAL: SILICONFLOW_API_KEY_SECRET environment variable is not set!");
+    return new Response(JSON.stringify({ error: 'Server Config Error: API Key not set.' }), { status: 500 });
+  }
 
   try {
     const requestBody = await request.json();
+    console.log("[SiliconFlow Proxy] Received request body from frontend:", JSON.stringify(requestBody, null, 2)); // 打印从前端收到的完整请求体
+
     const isStream = requestBody.stream || false;
-    
+
     // 3. 请求 SiliconFlow API
     const apiResponse = await fetch(API_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${API_KEY}` },
-      body: JSON.stringify(requestBody),
+      body: JSON.stringify(requestBody), // 将从前端收到的请求体直接转发
     });
+
+    console.log(`[SiliconFlow Proxy] API response status: ${apiResponse.status}`); // 打印API响应状态码
 
     // 4. 处理 API 返回的错误
     if (!apiResponse.ok) {
@@ -41,6 +48,7 @@ export default async function handler(request) {
 
     // 5. ★★★ 可靠的流式处理 ★★★
     if (isStream && apiResponse.body) {
+        console.log("[SiliconFlow Proxy] Handling as a STREAMING response.");
         const { readable, writable } = new TransformStream();
         const pump = async () => {
             const reader = apiResponse.body.getReader();
@@ -60,12 +68,14 @@ export default async function handler(request) {
         });
     } else {
         // 6. 处理非流式响应
+        console.log("[SiliconFlow Proxy] Handling as a NON-STREAMING response.");
         const json = await apiResponse.json();
         return new Response(JSON.stringify(json), { status: 200, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }});
     }
 
   } catch (err) {
-    console.error('[SiliconFlow Proxy] Network/internal error', err);
+    // 捕获请求体解析错误或fetch本身的T网络错误
+    console.error('[SiliconFlow Proxy] Network/internal error:', err);
     return new Response(JSON.stringify({ error: 'Proxy internal error', details: err.message }), { status: 502 });
   }
 }

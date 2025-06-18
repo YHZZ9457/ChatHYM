@@ -73,6 +73,11 @@
           "text": "OR Magistral Small",
           "value": "openrouter::mistralai/magistral-small-2506",
           "isHidden": true
+        },
+        {
+          "text": "OR Qwen3-8B",
+          "value": "openrouter::qwen/qwen3-8b-04-28",
+          "isHidden": false
         }
       ]
     },
@@ -82,17 +87,17 @@
       "options": [
         {
           "text": "Gemini 2.5 Pro",
-          "value": "gemini::gemini-2.5-pro-preview-05-06",
+          "value": "gemini::gemini-2.5-pro",
           "isHidden": false
         },
         {
           "text": "Gemini 2.5 FLash",
-          "value": "gemini::gemini-2.5-flash-preview-04-17",
+          "value": "gemini::gemini-2.5-flash",
           "isHidden": false
         },
         {
-          "text": "Gemini 2.5 FLash-0520",
-          "value": "gemini::gemini-2.5-flash-preview-05-20",
+          "text": "Gemini 2.5 FLash-Lite",
+          "value": "gemini::gemini-2.5-flash-lite-preview-06-17",
           "isHidden": false
         },
         {
@@ -124,57 +129,57 @@
       "options": [
         {
           "text": "SF Deepseek-R1 0528",
-          "value": "sf::deepseek-ai/DeepSeek-R1",
+          "value": "siliconflow::deepseek-ai/DeepSeek-R1",
           "isHidden": false
         },
         {
           "text": "SF Qwen3-235B-A22B",
-          "value": "sf::Qwen/Qwen3-235B-A22B",
+          "value": "siliconflow::Qwen/Qwen3-235B-A22B",
           "isHidden": false
         },
         {
           "text": "SF Qwen3-32B",
-          "value": "sf::Qwen/Qwen3-32B",
+          "value": "siliconflow::Qwen/Qwen3-32B",
           "isHidden": false
         },
         {
           "text": "SF QwQ-32B",
-          "value": "sf::Qwen/QwQ-32B",
+          "value": "siliconflow::Qwen/QwQ-32B",
           "isHidden": false
         },
         {
           "text": "SF Qwen3-30B-A3B",
-          "value": "sf::Qwen/Qwen3-30B-A3B",
+          "value": "siliconflow::Qwen/Qwen3-30B-A3B",
           "isHidden": false
         },
         {
           "text": "SF Qwen3-14B",
-          "value": "sf::Qwen/Qwen3-14B",
+          "value": "siliconflow::Qwen/Qwen3-14B",
           "isHidden": true
         },
         {
           "text": "SF Qwen3-8B",
-          "value": "sf::Qwen/Qwen3-8B",
+          "value": "siliconflow::Qwen/Qwen3-8B",
           "isHidden": false
         },
         {
           "text": "SF GLM-Z1-32B",
-          "value": "sf::THUDM/GLM-Z1-32B-0414",
+          "value": "siliconflow::THUDM/GLM-Z1-32B-0414",
           "isHidden": true
         },
         {
           "text": "SF GLM-4-32B",
-          "value": "sf::THUDM/GLM-4-32B-0414",
+          "value": "siliconflow::THUDM/GLM-4-32B-0414",
           "isHidden": true
         },
         {
           "text": "SF GLM-Z1-9B",
-          "value": "sf::THUDM/GLM-Z1-9B-0414",
+          "value": "siliconflow::THUDM/GLM-Z1-9B-0414",
           "isHidden": true
         },
         {
           "text": "SF GLM-4-9B",
-          "value": "sf::THUDM/GLM-4-9B-0414",
+          "value": "siliconflow::THUDM/GLM-4-9B-0414",
           "isHidden": true
         }
       ]

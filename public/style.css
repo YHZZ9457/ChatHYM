@@ -4,7 +4,7 @@
   --border-light: rgba(0, 0, 0, 0.12); /* 浅色主题边框，略微调整透明度以更柔和 */
   --border-dark:  rgba(255,255,255,0.15); /* 深色主题边框，参考图片中元素分隔，可能需要更明显一点 */
   /* 主色 - 参考图片，主色调为蓝色 */
-  --primary-light: #1e90ff; /* 浅色主题主色 (道奇蓝) */
+  --primary-light: #379bff; /* 浅色主题主色 (道奇蓝) */
   --primary-dark:  #3b82f6; /* 深色主题主色 (Tailwind Blue 500), 与图片中按钮颜色接近 */
   --primary-light-rgb: 30,144,255; /* 浅色主题主色 RGB */
   --primary-dark-rgb:  59,130,246; /* 深色主题主色 RGB */
@@ -342,7 +342,16 @@ body.sidebar-collapsed .sidebar {
 .setting-item input:checked + .slider {
   background-color: var(--primary); /* 使用您的主题蓝色 */
 }
-
+body.light-theme .setting-item .slider:before {
+    /* 
+      原始定位是 bottom: 3px; left: 3px;
+      因为轨道的下边框占了 1px，所以我们需要将圆圈向下移动 1px 来补偿。
+      因此，bottom 的值从 3px 减少到 2px。
+      同时，左边框也占了 1px，所以 left 的值也从 3px 减少到 2px。
+    */
+    bottom: 2px;
+    left: 2px;
+}
 /* 规则2：当 input 被选中时，移动滑块（小圆圈） */
 .setting-item input:checked + .slider:before {
   transform: translateX(20px); /* ★ 将滑块向右移动 20px ★ */
@@ -486,34 +495,30 @@ body.light-theme .setting-item input:checked + .slider {
 /* 单条消息的包裹层 */
 .message-wrapper {
     display: flex;
-    align-items: flex-start; /* 保持：按钮和气泡顶部对齐 */
-    gap: 8px;               /* 保持：气泡和按钮组之间的间隙 */
-    width: auto;            /* 改为 auto，或者 100% 看具体情况，避免 fit-content 干扰外部按钮定位 */
-                            /* 如果父级 .messages 是 flex column, 那么这里用 auto 可能更好 */
-    max-width: 90%;         /* 或者根据需要调整，为按钮留出空间 */
-    position: relative;     /* 使得悬浮效果更稳定 */
+    align-items: flex-start; /* 按钮和气泡顶部对齐 */
+    gap: 8px;               /* 气泡和按钮组之间的间隙 */
+    max-width: 90%;         /* 限制消息总宽度，避免太长 */
+    position: relative;     /* 用于悬浮效果 */
 }
+
 .user-message-wrapper {
     align-self: flex-end;
-    flex-direction: row-reverse; /* DOM: 气泡, 按钮组 -> 视觉: 按钮组(左), 气泡(右) */
+    flex-direction: row-reverse; /* DOM: 气泡, 按钮 -> 视觉: 按钮, 气泡 */
 }
+
 .assistant-message-wrapper {
     align-self: flex-start;
-    flex-direction: row; /* DOM: 气泡, 按钮组 -> 视觉: 气泡(左), 按钮组(右) */
+    flex-direction: row; /* DOM: 气泡, 按钮 -> 视觉: 气泡, 按钮 */
 }
 .message { /* 消息气泡 */
-  padding: 10px 14px; /* 内边距 */
-  border-radius: var(--border-radius-lg); /* 使用变量，圆润一些 */
+  padding: 10px 14px;
+  border-radius: var(--border-radius-lg);
   line-height: 1.6;
   font-size: 0.95rem;
-  box-shadow: var(--shadow-sm); /* 使用变量 */
+  box-shadow: var(--shadow-sm);
   word-break: break-word;
-  align-items: flex-start;
-  max-width: 100%;
-  position: relative; /* 用于内部元素如删除按钮 */
-    flex-grow: 0 !important;
-    flex-shrink: 0 !important; /* 通常也一起设置，防止被压缩 */
-    flex-basis: auto !important; /* 确保其基础尺寸由内容或height决定 */
+  max-width: 100%; /* 气泡宽度最大占满其容器.message-wrapper */
+  position: relative;
 }
 .messages::after {
   content: "";      /* 伪元素必须有 content */
@@ -953,55 +958,13 @@ body.dark-theme .messages, body.dark-theme .sidebar, body.dark-theme .settings-a
     white-space: pre-wrap; /* 保留空白符序列，正常换行，保留换行符 */
 
 }
-/* loading 占位样式 - 强制高度版本 */
-.message.assistant.loading {
-  opacity: 0.6;
-  font-style: italic;
 
-  /* --- Flexbox 用于内部居中 --- */
-  display: flex;
-  align-items: center;       /* 垂直居中内部的 .text 元素 */
-  justify-content: flex-start; /* 文本靠左 */
 
-  height: 44px;              /* 示例值，例如：您测量出的单行消息是 44px */
-  box-sizing: border-box;    /* 确保 padding 和 border 包含在 height 内 */
-
-  /* --- 内边距：只需要水平方向的，因为垂直方向由 height 和 align-items 控制 --- */
-  padding-top: 0;
-  padding-bottom: 0;
-  padding-left: 14px;        /* 与 .message 保持一致 */
-  padding-right: 14px;       /* 与 .message 保持一致 */
-
-  /* --- 宽度由内容决定 --- */
-  width: fit-content;
-
-  /* --- 其他视觉样式 --- */
-  background-color: var(--input-bg);
-  color: var(--text-color);
-  border-radius: var(--border-radius-lg);
-  box-shadow: var(--shadow-sm);
-  align-self: flex-start;
-
-  /* 确保字体大小用于计算内部文本的自然行高，但不直接决定容器高度 */
-  font-size: 0.95rem;   /* 与 .message 的 font-size 一致 */
-  /* line-height: 1.6; */ /* 当设置了固定height和align-items后，这个可以不设置或设为normal */
-  line-height: normal;  /* 或者尝试 normal，让文本自然占据高度 */
-}
-
-/* 确保浅色主题也应用正确的背景和边框 */
+/* 4. (可选) 移除浅色主题下的特定背景，让它也使用透明背景 */
 body.light-theme .message.assistant.loading {
-  background: #f0f2f5;
-  /* border: 1px solid rgba(0,0,0,0.08); */ /* 如果需要 */
-}
-
-/* 加载提示内部的 .text 元素 */
-.message.assistant.loading > .text {
-    padding: 0 !important;
-    margin: 0 !important;
-    white-space: nowrap;
-    line-height: normal; /* 或者与父级一致，如果父级设置了特定 line-height */
-    /* font-size: inherit; 默认继承父级字体大小 */
-    /* display: block; */ /* 确保它表现为块元素以便正确居中（尽管在flex子项中影响不大） */
+  background: transparent !important;
+  border-color: var(--border-light) !important;
+  color: var(--text-secondary-light) !important;
 }
 
 /* 聊天框中所有链接显示为蓝色，并加下划线 */
@@ -2292,29 +2255,32 @@ border: 1px solid var(--border-color);
 
 
 
-
+/* 1. 按钮容器的样式 */
 .message-actions-container {
     display: flex;
     flex-direction: column; /* 垂直堆叠按钮 */
-    gap: 1px; /* 按钮之间的垂直间距 */
-    width: 24px; /* 按钮容器的宽度，根据您的图标大小调整 */
-    align-items: center; /* 水平居中按钮（如果按钮本身比容器窄） */
+    gap: 4px; /* 按钮之间的垂直间距 */
+    
+    /* 移除固定的 width 和 height，让其由内容决定 */
+    
     flex-shrink: 0; /* 防止按钮容器在空间不足时被压缩 */
-    margin-top: 0;
+    
+    /* 默认隐藏 */
     visibility: hidden;
     opacity: 0;
+    
+    /* 动画效果 */
     transition: opacity 0.2s ease-in-out, visibility 0s linear 0.2s;
-}
-.message-wrapper:hover .message-actions-container {
-    visibility: visible;
-    opacity: 1;
-    transition-delay: 0s;
+    
+    /* 垂直对齐：让容器的顶部与消息气泡的顶部大致对齐 */
+    padding-top: 0;
 }
 
-.message-action-btn { /* 用于删除和复制按钮的通用样式 */
+/* 2. 通用操作按钮样式 */
+.message-action-btn {
     background: transparent;
     border: none;
-    color: var(--text-secondary); /* 或 var(--text-color-secondary) */
+    color: var(--text-secondary);
     cursor: pointer;
     padding: 0;
     font-size: 15px; /* 控制图标大小 */
@@ -2322,41 +2288,38 @@ border: 1px solid var(--border-color);
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 22px;  /* 示例大小 */
-    height: 22px; /* 示例大小 */
-    border-radius: 4px;
-    margin-top: 0;
+    width: 18px;  /* 按钮本身的大小 */
+    height: 18px; /* 按钮本身的大小 */
+    border-radius: var(--border-radius-sm);
     transition: color 0.2s, background-color 0.2s;
 }
 
+/* 3. 按钮悬浮效果 */
 .message-action-btn:hover {
-    color: var(--text-color); /* 或 var(--text-color-primary) */
-    background-color: rgba(0,0,0,0.1); /* 轻微背景 */
+    color: var(--text-color);
+    background-color: rgba(128, 128, 128, 0.2);
 }
 body.dark-theme .message-action-btn:hover {
-    background-color: rgba(255,255,255,0.1);
-}
-.delete-message-btn:hover { /* 特殊的删除按钮hover颜色 */
-    color: #e53e3e;
+    background-color: rgba(255, 255, 255, 0.1);
 }
 
-.message-action-btn svg {
-    width: 1em; /* 图标宽度等于字体大小 */
-    height: 1em; /* 图标高度等于字体大小 */
-    vertical-align: middle; /* 如果需要微调对齐 */
+/* 删除按钮的特定悬浮颜色 */
+.delete-message-btn:hover {
+    color: #fff; /* 红色图标可能在红色背景下看不清，改为白色 */
+    background-color: #e53e3e;
 }
 
-/* 默认隐藏按钮，悬浮在整个 message-wrapper 上时显示 */
-.message-wrapper .message-actions-container {
-    visibility: hidden;
-    opacity: 0;
-    transition: opacity 0.15s ease-in-out, visibility 0s linear 0.15s;
-}
-
+/* 4. 触发显示的逻辑 (这个是正确的，保持不变) */
 .message-wrapper:hover .message-actions-container {
     visibility: visible;
     opacity: 1;
     transition-delay: 0s;
+}
+
+/* 确保 SVG 图标大小正确 */
+.message-action-btn svg {
+    width: 1em; /* 图标宽度等于字体大小 */
+    height: 1em; /* 图标高度等于字体大小 */
 }
 
 .toast {
@@ -2529,11 +2492,14 @@ body.dark-theme .toast.toast-error {
     display: flex;
     flex-direction: column;
     gap: 8px; /* 多个附件之间的间距 */
-    margin-bottom: 10px; /* 附件和下方文字之间的间距 */
     padding: 10px;
     background-color: rgba(0, 0, 0, 0.05); /* 给附件区域一个浅色背景 */
     border-radius: 8px;
     border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.message.user .user-attachments-container + .text:not(:empty) {
+    margin-top: 8px;
 }
 
 .dark-theme .message.user .user-attachments-container {
@@ -2551,4 +2517,48 @@ body.dark-theme .toast.toast-error {
 
 .attachment-item svg {
     flex-shrink: 0; /* 防止图标被压缩 */
+}
+
+/* ==================================
+   Loading Indicator (Final & Isolated)
+   ================================== */
+
+/* 1. 定义外层包裹，用于在聊天流中定位 */
+.loading-indicator-wrapper {
+  display: flex; /* 让内部的气泡可以按 flex 规则对齐 */
+  justify-content: flex-start; /* 默认靠左 */
+  width: 100%;
+  padding: 8px 0; /* 与 .message-wrapper 的 gap 保持视觉一致 */
+}
+
+/* 2. 定义加载气泡（胶囊）本身的样式 */
+.loading-indicator-bubble {
+  /* --- 尺寸和布局 --- */
+  height: 38px;
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  box-sizing: border-box;
+  
+  /* --- 外观和动画 --- */
+  border: 1px solid var(--border-color);
+  border-radius: 999px; /* 胶囊形状 */
+  color: var(--text-secondary);
+  background-color: transparent;
+  font-size: 0.9rem;
+  
+  animation: loading-pulse 2.5s infinite ease-in-out;
+}
+
+/* 3. 内部文本样式 (确保对齐) */
+.loading-indicator-bubble > span {
+  line-height: 1;
+}
+
+/* 4. 动画定义 (保持不变) */
+@keyframes loading-pulse {
+  0%, 100% { opacity: 0.9; }
+  50% { opacity: 0.5; }
 }

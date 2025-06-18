@@ -1,135 +1,162 @@
-// netlify/functions/gemini-proxy-debug.mjs
-// Debug-Enhanced Gemini Proxy Function with Stream Chunk Logging
+// --- START OF FILE netlify/functions/gemini-proxy.mjs (最终、最务实的 Gemini 思考控制版) ---
 
-console.log("▶️ [Init] Gemini Proxy Function Loaded (Debug Mode) at", new Date().toISOString());
+/**
+ * 将内部对话历史映射为 Gemini API 所需的、严格交替角色的 `contents` 格式。
+ * @param {Array} messagesHistory - 从前端传来的原始对话历史数组
+ * @returns {Array} - 符合 Gemini API 规范的 contents 数组
+ */
+function mapMessagesForGemini(messagesHistory) {
+    const mappedContents = [];
+    let lastRole = '';
 
-const CORS_COMMON = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-
-export default async function handler(request) {
-  console.log(`▶️ [Handler] Invoked - Method: ${request.method}, URL: ${request.url}, Time: ${new Date().toISOString()}`);
-
-  // CORS preflight
-  if (request.method === 'OPTIONS') {
-    console.log('▶️ [CORS] Preflight request');
-    return new Response(null, { status: 204, headers: CORS_COMMON });
-  }
-
-  // Only allow POST
-  if (request.method !== 'POST') {
-    console.warn(`⚠️ [Method] Not Allowed: ${request.method}`);
-    return new Response(JSON.stringify({ error: 'Method Not Allowed' }), {
-      status: 405,
-      headers: { ...CORS_COMMON, 'Content-Type': 'application/json' },
-    });
-  }
-
-  // Check API key
-  const API_KEY = process.env.GEMINI_API_KEY_SECRET;
-  if (!API_KEY) {
-    console.error('❌ [Config] Missing GEMINI_API_KEY_SECRET');
-    return new Response(JSON.stringify({ error: 'Server Config Error: Missing API Key' }), {
-      status: 500,
-      headers: { ...CORS_COMMON, 'Content-Type': 'application/json' },
-    });
-  }
-
-  // Parse JSON body
-  let body;
-  try {
-    body = await request.json();
-    console.log('▶️ [Body] Parsed JSON:', body);
-  } catch (err) {
-    console.error('❌ [Body] Invalid JSON:', err.message);
-    return new Response(JSON.stringify({ error: 'Invalid JSON' }), {
-      status: 400,
-      headers: { ...CORS_COMMON, 'Content-Type': 'application/json' },
-    });
-  }
-
-  const { model, contents, generationConfig = {}, stream } = body;
-  if (!model || !Array.isArray(contents)) {
-    console.error('❌ [Request] Bad Request - model or contents missing or invalid');
-    return new Response(JSON.stringify({ error: 'Bad Request: model and contents are required' }), {
-      status: 400,
-      headers: { ...CORS_COMMON, 'Content-Type': 'application/json' },
-    });
-  }
-
-  // Build endpoint
-  const baseBeta = 'https://generativelanguage.googleapis.com/v1beta/models';
-  const endpoint = `${baseBeta}/${model}:generateContent?key=${API_KEY}`;
-  console.log(`▶️ [Fetch] Endpoint: ${endpoint}`);
-  console.log('▶️ [Fetch] Payload:', { contents, generationConfig });
-
-  try {
-    const apiResponse = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents, generationConfig }),
-    });
-    console.log(`▶️ [Fetch] Received status ${apiResponse.status}`);
-
-    // Prepare response headers
-    const responseHeaders = new Headers();
-    // Copy common and CORS headers
-    Object.entries(CORS_COMMON).forEach(([k, v]) => responseHeaders.set(k, v));
-    if (stream) {
-      responseHeaders.set('Content-Type', 'text/event-stream');
-      responseHeaders.set('Cache-Control', 'no-cache');
-      responseHeaders.set('Connection', 'keep-alive');
-    } else {
-      responseHeaders.set('Content-Type', 'application/json');
-    }
-
-    // Non-stream: log full body and return
-    const text = await apiResponse.text();
-    console.log('▶️ [Response] Body Text (forced non-stream):', text);
-    
-    // 确保响应头是 application/json
-    responseHeaders.set('Content-Type', 'application/json');
-
-    return new Response(text, {
-        status: apiResponse.status,
-        statusText: apiResponse.statusText,
-        headers: responseHeaders,
-    });
-    
-
-      const { readable, writable } = new TransformStream({
-        transform(chunk, controller) {
-            // chunk 是 Uint8Array 格式的原始数据
-            const decodedChunk = new TextDecoder().decode(chunk);
-            console.log('▶️ [Stream Chunk]:', decodedChunk);
-            // 将原始数据块转发出去
-            controller.enqueue(chunk);
-        },
-        flush(controller) {
-            console.log('▶️ [Stream] Finished flushing.');
-            controller.terminate();
+    messagesHistory.forEach(msg => {
+        if (!msg || !msg.role || !msg.content) return;
+        if (msg.role === 'system') {
+            const nextUserMsg = messagesHistory.find(m => m.role === 'user');
+            if (nextUserMsg) {
+                let textContent = (typeof nextUserMsg.content === 'string') ? nextUserMsg.content : (nextUserMsg.content?.text || "");
+                nextUserMsg.content = `${msg.content}\n\n${textContent}`;
+            }
+            return;
+        }
+        const currentRole = (msg.role === 'assistant' || msg.role === 'model') ? 'model' : 'user';
+        let textContent = (typeof msg.content === 'string') ? msg.content : (msg.content?.text || "");
+        if (!textContent.trim()) return;
+        if (mappedContents.length > 0 && lastRole === currentRole) {
+            mappedContents[mappedContents.length - 1].parts.push({ text: textContent });
+        } else {
+            mappedContents.push({ role: currentRole, parts: [{ text: textContent }] });
+            lastRole = currentRole;
         }
     });
 
-    // ★★★ 核心修复：使用 pipeTo 并等待它完成 ★★★
-    // pipeTo 会自动处理流的读取、写入和关闭，并返回一个 Promise
-    // 整个 handler 函数会等待这个 Promise 完成，确保流被完整传输
-    apiResponse.body.pipeTo(writable);
-
-    // 返回 TransformStream 的可读端
-    return new Response(readable, {
-        status: apiResponse.status,
-        statusText: apiResponse.statusText,
-        headers: responseHeaders,
-    });
-
-  } catch (err) {
-    console.error('❌ [Proxy] Network/internal error:', err.message);
-    return new Response(JSON.stringify({ error: 'Proxy internal error', details: err.message }), {
-      status: 502,
-      headers: { ...CORS_COMMON, 'Content-Type': 'application/json' },
-    });
-  }
+    if (mappedContents.length > 0 && mappedContents[0].role !== 'user') {
+      mappedContents.unshift({ role: 'user', parts: [{ text: " " }] });
+    }
+    return mappedContents;
 }
+
+
+export default async (request, context) => {
+  const API_KEY = process.env.GEMINI_API_KEY_SECRET;
+  const GEMINI_API_BASE_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
+
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } });
+  }
+
+  if (!API_KEY) {
+    return Response.json({ error: { message: 'Server Configuration Error: Gemini API Key not set.' } }, { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } });
+  }
+
+  try {
+    const requestBody = await request.json();
+    const { model, messages, stream, temperature, max_tokens, isManualThinkModeEnabled } = requestBody;
+
+    const geminiContents = mapMessagesForGemini(messages);
+
+    const geminiPayload = {
+      contents: geminiContents,
+      generationConfig: {
+        ...(temperature !== undefined && { temperature }),
+        ...(max_tokens !== undefined && { maxOutputTokens: max_tokens }),
+        thinkingConfig: {}, // 先创建一个空对象
+      },
+    };
+
+    if (isManualThinkModeEnabled) {
+      geminiPayload.generationConfig.thinkingConfig.thinkingBudget = -1;
+      console.log(`[Gemini Proxy] Thinking ENABLED for ${model} via thinkingBudget: -1.`);
+    } else {
+      if (model && model.includes('flash')) {
+        geminiPayload.generationConfig.thinkingConfig.thinkingBudget = 0;
+        console.log(`[Gemini Proxy] Thinking DISABLED for Flash model via thinkingBudget: 0.`);
+      } else {
+        delete geminiPayload.generationConfig.thinkingConfig;
+        console.log(`[Gemini Proxy] Thinking config omitted for Pro model: ${model}.`);
+      }
+    }
+    
+    if (stream) {
+        const geminiEndpoint = `${GEMINI_API_BASE_URL}${model}:streamGenerateContent?key=${API_KEY}&alt=sse`;
+        console.log(`[Gemini Proxy] Requesting to STREAMING endpoint: ${model}`);
+        console.log('[Gemini Proxy] Final Payload:', JSON.stringify(geminiPayload, null, 2));
+        
+        const apiResponse = await fetch(geminiEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(geminiPayload),
+        });
+
+        if (!apiResponse.ok) {
+            const errorData = await apiResponse.json();
+            return Response.json(errorData, { status: apiResponse.status, headers: { 'Access-Control-Allow-Origin': '*' } });
+        }
+
+        const { readable, writable } = new TransformStream();
+        const writer = writable.getWriter();
+        const encoder = new TextEncoder();
+        const decoder = new TextDecoder();
+        (async () => {
+            let buffer = '';
+            const reader = apiResponse.body.getReader();
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    let boundaryIndex;
+                    while ((boundaryIndex = buffer.indexOf('\n')) !== -1) {
+                        const line = buffer.substring(0, boundaryIndex).trim();
+                        buffer = buffer.substring(boundaryIndex + 1);
+                        if (line.startsWith('data:')) {
+                            await writer.write(encoder.encode(line + '\n\n'));
+                        }
+                    }
+                }
+                if (buffer.trim().startsWith('data:')) {
+                    await writer.write(encoder.encode(buffer.trim() + '\n\n'));
+                }
+            } catch (error) { console.error('[Gemini Proxy] Stream processing error:', error); await writer.abort(error); } 
+            finally { await writer.close(); }
+        })();
+        return new Response(readable, { status: 200, headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache', 'Connection': 'keep-alive' } });
+
+    } else {
+        const geminiEndpoint = `${GEMINI_API_BASE_URL}${model}:generateContent?key=${API_KEY}`;
+        console.log(`[Gemini Proxy] Requesting to NON-STREAMING endpoint: ${model}`);
+        console.log('[Gemini Proxy] Final Payload:', JSON.stringify(geminiPayload, null, 2));
+
+        const apiResponse = await fetch(geminiEndpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(geminiPayload),
+        });
+
+        const responseText = await apiResponse.text();
+        const headers = { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' };
+
+        if (!apiResponse.ok) {
+            try {
+                JSON.parse(responseText);
+                return new Response(responseText, { status: apiResponse.status, headers });
+            } catch (e) {
+                const errorPayload = JSON.stringify({ error: { message: responseText || "Unknown API error" } });
+                return new Response(errorPayload, { status: apiResponse.status, headers });
+            }
+        }
+
+        try {
+            JSON.parse(responseText);
+            return new Response(responseText, { status: 200, headers });
+        } catch (e) {
+            const errorPayload = JSON.stringify({ error: { message: "API returned a success status but the response was not valid JSON." } });
+            return new Response(errorPayload, { status: 502, headers });
+        }
+    }
+
+  } catch (error) {
+    console.error('[Gemini Proxy] Proxy internal error:', error);
+    return Response.json({ error: { message: 'Proxy internal error', details: error.message } }, { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } });
+  }
+};

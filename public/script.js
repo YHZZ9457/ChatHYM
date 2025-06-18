@@ -29,7 +29,7 @@ let temperatureInputInline = null;
 let inlineChatSettingsPanel = null;
 let chatSettingsBtnInlineElement = null; // 用于 document click 事件
 let thinkModeToggle = null;
-let currentthinkModeToggle = false; // 存储当前模式，默认为不开启
+let isManualThinkModeEnabled = false; // 用于手动思考模式
 let showPresetPromptsBtn = null;
 let presetPromptsListPanel = null;
 let presetPromptsUl = null;
@@ -53,7 +53,6 @@ let lastScrollTop = 0;
 
  
 window.isNearBottomMessages = window.isNearBottomMessages || function() { return true; };
-
 
 
 
@@ -257,80 +256,89 @@ function getCurrentConversation() {
 
 // ▼▼▼ 用这个版本完整替换你现有的 loadConversations 函数 ▼▼▼
 function loadConversations() {
-  console.log("%c[loadConversations] Function CALLED. Starting to load from localStorage.", "color: blue; font-weight: bold;");
-
-  const data = localStorage.getItem('conversations');
-  let rawConversations;
-
   try {
-    rawConversations = data ? JSON.parse(data) : [];
-    if (!Array.isArray(rawConversations)) {
-      console.warn("[loadConversations] Data in localStorage is not an array, resetting to [].");
-      rawConversations = [];
+    const data = localStorage.getItem('conversations');
+    const parsedData = data ? JSON.parse(data) : [];
+    if (Array.isArray(parsedData)) {
+      conversations = parsedData;
+      console.log(`%c[loadConversations] Successfully loaded ${conversations.length} conversations.`, "color: blue;");
+    } else {
+      conversations = [];
+      console.warn("[loadConversations] Data from localStorage was not an array. Resetting.");
     }
-    console.log(`[loadConversations] Successfully parsed ${rawConversations.length} conversation(s) from localStorage.`);
-  } catch (e) {
-    console.error('[loadConversations] Failed to parse "conversations" from localStorage. Data might be corrupted. Resetting to [].', e);
-    rawConversations = [];
+  } catch (error) {
+    console.error("[loadConversations] CRITICAL ERROR while loading/parsing:", error);
+    showToast("加载历史对话失败！数据可能已损坏。", "error");
+    conversations = [];
   }
-
-  // 对每一条对话和其中的消息进行深度校验和修正
-  const validatedConversations = rawConversations.map((conv, convIndex) => {
-    // 基础校验
-    if (!conv || typeof conv !== 'object' || !conv.id) {
-      console.warn(`[loadConversations] Skipping invalid conversation object at index ${convIndex}.`, conv);
-      return null; // 返回 null，稍后过滤掉
-    }
-
-    // 确保核心字段存在
-    const validatedConv = {
-      id: conv.id,
-      title: conv.title || '无标题对话',
-      model: conv.model || getCurrentModel(),
-      messages: Array.isArray(conv.messages) ? conv.messages : [],
-      archived: typeof conv.archived === 'boolean' ? conv.archived : false,
-      isNew: typeof conv.isNew === 'boolean' ? conv.isNew : false,
-    };
-    
-    // 深度检查 messages 数组
-    validatedConv.messages = validatedConv.messages.map((msg, msgIndex) => {
-      if (!msg || typeof msg !== 'object' || !msg.role || msg.content === undefined) {
-        console.warn(`[loadConversations] Skipping invalid message in conv "${validatedConv.title}" at index ${msgIndex}.`, msg);
-        return null;
-      }
-      // ★★★ 核心：确保 usage 字段被保留下来 ★★★
-      const validatedMsg = {
-        role: msg.role,
-        content: msg.content,
-        model: msg.model, // 保留消息级别的模型
-        reasoning_content: msg.reasoning_content, // 保留思考过程
-        usage: msg.usage, // ★★★ 保留 USAGE 字段 ★★★
-      };
-      return validatedMsg;
-    }).filter(Boolean); // 过滤掉无效消息
-
-    // 打印最后一条助手消息，看看 usage 是否还在
-    const lastAssistantMsg = [...validatedConv.messages].reverse().find(m => m.role === 'assistant');
-    if (lastAssistantMsg && lastAssistantMsg.usage) {
-        console.log(`%c[loadConversations] GOOD: Conv "${validatedConv.title}" has a last assistant message WITH usage.`, "color: lightgreen;", lastAssistantMsg.usage);
-    } else if (lastAssistantMsg) {
-        console.log(`%c[loadConversations] INFO: Conv "${validatedConv.title}" has a last assistant message WITHOUT usage.`, "color: yellow;");
-    }
-
-    return validatedConv;
-  }).filter(Boolean); // 过滤掉无效对话
-
-  console.log("[loadConversations] Validation complete. Final conversations object:", JSON.parse(JSON.stringify(validatedConversations)));
-  conversations = validatedConversations;
-     console.log("%c[AFTER loadConversations] Global 'conversations' state:", "background: #222; color: #bada55", JSON.parse(JSON.stringify(conversations)));
 }
-
 
 /**
  * 将当前的 `conversations` 数组保存到 Local Storage。
  */
 function saveConversations() {
-  localStorage.setItem('conversations', JSON.stringify(conversations));
+    
+  try {
+        // ★★★ 在这里添加日志 ★★★
+    const lastConv = conversations[conversations.length - 1];
+    if (lastConv && lastConv.messages.length > 0) {
+        const lastMsgInArray = lastConv.messages[lastConv.messages.length - 1];
+        if (lastMsgInArray.role === 'assistant' || lastMsgInArray.role === 'model') {
+            console.log('%c[SAVE CHECK 2] saveConversations 接收到的最后一条助手消息:', 'color: red; font-weight: bold;', JSON.parse(JSON.stringify(lastMsgInArray)));
+        }
+    }
+    // 在序列化之前，创建一个不包含 File 对象的副本，防止循环引用或序列化错误
+    const conversationsForStorage = conversations.map(conv => {
+      // 创建一个对话的浅拷贝，以避免修改原始的 conversations 数组
+      const convCopy = { ...conv };
+      
+      // 深度处理 messages 数组
+      convCopy.messages = conv.messages.map(msg => {
+        // --- 情况 1：处理带文件的用户消息 ---
+        if (msg.role === 'user' && msg.content && typeof msg.content === 'object' && msg.content.files) {
+          
+          const msgCopy = { ...msg };
+          const safeContent = { ...msgCopy.content };
+          
+          safeContent.files = safeContent.files.map(file => ({
+            name: file.name,
+            type: file.type
+          }));
+          
+          msgCopy.content = safeContent;
+          return msgCopy;
+        }
+
+        // --- ★★★ 核心修改：专门处理带 usage 数据的助手消息 ★★★ ---
+        // 检查是否是助手消息，并且它有关联的 usage 数据
+        if ((msg.role === 'assistant' || msg.role === 'model') && msg.usage) {
+            // 创建一个消息的副本，以确保我们不会修改原始的 `conversations` 数组
+            const msgCopyWithUsage = { ...msg };
+            
+            // usage 字段本身通常是可序列化的 JSON 对象，所以我们直接保留它。
+            // msgCopyWithUsage.usage = msg.usage; // 这行是多余的，因为 ...msg 已经包含了它
+            
+            // 我们返回这个包含了 usage 数据的副本
+            return msgCopyWithUsage;
+        }
+
+        // --- 情况 3：对于所有其他消息（不带文件的用户消息，不带 usage 的助手消息等）---
+        // 直接返回原样即可，因为它们不包含需要清理的复杂对象
+        return msg;
+      });
+      
+      return convCopy;
+    });
+
+    // 将清理过的数据保存到 localStorage
+    localStorage.setItem('conversations', JSON.stringify(conversationsForStorage));
+    console.log("%c[saveConversations] Successfully saved a sanitized version of conversations.", "color: green;");
+
+  } catch (error) {
+    console.error("[saveConversations] CRITICAL ERROR while preparing or saving conversations:", error);
+    // 在UI上给用户一个明确的提示
+    showToast("保存对话失败！请检查控制台获取详细信息。", "error");
+  }
 }
 
 // --- DOM 操作与渲染 ---
@@ -365,6 +373,7 @@ if (typeof marked !== 'undefined') {
   });
 }
 
+// --- START OF appendMessage MODIFICATION ---
 function appendMessage(role, messageContent, modelForNote, reasoningText, conversationId, messageIndex, usage) {
     console.log(`[AppendMessage CALLED] Role: "${role}"`, { messageContent, reasoningText });
 
@@ -374,17 +383,15 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
         return null;
     }
 
-    
     const emptyChatPlaceholder = document.getElementById('empty-chat-placeholder');
     if (emptyChatPlaceholder) {
         emptyChatPlaceholder.style.display = 'none';
     }
 
-    // --- 1. 创建基础 DOM 结构 ---
     const messageWrapperDiv = document.createElement('div');
     messageWrapperDiv.className = `message-wrapper ${role === 'user' ? 'user-message-wrapper' : 'assistant-message-wrapper'}`;
-    messageWrapperDiv.dataset.conversationId = conversationId;
-    messageWrapperDiv.dataset.messageIndex = messageIndex;
+    messageWrapperDiv.dataset.conversationId = conversationId; // 这些应该在loadConversation中被正确设置
+    messageWrapperDiv.dataset.messageIndex = messageIndex;     // 或者在调用appendMessage时传递正确的ID和索引
 
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role === 'assistant' || role === 'model' ? 'assistant' : 'user'}`;
@@ -395,8 +402,8 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
     const actionsContainer = document.createElement('div');
     actionsContainer.className = 'message-actions-container';
 
-    // --- 2. 特殊处理: System 消息 ---
     if (role === 'system') {
+        // ... (system message handling remains the same) ...
         const systemDiv = document.createElement('div');
         systemDiv.className = 'system-prompt-display';
         systemDiv.innerHTML = `<strong>系统指令:</strong><div class="system-prompt-content">${escapeHtml(String(messageContent))}</div>`;
@@ -405,11 +412,9 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
         return systemDiv;
     }
 
-    // --- 3. 构建最终要渲染的 Markdown 文本 ---
-     let finalMarkdown = "";
-
-    // ★ 新增：专门为用户消息处理附件
+    let finalMarkdown = "";
     if ((role === 'user') && messageContent && typeof messageContent.files !== 'undefined' && Array.isArray(messageContent.files) && messageContent.files.length > 0) {
+        // ... (user attachments handling remains the same) ...
         const attachmentsContainer = document.createElement('div');
         attachmentsContainer.className = 'user-attachments-container';
 
@@ -424,35 +429,29 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
             `;
             attachmentsContainer.appendChild(attachmentItem);
         });
-        
-        // 将附件容器添加到消息气泡中，位于文本内容上方
         messageDiv.appendChild(attachmentsContainer);
     }
-
+    // ... (finalMarkdown population remains the same) ...
     if (typeof messageContent === 'string') {
         finalMarkdown = messageContent;
     } else if (messageContent && typeof messageContent.text !== 'undefined') {
-        // 提取文本部分
         finalMarkdown = messageContent.text || "";
     } else if (Array.isArray(messageContent) && messageContent[0]?.type === 'text' && messageContent[0]?.text) {
-        // 这是旧的、错误的 Anthropic 历史数据格式
-        console.warn("[AppendMessage] Detected legacy array format for message content. Extracting text.");
         finalMarkdown = messageContent[0].text;
     } else if (messageContent) {
-        // 对于未知的对象类型，安全地转换为字符串，避免 [object Object]
         try {
             finalMarkdown = JSON.stringify(messageContent, null, 2);
         } catch (e) {
             finalMarkdown = "[无法渲染的复杂内容]";
         }
     }
-    
-    // --- 4. 填充主内容和思考过程 ---
-    let reasoningContentElement;
-    // 思考过程块 (只为助手消息创建)
+
+    // ▼▼▼ MODIFICATION START ▼▼▼
+    let reasoningDivElement = null; // Declare one variable for the reasoning div
+
     if (role === 'assistant' || role === 'model') {
         const reasoningBlockDiv = document.createElement('div');
-        reasoningBlockDiv.className = 'reasoning-block reasoning-block-empty'; // 默认隐藏
+        reasoningBlockDiv.className = 'reasoning-block';
         
         const labelContainer = document.createElement('div');
         labelContainer.className = 'reasoning-label';
@@ -467,17 +466,21 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
         copyBtn.type = 'button';
         labelContainer.appendChild(copyBtn);
 
-        reasoningContentElement = document.createElement('div');
-        reasoningContentElement.className = 'reasoning-content';
-
-        if (typeof reasoningText === 'string' && reasoningText.trim()) {
-            reasoningContentElement.textContent = reasoningText;
-            reasoningBlockDiv.classList.remove('reasoning-block-empty');
+        // Assign to the function-scoped variable
+        reasoningDivElement = document.createElement('div'); 
+        reasoningDivElement.className = 'reasoning-content';
+        
+        const hasValidReasoning = typeof reasoningText === 'string' && reasoningText.trim() !== '';
+        if (hasValidReasoning) {
+            reasoningDivElement.textContent = reasoningText;
+        } else {
+            reasoningBlockDiv.classList.add('reasoning-block-empty'); 
         }
 
         copyBtn.addEventListener('click', e => {
             e.stopPropagation();
-            navigator.clipboard.writeText(reasoningContentElement.textContent || "").then(() => {
+            // Use reasoningDivElement here
+            navigator.clipboard.writeText(reasoningDivElement.textContent || "").then(() => {
                 copyBtn.textContent = '已复制!';
                 setTimeout(() => { copyBtn.textContent = '复制'; }, 2000);
             }).catch(() => {
@@ -487,24 +490,23 @@ function appendMessage(role, messageContent, modelForNote, reasoningText, conver
         });
         
         reasoningBlockDiv.appendChild(labelContainer);
-        reasoningBlockDiv.appendChild(reasoningContentElement);
+        reasoningBlockDiv.appendChild(reasoningDivElement); // Append the correctly assigned div
+        
         messageDiv.appendChild(reasoningBlockDiv);
     }
+    // ▲▲▲ MODIFICATION END ▲▲▲
     
-    // 主内容块
     if (finalMarkdown.trim()) {
-    // ★ 对用户消息的内容再做一次 trim，确保没有尾随换行
-    let contentToRender = (role === 'user') ? finalMarkdown.trim() : finalMarkdown;
-    contentDiv.innerHTML = marked.parse(contentToRender);
-}
-if (contentDiv.lastChild && contentDiv.lastChild.nodeType === Node.TEXT_NODE && !contentDiv.lastChild.textContent.trim()) {
+        let contentToRender = (role === 'user') ? finalMarkdown.trim() : finalMarkdown;
+        contentDiv.innerHTML = marked.parse(contentToRender);
+    }
+    if (contentDiv.lastChild && contentDiv.lastChild.nodeType === Node.TEXT_NODE && !contentDiv.lastChild.textContent.trim()) {
         contentDiv.removeChild(contentDiv.lastChild);
     }
     messageDiv.appendChild(contentDiv);
 
-
-    // --- 5. 为代码块 <pre> 添加复制按钮 ---
     contentDiv.querySelectorAll('pre').forEach(pre => {
+        // ... (copy button for pre blocks remains the same) ...
         if (pre.querySelector('.copy-btn')) return;
         pre.style.position = 'relative';
         const btn = document.createElement('button');
@@ -524,106 +526,100 @@ if (contentDiv.lastChild && contentDiv.lastChild.nodeType === Node.TEXT_NODE && 
         pre.appendChild(btn);
     });
 
-   const hasModelNote = (role === 'assistant' || role === 'model') && modelForNote;
-const hasUsageData = (role === 'assistant' || role === 'model') && usage;
+    // ... (message meta info, delete button, copy message button remain the same) ...
+    const hasModelNote = (role === 'assistant' || role === 'model') && modelForNote;
+    const hasUsageData = (role === 'assistant' || role === 'model') && usage;
 
-// 只有当需要显示模型或 Token 信息时，才创建元信息容器
-if (hasModelNote || hasUsageData) {
-    
-    // 1. 创建统一的父容器
-    const metaInfoDiv = document.createElement('div');
-    metaInfoDiv.className = 'message-meta-info';
-
-    // 2. 如果有模型信息，创建并添加 .model-note
-    if (hasModelNote) {
-        const note = document.createElement('div');
-        note.className = 'model-note';
-        
-        let displayModelName = modelForNote;
-        const modelSelect = document.getElementById('model');
-        if (modelSelect) {
-            const opt = modelSelect.querySelector(`option[value="${modelForNote}"]`);
-            if (opt) displayModelName = opt.textContent;
-            else { const p = String(modelForNote).split('::'); if (p.length === 2) displayModelName = p[1]; }
+    if (hasModelNote || hasUsageData) {
+        const metaInfoDiv = document.createElement('div');
+        metaInfoDiv.className = 'message-meta-info';
+        if (hasModelNote) { /* ... */ 
+            const note = document.createElement('div');
+            note.className = 'model-note';
+            let displayModelName = modelForNote;
+            const modelSelect = document.getElementById('model');
+            if (modelSelect) {
+                const opt = modelSelect.querySelector(`option[value="${modelForNote}"]`);
+                if (opt) displayModelName = opt.textContent;
+                else { const p = String(modelForNote).split('::'); if (p.length === 2) displayModelName = p[1]; }
+            }
+            note.textContent = `模型：${displayModelName}`;
+            metaInfoDiv.appendChild(note);
         }
-        note.textContent = `模型：${displayModelName}`;
-        metaInfoDiv.appendChild(note);
+        if (hasUsageData) { /* ... */ 
+            const tokenNote = document.createElement('span');
+            tokenNote.className = 'token-count-note';
+            const promptTokens = usage.prompt_tokens ?? 'N/A';
+            const completionTokens = usage.completion_tokens ?? 'N/A';
+            tokenNote.textContent = `提示: ${promptTokens} tokens, 回复: ${completionTokens} tokens`;
+            metaInfoDiv.appendChild(tokenNote);
+        }
+        messageDiv.appendChild(metaInfoDiv);
     }
 
-    // 3. 如果有 Token 信息，创建并添加 .token-count-note
-    if (hasUsageData) {
-        const tokenNote = document.createElement('span');
-        tokenNote.className = 'token-count-note';
-        
-        const promptTokens = usage.prompt_tokens ?? 'N/A';
-        const completionTokens = usage.completion_tokens ?? 'N/A';
-        tokenNote.textContent = `提示: ${promptTokens} tokens, 回复: ${completionTokens} tokens`;
-        
-        metaInfoDiv.appendChild(tokenNote);
-    }
-    
-    // 4. 将组装好的元信息容器一次性添加到消息气泡中
-    messageDiv.appendChild(metaInfoDiv);
-}
-
-
-    // --- 7. 创建并绑定操作按钮 ---
-    // 删除单条消息按钮
-    const deleteMsgBtn = document.createElement('button');
-    deleteMsgBtn.className = 'delete-message-btn message-action-btn';
-    deleteMsgBtn.textContent = '✕';
-    deleteMsgBtn.title = '删除此条消息';
-    deleteMsgBtn.addEventListener('click', e => {
-        e.stopPropagation();
-        const convId = messageWrapperDiv.dataset.conversationId;
-    const msgIndex = parseInt(messageWrapperDiv.dataset.messageIndex, 10);
-
-    // 检查我们是否成功从 DOM 中获取了数据
-    if (convId && !isNaN(msgIndex)) {
-        deleteSingleMessage(messageWrapperDiv, convId, msgIndex);
-    } else {
-        // 如果 DOM 中没有数据，这是一个严重的问题，需要报错
-        console.error('无法删除消息：缺少对话ID或消息索引。Dataset:', messageWrapperDiv.dataset);
-    }
-    // ▲▲▲ 修改结束 ▲▲▲
-});
-    actionsContainer.appendChild(deleteMsgBtn);
-
-    // 复制整条消息按钮
+    // 1. 创建复制消息按钮
     const copyMessageBtn = document.createElement('button');
-    copyMessageBtn.className = 'copy-full-message-btn message-action-btn';
-    copyMessageBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-clipboard" viewBox="0 0 16 16"><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>';
+    copyMessageBtn.className = 'message-action-btn copy-message-btn'; // 使用通用和特定类
     copyMessageBtn.title = '复制消息内容';
-    copyMessageBtn.addEventListener('click', e => {
+    copyMessageBtn.type = 'button';
+    copyMessageBtn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-copy" viewBox="0 0 16 16">
+            <path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/>
+        </svg>
+    `;
+    copyMessageBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        const textToCopy = contentDiv.innerText.trim();
-        if (textToCopy) {
-            navigator.clipboard.writeText(textToCopy).then(() => {
-                const originalIcon = copyMessageBtn.innerHTML;
-                copyMessageBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="currentColor" class="bi bi-clipboard-check" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M10.854 7.146a.5.5 0 0 1 0 .708l-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 1 1 .708-.708L7.5 9.793l2.646-2.647a.5.5 0 0 1 .708 0z"/><path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1z"/><path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3z"/></svg>';
-                copyMessageBtn.title = '已复制!';
-                setTimeout(() => {
-                    copyMessageBtn.innerHTML = originalIcon;
-                    copyMessageBtn.title = '复制消息内容';
-                }, 2000);
-            });
+        // 提取纯文本内容进行复制
+        let textToCopy = finalMarkdown.trim();
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            showToast('消息内容已复制', 'success');
+        }).catch(err => {
+            showToast('复制失败: ' + err, 'error');
+        });
+    });
+    actionsContainer.appendChild(copyMessageBtn); // 先添加复制按钮
+
+    // 2. 创建删除消息按钮
+    const deleteMsgBtn = document.createElement('button');
+    deleteMsgBtn.className = 'message-action-btn delete-message-btn'; // 使用通用和特定类
+    deleteMsgBtn.title = '删除此条消息';
+    deleteMsgBtn.type = 'button';
+    deleteMsgBtn.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash3" viewBox="0 0 16 16">
+            <path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1zm-9.955 1H14.5a.5.5 0 0 1 0 1H1.455a.5.5 0 0 1 0-1Z"/>
+        </svg>
+    `;
+    deleteMsgBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        // 使用 dataset 获取 ID 和索引来调用删除函数
+        const convId = messageWrapperDiv.dataset.conversationId;
+        const msgIdx = parseInt(messageWrapperDiv.dataset.messageIndex, 10);
+        if (convId && !isNaN(msgIdx)) {
+            deleteSingleMessage(messageWrapperDiv, convId, msgIdx);
+        } else {
+            console.error("无法删除：消息的 conversationId 或 messageIndex 未在 DOM 元素上找到。");
+            showToast("删除失败，消息数据异常。", "error");
         }
     });
-    actionsContainer.insertBefore(copyMessageBtn, deleteMsgBtn); 
+    actionsContainer.appendChild(deleteMsgBtn); // 再添加删除按钮
 
-    // --- 8. 最终组装 ---
+    // --- 修复结束 ---
+
     messageWrapperDiv.appendChild(messageDiv);
-    messageWrapperDiv.appendChild(actionsContainer);
+    messageWrapperDiv.appendChild(actionsContainer); // 将填充好按钮的容器添加到 DOM
     container.appendChild(messageWrapperDiv);
 
-    // --- 9. 后处理 ---
+
     container.scrollTop = container.scrollHeight;
+    
     if (window.MathJax) {
         const elementsToTypeset = [contentDiv];
-        // 只有当 reasoningContentElement 存在且有内容时才加入渲染
-        if (reasoningContentElement && reasoningContentElement.textContent.trim()) {
-            elementsToTypeset.push(reasoningContentElement);
+        // ▼▼▼ MODIFICATION FOR MATHJAX ▼▼▼
+        // Use the correctly scoped and assigned reasoningDivElement
+        if (reasoningDivElement && reasoningDivElement.textContent.trim()) { 
+            elementsToTypeset.push(reasoningDivElement);
         }
+        // ▲▲▲ MODIFICATION FOR MATHJAX ▲▲▲
         if (elementsToTypeset.length > 0) {
             MathJax.typesetPromise(elementsToTypeset).catch(err => console.error("MathJax typesetting failed:", err));
         }
@@ -631,6 +627,7 @@ if (hasModelNote || hasUsageData) {
     
     return messageWrapperDiv;
 }
+// --- END OF appendMessage MODIFICATION ---
 
 function processPreBlocksForCopyButtons(containerElement) {
     if (!containerElement || typeof marked === 'undefined') return;
@@ -707,25 +704,30 @@ function processPreBlocksForCopyButtons(containerElement) {
 
 function appendLoading() {
   const container = document.getElementById('messages');
-  console.log("[AppendMessage] #messages container:", container);
-  
-
   if (!container) {
       console.error("appendLoading: Message container '#messages' not found.");
       return null;
   }
+
+  // 1. 创建一个独立的、不带 .message 类的包裹层
   const loadingWrapper = document.createElement('div');
-  loadingWrapper.className = 'message assistant loading'; // 应用目标样式类
+  loadingWrapper.className = 'loading-indicator-wrapper'; // 使用一个全新的、独立的类名
 
-  const textElement = document.createElement('span'); // 使用 span 更语义化，且默认无块级样式
+  // 2. 创建真正的加载提示框
+  const loadingBubble = document.createElement('div');
+  loadingBubble.className = 'loading-indicator-bubble'; // 这是我们的“胶囊”
+  
+  const textElement = document.createElement('span');
   textElement.textContent = '对方正在输入…';
-  // 不要给这个 textElement 添加 'text' 类，除非你明确知道 .text 类不包含垂直间距样式
-  // 或者，如果你必须用 div.text，请确保下面的CSS中 .message.assistant.loading > .text 的规则足够强
-
-  loadingWrapper.appendChild(textElement);
+  
+  loadingBubble.appendChild(textElement);
+  loadingWrapper.appendChild(loadingBubble);
+  
   container.appendChild(loadingWrapper);
   container.scrollTop = container.scrollHeight;
-  return loadingWrapper;
+  
+  // 返回外层包裹，以便后续移除
+  return loadingWrapper; 
 }
 
 /**
@@ -1021,14 +1023,15 @@ function loadConversation(id) {
 
 
             if (shouldRenderThisMessage) {
-                const messageElement = appendMessage(
-                       msg.role,
-             msg.content,
-             msg.model || convToLoad.model,
-             msg.reasoning_content || null,
-                convToLoad.id,
-             indexInConvMessages,
-             msg.usage || null
+             const messageElement = appendMessage(
+                    msg.role,
+                    msg.content,
+                    msg.model || convToLoad.model,
+                    msg.reasoning_content || null,
+                    // ▼▼▼ 核心修复：调整参数顺序和内容 ▼▼▼
+                    convToLoad.id,         // 第5个参数：对话ID
+                    indexInConvMessages,   // 第6个参数：消息索引
+                    msg.usage || null      // 第7个参数：Token用量
                 );
 
                 if (messageElement) {
@@ -1311,7 +1314,7 @@ function mapMessagesForStandardOrClaude(messagesHistory, provider, currentFilesD
         // --- 处理 System 消息 ---
         if (msg.role === 'system') {
             // Anthropic 和 Ollama 的 system prompt 在顶层单独处理，这里不加入 messages 数组
-            if (provider === 'anthropic' || provider === 'ollama') {
+            if (provider === 'anthropic' || provider === 'ollama') { // <--- 检查这里是否包含了 'ollama'
                 return null; // 返回 null，稍后过滤掉
             }
             return { role: 'system', content: msg.content };
@@ -1421,20 +1424,9 @@ function mapMessagesForStandardOrClaude(messagesHistory, provider, currentFilesD
 }
 
 
-// ====================================================================================================
-// =================== START: 终极修复版 send() (无任何省略) ===================
-// ====================================================================================================
-
-// ====================================================================================================
-// =================== START: 终极完整修复版 send() (无任何省略，聚焦所有问题) ===================
-// ====================================================================================================
-
-// ====================================================================================================
-// =================== START: 终极版 All-In-One send() 函数 (请完整替换) ===================
-// ====================================================================================================
 
 async function send() {
-    // --- 1. 初始变量声明 ---
+    // --- 1. 初始变量声明 (完整版) ---
     let apiUrl;
     const headers = { 'Content-Type': 'application/json' };
     let bodyPayload = {};
@@ -1451,250 +1443,366 @@ async function send() {
 
     console.log("%c--- send() CALLED ---", "color:dodgerblue; font-size:14px; font-weight:bold;");
 
-    // --- 2. 前置检查 ---
+    // --- 2. 前置检查 (完整版) ---
     const promptInput = document.getElementById('prompt');
     if (!promptInput) { showToast("发生内部错误：找不到输入框。", 'error'); return; }
     const promptText = promptInput.value.replace(/\n$/, '');
     const filesToActuallySend = uploadedFilesData ? [...uploadedFilesData] : [];
-    if (!promptText.trim() && filesToActuallySend.length === 0) { showToast("请输入问题或上传文件后再发送。",'warning'); return; }
+    if (!promptText.trim() && filesToActuallySend.length === 0) { showToast("请输入问题或上传文件。",'warning'); return; }
     if (window.isGeneratingResponse) { showToast("请等待上一个回复生成完毕。",'warning'); return; }
+    
+    // --- 3. 获取对话和模型信息 (完整版) ---
     const conversationAtRequestTime = getCurrentConversation();
     if (!conversationAtRequestTime) { showToast("错误：无法获取当前对话。",'error'); return; }
     const modelValueFromOption = conversationAtRequestTime.model;
     if (!modelValueFromOption) { showToast("错误：当前对话没有指定模型。", 'error'); return; }
     const conversationIdAtRequestTime = conversationAtRequestTime.id;
+    let [providerToUse, modelNameForAPI] = String(modelValueFromOption).split('::');
+    if (!providerToUse || !modelNameForAPI) { showToast(`模型 "${modelValueFromOption}" 配置错误。`,'error'); return; }
+    providerToUse = providerToUse.toLowerCase();
 
-    // --- 3. 解析模型提供商 ---
-    let actualProvider, modelNameForAPI;
-    const parts = String(modelValueFromOption).split('::');
-    if (parts.length === 2) {
-        const prefix = parts[0].toLowerCase(); modelNameForAPI = parts[1];
-        switch (prefix) {
-            case 'sf': actualProvider = 'siliconflow'; break;
-            case 'openai': actualProvider = 'openai'; break;
-            case 'deepseek': actualProvider = 'deepseek'; break;
-            case 'gemini': actualProvider = 'gemini'; break;
-            case 'anthropic': actualProvider = 'anthropic'; break;
-            case 'ollama': actualProvider = 'ollama'; break;
-            case 'suanlema': actualProvider = 'suanlema'; break;
-            case 'openrouter': actualProvider = 'openrouter'; break;
-            case 'volcengine': actualProvider = 'volcengine'; break;
-            default: showToast(`模型 "${modelValueFromOption}" 配置错误。`,'error'); return;
-        }
-    } else { showToast(`模型 "${modelValueFromOption}" 配置错误。`,'error'); return; }
-    const providerToUse = actualProvider;
-    
-    // --- 4. 进入“请求中”状态 ---
+    // --- 4. 进入“请求中”状态 (完整版) ---
     window.isGeneratingResponse = true;
     updateSubmitButtonState(true);
     window.currentAbortController = new AbortController();
     const signal = window.currentAbortController.signal;
     const userMessageContentForHistory = { text: promptText.trim(), files: filesToActuallySend.map(f => ({ name: f.name, type: f.type })) };
-    appendMessage('user', userMessageContentForHistory, modelValueFromOption, null, conversationIdAtRequestTime, conversationAtRequestTime.messages.length, null);
+    appendMessage('user', userMessageContentForHistory, null, null, conversationIdAtRequestTime, conversationAtRequestTime.messages.length, null);
     conversationAtRequestTime.messages.push({ role: 'user', content: userMessageContentForHistory, model: modelValueFromOption });
-    if (promptInput) { promptInput.value = ''; if (typeof autoGrowTextarea === 'function') autoGrowTextarea({ target: promptInput }); }
-    if (currentConversationId === conversationIdAtRequestTime) loadingDiv = appendLoading();
+    promptInput.value = '';
+    if (typeof autoGrowTextarea === 'function') { // 检查函数是否存在
+        autoGrowTextarea({ target: promptInput });
+    } else {
+        // 如果没有全局函数，可以手动触发 input 事件，这同样有效
+        promptInput.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    if (typeof autoGrowTextarea === 'function') autoGrowTextarea({ target: promptInput });
+    loadingDiv = appendLoading();
+    
     let accumulatedAssistantReply = "";
     let accumulatedThinkingForDisplay = "";
     const assistantRoleForDisplay = (providerToUse === 'gemini') ? 'model' : 'assistant';
-    window.isCurrentlyInThinkingBlock = false;
-    let accumulatedToolCallArgs = {};
     
     try {
-        // --- 5.1. 构建 API 请求体 ---
-        let currentTemperature = parseFloat(localStorage.getItem('model-temperature')) || 0.7;
-        let currentMaxTokensSetting = parseInt(localStorage.getItem(MAX_TOKENS_STORAGE_KEY), 10) || null;
-        if (currentMaxTokensSetting && currentMaxTokensSetting < 1) currentMaxTokensSetting = null;
+        // --- 5. 构建请求体 (完整版，包含所有逻辑) ---
+        const currentTemperature = parseFloat(localStorage.getItem('model-temperature')) || 0.7;
+        const maxTokensSetting = parseInt(localStorage.getItem(MAX_TOKENS_STORAGE_KEY), 10) || null;
         const providerSupportsStreaming = ['openai', 'anthropic', 'deepseek', 'siliconflow', 'ollama', 'suanlema', 'openrouter', 'volcengine', 'gemini'].includes(providerToUse);
-        
-        // ★★★ 核心修复 #1：正确结合服务商支持和用户开关 ★★★
         shouldUseStreaming = providerSupportsStreaming && isStreamingEnabled;
-        
-        bodyPayload = { model: modelNameForAPI, temperature: currentTemperature, ...(shouldUseStreaming && { stream: true }) };
-        const modelNameLower = modelNameForAPI.toLowerCase();
-        if (isAutoThinkModeEnabled) { if (providerToUse === 'volcengine' && modelNameLower.includes('doubao')) bodyPayload.thinking = "auto"; }
-        else { if (modelNameLower.includes('qwen/qwen3') || modelNameLower.includes('qwen3')) bodyPayload.enable_thinking = !!window.currentThinkMode; else if (providerToUse === 'volcengine' && modelNameLower.includes('doubao')) bodyPayload.thinking = window.currentThinkMode ? "on" : "off"; }
-        if (currentMaxTokensSetting) { const modelsWithoutTokenLimit = ['o4-mini', 'o4-mini-2025-04-16', 'o3']; if (!modelsWithoutTokenLimit.includes(modelNameForAPI)) bodyPayload.max_tokens = currentMaxTokensSetting; }
-        if (providerToUse === 'gemini') { apiUrl = `/.netlify/functions/gemini-proxy`; bodyPayload.contents = mapMessagesForGemini(conversationAtRequestTime.messages, filesToActuallySend); bodyPayload.generationConfig = { temperature: bodyPayload.temperature }; if (bodyPayload.max_tokens) bodyPayload.generationConfig.maxOutputTokens = bodyPayload.max_tokens; const systemMsg = conversationAtRequestTime.messages.find(m => m.role === 'system'); if (systemMsg?.content) bodyPayload.system_instruction = { role: "system", parts: [{text: String(systemMsg.content)}] }; delete bodyPayload.messages; delete bodyPayload.temperature; delete bodyPayload.max_tokens; }
-        else if (providerToUse === 'ollama') { const ollamaSettings = JSON.parse(localStorage.getItem('ollama-settings') || '{}'); apiUrl = ollamaSettings?.apiUrl?.trim() || 'http://localhost:11434/api/chat'; bodyPayload.messages = mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, 'ollama', filesToActuallySend); bodyPayload.options = { temperature: bodyPayload.temperature }; if (bodyPayload.max_tokens) bodyPayload.options.num_predict = bodyPayload.max_tokens; const systemMsg = conversationAtRequestTime.messages.find(m => m.role === 'system'); if (systemMsg?.content) bodyPayload.system = String(systemMsg.content).trim(); delete bodyPayload.temperature; delete bodyPayload.max_tokens; }
-        else { apiUrl = `/.netlify/functions/${providerToUse}-proxy`; bodyPayload.messages = mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, providerToUse, filesToActuallySend); if (providerToUse === 'anthropic') { const systemMsg = conversationAtRequestTime.messages.find(m => m.role === 'system'); if (systemMsg?.content) bodyPayload.system = String(systemMsg.content); if (!bodyPayload.max_tokens) bodyPayload.max_tokens = 4096; } }
 
-        // --- 5.2. 发送网络请求 ---
-        response = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(bodyPayload), signal });
+        bodyPayload = {
+            model: modelNameForAPI,
+            temperature: currentTemperature,
+            stream: shouldUseStreaming,
+            isManualThinkModeEnabled: isManualThinkModeEnabled, 
+            ...(maxTokensSetting && { max_tokens: maxTokensSetting })
+        };
+        
+       
+                // --- Think 模式逻辑 (最终修正版，支持 Qwen 和 Doubao 的显式关闭) ---
+        const modelNameLower = modelNameForAPI.toLowerCase();
+
+        // 打印用于调试的状态值
+        console.log("[Send - Think Check] isAutoThinkModeEnabled:", isAutoThinkModeEnabled);
+        console.log("[Send - Think Check] isManualThinkModeEnabled:", isManualThinkModeEnabled);
+        console.log("[Send - Think Check] modelNameLower:", modelNameLower);
+        console.log("[Send - Think Check] providerToUse:", providerToUse);
+
+        // 1. 自动思考模式 (isAutoThinkModeEnabled 开关) - 这个优先级最高
+        if (isAutoThinkModeEnabled) {
+            if (providerToUse === 'volcengine' && modelNameLower.includes('doubao')) {
+                bodyPayload.thinking = 'auto';
+                console.log("[Send - Payload] Auto-Thinking Mode: Applied 'thinking: auto' for Doubao model.");
+            }
+        }
+        /// 2. 手动思考模式 (根据模型类型分别处理)
+        else {
+            // ★★★ 核心修改：统一处理所有通过 Ollama 运行的模型，包括 Qwen3 ★★★
+            if (providerToUse === 'ollama') {
+                bodyPayload.think = isManualThinkModeEnabled; // 直接将开关状态 (true/false) 赋给 think 字段
+                console.log(`[Send - Payload] Manual-Thinking Mode: Explicitly set 'think: ${isManualThinkModeEnabled}' for Ollama model.`);
+            }
+            // ★★★ Qwen (非 Ollama) 模型处理逻辑 ★★★
+            else if (modelNameLower.includes('qwen')) {
+                bodyPayload.enable_thinking = isManualThinkModeEnabled;
+                console.log(`[Send - Payload] Manual-Thinking Mode: Explicitly set 'enable_thinking: ${isManualThinkModeEnabled}' for Qwen model.`);
+            }
+            // ★★★ 豆包 (Doubao) 模型处理逻辑 ★★★
+            else if (providerToUse === 'volcengine' && modelNameLower.includes('doubao')) {
+                const thinkingType = isManualThinkModeEnabled ? 'thinking' : 'non-thinking';
+                bodyPayload.thinking = { "type": thinkingType };
+                console.log(`[Send - Payload] Manual-Thinking Mode: Explicitly set 'thinking: { type: "${thinkingType}" }' for Doubao model.`);
+            }
+        }
+
+        // Provider 特有逻辑
+        if (providerToUse === 'gemini') {
+            apiUrl = `/.netlify/functions/gemini-proxy`;
+            bodyPayload.messages = conversationAtRequestTime.messages; // 后端处理转换
+        } else {
+            apiUrl = `/.netlify/functions/${providerToUse}-proxy`;
+            bodyPayload.messages = mapMessagesForStandardOrClaude(conversationAtRequestTime.messages, providerToUse, filesToActuallySend);
+            if (providerToUse === 'anthropic') {
+                const sysMsg = conversationAtRequestTime.messages.find(m => m.role === 'system');
+                if (sysMsg?.content) bodyPayload.system = sysMsg.content;
+                if (!bodyPayload.max_tokens) bodyPayload.max_tokens = 4096;
+            }
+        }
+        
+        // --- 6. 发送网络请求 ---
+        console.log(`[Send] Fetching ${apiUrl} with payload:`, JSON.parse(JSON.stringify(bodyPayload)));
+        const response = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(bodyPayload), signal });
+        
+        if (loadingDiv?.parentNode) loadingDiv.remove();
         
         const responseContentType = response.headers.get('content-type') || '';
         isActuallyStreaming = shouldUseStreaming && response.body && (responseContentType.includes('text/event-stream') || responseContentType.includes('application/x-ndjson'));
-        
-        if (isActuallyStreaming) {
-            // --- 分支 A: 处理流式响应 ---
-            if (!response.ok) throw new Error(`API流式请求失败 (${response.status}): ${await response.text()}`);
-            if (loadingDiv?.parentNode) loadingDiv.remove();
-            
-            let assistantTextElement, reasoningContentElement, reasoningBlockDiv;
-            tempMsgElementWrapper = appendMessage(assistantRoleForDisplay, "", modelValueFromOption, "", conversationIdAtRequestTime, conversationAtRequestTime.messages.length, null);
-            if (tempMsgElementWrapper) { assistantTextElement = tempMsgElementWrapper.querySelector('.text'); reasoningContentElement = tempMsgElementWrapper.querySelector('.reasoning-content'); reasoningBlockDiv = tempMsgElementWrapper.querySelector('.reasoning-block'); }
 
+        if (isActuallyStreaming) {
+            // --- 6a. 处理流式响应 ---
+            if (!response.ok) throw new Error(`API流式请求失败 (${response.status}): ${await response.text()}`);
+            
+            tempMsgElementWrapper = appendMessage(assistantRoleForDisplay, { text: '' }, modelValueFromOption, null, conversationIdAtRequestTime, -1, null);
+            const assistantTextElement = tempMsgElementWrapper.querySelector('.text');
+            const reasoningDivElement = tempMsgElementWrapper.querySelector('.reasoning-content');
+            const reasoningBlockDiv = tempMsgElementWrapper.querySelector('.reasoning-block');
+            
             const stream = response.body.pipeThrough(new TextDecoderStream());
             let buffer = '';
+            let inThinkingBlock = false; 
 
             for await (const chunk of stream) {
                 if (signal.aborted) throw new Error("STREAM_ABORTED_BY_USER");
                 buffer += chunk;
-                const chunkSeparator = (providerToUse === 'ollama') ? '\n' : '\n\n';
-                let processableUnits = buffer.split(chunkSeparator);
-                buffer = processableUnits.pop() || '';
 
-                for (const unit of processableUnits) {
-                    if (!unit.trim()) continue;
-                    let jsonDataString;
-                    if (providerToUse !== 'ollama') { const dataLine = unit.split('\n').find(line => line.startsWith('data:')); if (!dataLine) continue; jsonDataString = dataLine.substring(5).trim(); }
-                    else { jsonDataString = unit.trim(); }
-                    if (!jsonDataString || jsonDataString === '[DONE]') continue;
-                    let chunkObj;
-                    try { chunkObj = JSON.parse(jsonDataString); } catch (e) { continue; }
-                    if (!streamContentReceived) streamContentReceived = true;
+                // 根据 provider 确定分隔符
+                const separator = (providerToUse === 'ollama') ? '\n' : '\n\n';
+                let boundaryIndex;
+
+                while ((boundaryIndex = buffer.indexOf(separator)) !== -1) {
+                    const rawUnit = buffer.substring(0, boundaryIndex);
+                    buffer = buffer.substring(boundaryIndex + separator.length);
+
+                    if (!rawUnit.trim()) continue;
+
+                    let jsonDataString = null;
+
+                    // 1. 智能提取 JSON 字符串，兼容多种格式
+                    const trimmedUnit = rawUnit.trim();
+                    if (trimmedUnit.startsWith('data:')) {
+                        // 标准 SSE 格式 (如 Gemini)
+                        jsonDataString = trimmedUnit.substring(trimmedUnit.indexOf(':') + 1).trim();
+                    } else if (trimmedUnit.startsWith('{')) {
+                        // 纯 JSON 对象格式 (如 Ollama, 或某些 OpenAI 代理)
+                        jsonDataString = trimmedUnit;
+                    } else {
+                        // 忽略其他非标准行
+                        continue;
+                    }
                     
-                    let replyForUnit = '', thinkingForUnit = '';
-                    // ★★★ 核心修复 #2：统一且完整的流式数据提取逻辑 ★★★
-                    switch(providerToUse) {
-                        case 'anthropic': if (chunkObj.type === 'message_start' && chunkObj.message?.usage) usageData = { prompt_tokens: chunkObj.message.usage.input_tokens }; if (chunkObj.type === 'message_delta' && chunkObj.usage) { if (!usageData) usageData = {}; usageData.completion_tokens = chunkObj.usage.output_tokens; } replyForUnit = chunkObj.delta?.text || ''; break;
-                        case 'gemini': replyForUnit = chunkObj.candidates?.[0]?.content?.parts?.[0]?.text || ''; if (chunkObj.usageMetadata) { usageData = { prompt_tokens: chunkObj.usageMetadata.promptTokenCount, completion_tokens: chunkObj.usageMetadata.candidatesTokenCount }; } break;
-                        case 'ollama': replyForUnit = chunkObj.message?.content || ''; if (chunkObj.done && chunkObj.total_duration) usageData = { prompt_tokens: chunkObj.prompt_eval_count, completion_tokens: chunkObj.eval_count }; break;
-                        default:
-                            const delta = chunkObj.choices?.[0]?.delta;
-                            if (delta) {
-                                if (typeof delta.reasoning_content === 'string') { thinkingForUnit += delta.reasoning_content; }
-                                if (typeof delta.reasoning === 'string') { thinkingForUnit += delta.reasoning; }
-                                if (delta.tool_calls?.[0]?.function?.name === 'think') { try { const args = JSON.parse(delta.tool_calls[0].function.arguments); thinkingForUnit += args.thought || ''; } catch(e) { /* 忽略不完整的JSON */ } }
-                                if (typeof delta.content === 'string') { replyForUnit = delta.content; }
-                            }
-                            if (chunkObj.usage) { usageData = chunkObj.usage; }
-                            break;
-                    }
+                    if (jsonDataString === '[DONE]') continue;
+                    
+                    try {
+                        const chunkObj = JSON.parse(jsonDataString);
+                        if (!streamContentReceived) streamContentReceived = true;
+                        
+                        let rawTextFromChunk = '';
+                        let reasoningForUnit = null;
 
-                    if ((replyForUnit || thinkingForUnit) && typeof processStreamChunk === 'function') {
-                        processStreamChunk(replyForUnit, providerToUse, conversationIdAtRequestTime, assistantTextElement, reasoningContentElement, reasoningBlockDiv, thinkingForUnit || null);
-                        accumulatedAssistantReply += replyForUnit;
-                        accumulatedThinkingForDisplay += thinkingForUnit;
+                        // 2. 从 JSON 中提取内容 (完整版)
+                        switch(providerToUse) {
+                            case 'gemini': 
+                                // 只提取回复内容，不再关心 thoughts
+                                rawTextFromChunk = chunkObj.candidates?.[0]?.content?.parts?.[0]?.text || ''; 
+                                break;
+                            case 'anthropic':
+                                if (chunkObj.type === 'content_block_delta' && chunkObj.delta?.type === 'text_delta') {
+                                    rawTextFromChunk = chunkObj.delta.text || '';
+                                }
+                                if (chunkObj.type === 'message_delta' && chunkObj.usage) {
+                                    usageData = chunkObj.usage;
+                                }
+                                break;
+                            case 'ollama':
+                                if (chunkObj?.message?.content) {
+                                    rawTextFromChunk = chunkObj.message.content;
+                                }
+                                if (chunkObj.done === true && chunkObj.total_duration) {
+                                    usageData = {
+                                        prompt_tokens: chunkObj.prompt_eval_count || 0,
+                                        completion_tokens: chunkObj.eval_count || 0,
+                                        total_tokens: (chunkObj.prompt_eval_count || 0) + (chunkObj.eval_count || 0)
+                                    };
+                                }
+                                break;
+                            default: // OpenAI, Deepseek, Qwen, OpenRouter, etc.
+                                const delta = chunkObj.choices?.[0]?.delta;
+                                if (delta) {
+                                    rawTextFromChunk = delta.content || '';
+                                    reasoningForUnit = delta.reasoning || delta.reasoning_content || null;
+                                }
+                                if (chunkObj.usage) { usageData = chunkObj.usage; }
+                                break;
+                        }
+
+                        // 3. 分离思考和回复 (完整版)
+                        let replyTextPortion = '';
+                        let thinkingTextPortion = '';
+
+                        if (reasoningForUnit) {
+                            thinkingTextPortion = reasoningForUnit;
+                            replyTextPortion = rawTextFromChunk;
+                        } else if (rawTextFromChunk) {
+                            const extraction = extractThinkingAndReply(rawTextFromChunk, '<think>', '</think>', inThinkingBlock);
+                            replyTextPortion = extraction.replyTextPortion;
+                            thinkingTextPortion = extraction.thinkingTextPortion;
+                            inThinkingBlock = extraction.newThinkingBlockState;
+                        }
+
+                        // 4. 累积并更新UI (完整版)
+                        if (thinkingTextPortion) {
+                            accumulatedThinkingForDisplay += thinkingTextPortion;
+                        }
+                        if (replyTextPortion) {
+                            accumulatedAssistantReply += replyTextPortion;
+                        }
+
+                        if ((replyTextPortion || thinkingTextPortion) && typeof processStreamChunk === 'function') {
+                            processStreamChunk(
+                                replyTextPortion, 
+                                providerToUse, 
+                                conversationIdAtRequestTime, 
+                                assistantTextElement, 
+                                reasoningDivElement, 
+                                reasoningBlockDiv, 
+                                accumulatedThinkingForDisplay
+                            );
+                        }
+
+                    } catch (e) {
+                        console.error('解析流式JSON失败:', e, '原始字符串:', `"${jsonDataString}"`);
                     }
                 }
             }
             requestWasSuccessful = true;
-            finalAssistantReply = accumulatedAssistantReply;
-            finalThinkingProcess = accumulatedThinkingForDisplay;
-        } else {
-            // --- 分支 B: 处理非流式响应 ---
-            const responseText = await response.text();
-            if (!response.ok) { let detail = responseText; try { detail = JSON.parse(responseText).error?.message || responseText; } catch (e) {} throw new Error(`API请求失败 (${response.status}): ${detail.substring(0, 300)}`); }
-            if (loadingDiv?.parentNode) loadingDiv.remove();
-            let data;
-            try { data = JSON.parse(responseText); } catch (e) { throw new Error(`API响应非JSON格式: ${responseText.substring(0, 300)}`); }
-            
-            switch(providerToUse) {
-                case 'gemini': finalAssistantReply = data.candidates?.[0]?.content?.parts?.[0]?.text || '（Gemini 回复为空）'; break;
-                case 'anthropic': finalAssistantReply = data.content?.[0]?.text || '（Anthropic 回复为空）'; break;
-                default: finalAssistantReply = data.choices?.[0]?.message?.content || '（回复为空）'; break;
-            }
-            
-            // ★★★ 核心修复 #3：统一的、健壮的非流式思考过程提取逻辑 ★★★
-            const message = data.choices?.[0]?.message;
-            if (message) {
-                finalThinkingProcess = message.thoughts || message.reasoning || message.reasoning_content || message.intermediate_steps || null;
-            }
 
-            switch(providerToUse) {
-                case 'gemini': if (data.usageMetadata) { usageData = { prompt_tokens: data.usageMetadata.promptTokenCount, completion_tokens: data.usageMetadata.candidatesTokenCount }; } break;
-                case 'anthropic': if (data.usage) { usageData = { prompt_tokens: data.usage.input_tokens, completion_tokens: data.usage.output_tokens }; } break;
-                case 'ollama': if (data.prompt_eval_count && data.eval_count) { usageData = { prompt_tokens: data.prompt_eval_count, completion_tokens: data.eval_count }; } break;
-                default: if (data.usage) { usageData = data.usage; } break;
-            }
-            requestWasSuccessful = true;
-            streamContentReceived = (finalAssistantReply && finalAssistantReply.trim() !== '' && !finalAssistantReply.includes('回复为空'));
-        }
-
-    } catch (error) {
-        requestWasSuccessful = false; console.error(`[Send Main Catch] Error: ${error.name} - ${error.message}`);
-        if (error.name === 'AbortError' || error.message === "STREAM_ABORTED_BY_USER") { finalAssistantReply = accumulatedAssistantReply.trim() ? accumulatedAssistantReply.trim() + '\n（用户已中止）' : '（用户已中止）'; streamContentReceived = accumulatedAssistantReply.trim() !== ''; }
-        else { finalAssistantReply = `错误：${error.message || "未知请求错误"}`; if(response) finalAssistantReply += ` (状态码: ${response.status})`; }
-    } finally {
-        // --- 6. 收尾工作 ---
-        if (loadingDiv?.parentNode) loadingDiv.remove();
-        window.isGeneratingResponse = false;
-        window.currentAbortController = null;
-        updateSubmitButtonState(false);
-        if (usageData && !usageData.total_tokens) { usageData.total_tokens = (usageData.prompt_tokens ?? 0) + (usageData.completion_tokens ?? 0); }
-
-        if (isActuallyStreaming && (requestWasSuccessful || finalAssistantReply.includes('（用户已中止）')) && streamContentReceived) {
-            if (tempMsgElementWrapper && tempMsgElementWrapper.parentNode) {
+            // --- 流结束后重新渲染 Markdown --- (完整版)
+            if (isActuallyStreaming && tempMsgElementWrapper && requestWasSuccessful) {
                 const assistantTextElement = tempMsgElementWrapper.querySelector('.text');
-                const messageDiv = tempMsgElementWrapper.querySelector('.message.assistant');
-                const reasoningContentElement = tempMsgElementWrapper.querySelector('.reasoning-content');
-                const reasoningBlockDiv = tempMsgElementWrapper.querySelector('.reasoning-block');
-                
-                // ★★★ 核心修复 #4：正确处理最终的思考和回复渲染 ★★★
-                let finalRenderedParts = { replyTextPortion: finalAssistantReply };
-                if (typeof extractThinkingAndReply === 'function') {
-                   finalRenderedParts = extractThinkingAndReply(finalAssistantReply, "<think>", "</think>", false);
-                }
-                
                 if (assistantTextElement) {
-                    assistantTextElement.innerHTML = marked.parse(finalRenderedParts.replyTextPortion);
-                    if (typeof processPreBlocksForCopyButtons === 'function') processPreBlocksForCopyButtons(assistantTextElement);
-                    if (typeof pruneEmptyNodes === 'function') pruneEmptyNodes(assistantTextElement);
-                }
-                if (reasoningContentElement && reasoningBlockDiv) {
-                    const combinedThinking = (finalThinkingProcess || "").trim();
-                    reasoningContentElement.textContent = combinedThinking;
-                    reasoningBlockDiv.classList.toggle('reasoning-block-empty', !combinedThinking);
-                }
-                
-                if (messageDiv) {
-                    messageDiv.querySelector('.message-meta-info')?.remove();
-                    if (modelValueFromOption || usageData) {
-                        const metaInfoDiv = document.createElement('div'); metaInfoDiv.className = 'message-meta-info';
-                        if (modelValueFromOption) { const note = document.createElement('div'); note.className = 'model-note'; let dn = (modelValueFromOption.split('::')[1] || modelValueFromOption); const opt = document.querySelector(`#model option[value="${modelValueFromOption}"]`); if(opt) dn = opt.textContent; note.textContent = `模型：${dn}`; metaInfoDiv.appendChild(note); }
-                        if (usageData) { const tokenNote = document.createElement('span'); tokenNote.className = 'token-count-note'; const p = usageData.prompt_tokens ?? 'N/A'; const c = usageData.completion_tokens ?? 'N/A'; tokenNote.textContent = `提示: ${p} tokens, 回复: ${c} tokens`; metaInfoDiv.appendChild(tokenNote); }
-                        messageDiv.appendChild(metaInfoDiv);
+                    // 使用 data-raw-markdown 中累积的最终文本，或者用 accumulatedAssistantReply
+                    const fullRawText = assistantTextElement.dataset.rawMarkdown || accumulatedAssistantReply;
+                    
+                    assistantTextElement.innerHTML = marked.parse(fullRawText.trim() || "");
+
+                    if (typeof pruneEmptyNodes === 'function') {
+                        pruneEmptyNodes(assistantTextElement);
+                    }
+                    if (typeof processPreBlocksForCopyButtons === 'function') {
+                        processPreBlocksForCopyButtons(assistantTextElement);
+                    }
+                    if (window.MathJax) {
+                        MathJax.typesetPromise([assistantTextElement]).catch(err => console.error("MathJax re-typesetting failed after stream:", err));
                     }
                 }
-                if (window.MathJax) MathJax.typesetPromise([assistantTextElement, reasoningContentElement].filter(Boolean));
             }
-        } else {
-            // ★★★ 核心修复 #5：确保非流式也渲染思考过程 ★★★
-            if (tempMsgElementWrapper?.parentNode) tempMsgElementWrapper.remove();
-            if (currentConversationId === conversationIdAtRequestTime) {
-                appendMessage(assistantRoleForDisplay, finalAssistantReply, modelValueFromOption, finalThinkingProcess, conversationIdAtRequestTime, -1, usageData);
+            
+            finalThinkingProcess = accumulatedThinkingForDisplay;
+            finalAssistantReply = accumulatedAssistantReply;
+            
+       } else {
+            // --- 6b. 处理非流式响应 ---
+            const responseData = await response.json();
+            if (!response.ok) throw new Error(responseData.error?.message || JSON.stringify(responseData));
+            
+            // ★★★ 核心修复：统一处理所有非流式响应，并正确构建 usage 字段 ★★★
+            let finalReply = '';
+            let finalReasoning = null;
+            let finalUsage = null;
+
+            switch(providerToUse) {
+                 case 'gemini': 
+                    finalReply = responseData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+                    // 明确设置为 null，因为我们不再期望从原生 REST API 获取 thoughts
+                    finalReasoning = null; 
+                    if (responseData.usageMetadata) {
+                        finalUsage = {
+                            prompt_tokens: responseData.usageMetadata.promptTokenCount,
+                            completion_tokens: responseData.usageMetadata.candidatesTokenCount || (responseData.usageMetadata.totalTokenCount - responseData.usageMetadata.promptTokenCount),
+                            total_tokens: responseData.usageMetadata.totalTokenCount
+                        };
+                    }
+                    break;
             }
+
+            // --- 分离 <think> 标签 (如果存在) ---
+            if (finalReasoning) {
+                finalThinkingProcess = finalReasoning;
+                finalAssistantReply = finalReply;
+            } else if (finalReply.includes('<think>')) {
+                const extraction = extractThinkingAndReply(finalReply, '<think>', '</think>', false);
+                finalAssistantReply = extraction.replyTextPortion.trim();
+                finalThinkingProcess = extraction.thinkingTextPortion.trim();
+            } else {
+                finalAssistantReply = finalReply;
+                finalThinkingProcess = null;
+            }
+            
+            // ★★★ 将最终确定的 usage 数据赋给顶层变量 ★★★
+            usageData = finalUsage;
+
+            appendMessage(assistantRoleForDisplay, { text: finalAssistantReply }, modelValueFromOption, finalThinkingProcess, conversationIdAtRequestTime, -1, usageData);
+            requestWasSuccessful = true;
         }
-        
-        const targetConversationForStorage = conversations.find(c => c.id === conversationIdAtRequestTime);
-        if (targetConversationForStorage) {
-            let finalReplyToSave = finalAssistantReply;
-            if (typeof extractThinkingAndReply === 'function' && !finalThinkingProcess) {
-                const finalSaveExtraction = extractThinkingAndReply(finalAssistantReply, "<think>", "</think>", false);
-                finalReplyToSave = finalSaveExtraction.replyTextPortion;
-                finalThinkingProcess = finalSaveExtraction.thinkingTextPortion.trim() || null;
-            }
-            const hasMeaningfulContent = (finalReplyToSave && !finalReplyToSave.startsWith('（无回复）') && !finalReplyToSave.startsWith('错误：')) || (finalThinkingProcess && finalThinkingProcess.trim() !== '');
-            const isNotPurelyFailedRequest = requestWasSuccessful || finalAssistantReply.includes('（用户已中止）');
-            if (isNotPurelyFailedRequest && hasMeaningfulContent) {
-                const lastMessage = targetConversationForStorage.messages[targetConversationForStorage.messages.length - 1];
-                if (!lastMessage || lastMessage.role === 'user') {
-                    targetConversationForStorage.messages.push({ role: assistantRoleForDisplay, content: finalReplyToSave, model: modelValueFromOption, reasoning_content: finalThinkingProcess, usage: usageData });
+    } finally {
+        // --- 7. 收尾工作 (功能完整版) ---
+        window.isGeneratingResponse = false;
+        updateSubmitButtonState(false);
+        window.currentAbortController = null;
+
+        const targetConversation = conversations.find(c => c.id === conversationIdAtRequestTime);
+        if (targetConversation) {
+            const hasMeaningfulContent = requestWasSuccessful && finalAssistantReply && finalAssistantReply.trim() !== '' && !finalAssistantReply.startsWith('（');
+            
+            if (hasMeaningfulContent) {
+                // 保存数据
+                const lastMessage = targetConversation.messages[targetConversation.messages.length - 1];
+                if (lastMessage && lastMessage.role === 'user') {
+                      console.log('%c[SAVE CHECK 1] 即将被保存的 usageData:', 'color: red; font-weight: bold;', JSON.parse(JSON.stringify(usageData || null)));
+                    targetConversation.messages.push({ 
+                        role: assistantRoleForDisplay, 
+                        content: finalAssistantReply.trim(),
+                        model: modelValueFromOption, 
+                        reasoning_content: finalThinkingProcess ? finalThinkingProcess.trim() : null,
+                        usage: usageData 
+                    });
                     saveConversations();
                 }
+                
+                // 自动重命名
+                if (targetConversation.title === '新对话') {
+                    const newTitle = finalAssistantReply.substring(0, 20).replace(/\s+/g, ' ').trim();
+                    targetConversation.title = newTitle;
+                    saveConversations();
+                    renderConversationList();
+                    if (currentConversationId === conversationIdAtRequestTime) {
+                        document.getElementById('chat-title').textContent = newTitle;
+                    }
+                    
+                }
             }
         }
         
-        if (requestWasSuccessful && streamContentReceived && targetConversationForStorage?.title === '新对话') { let titleCandidate = String(finalAssistantReply).replace(/<[^>]+>/g, '').replace(/[\s*#\-–—~`\[\](){}|：:「『“”。！？,，\.>]+/gm, '').trim().substring(0, 30); if (titleCandidate.length > 2) { targetConversationForStorage.title = titleCandidate + (titleCandidate.length === 30 ? "..." : ""); if (currentConversationId === conversationIdAtRequestTime && document.getElementById('chat-title')) document.getElementById('chat-title').textContent = targetConversationForStorage.title; } }
-        renderConversationList();
-        const requestSucceededWithContent = requestWasSuccessful && (streamContentReceived || !isActuallyStreaming) && !finalAssistantReply.includes('（用户已中止）') && !finalAssistantReply.startsWith('错误：');
-        if (requestSucceededWithContent && filesToActuallySend.length > 0) { 
-            uploadedFilesData.length = 0; // ★★★ 核心修正：使用这种方式就地清空数组 ★★★
-            renderFilePreview(); 
-        }        const messagesContainerForScroll = document.getElementById('messages');
-        if (messagesContainerForScroll && currentConversationId === conversationIdAtRequestTime) { requestAnimationFrame(() => { messagesContainerForScroll.scrollTop = messagesContainerForScroll.scrollHeight; }); }
-        console.log("======================= send() function FINISHED =======================\n\n");
+        // 清理文件
+        if (requestWasSuccessful && finalAssistantReply.trim() && filesToActuallySend.length > 0) {
+            uploadedFilesData.length = 0;
+            renderFilePreview();
+        }
+        
+        // 滚动到底部
+        const messagesContainer = document.getElementById('messages');
+        if (messagesContainer) requestAnimationFrame(() => { messagesContainer.scrollTop = messagesContainer.scrollHeight; });
+        console.log("%c--- send() FINISHED ---", "color:dodgerblue; font-weight:bold;");
     }
 }
 
@@ -1712,82 +1820,57 @@ window.send = send; // 暴露到全局，供HTML调用
  * @param {HTMLElement | null} reasoningBlockEl - 包含思考过程的DOM元素 (.reasoning-block)。
  * @param {string | null} [explicitThinkingText=null] - 如果API分别提供思考和回复，则这是显式的思考文本。
  */
-// ====================================================================================================
-// =================== START: 终极修复版 processStreamChunk() (无任何省略) ===================
-// ====================================================================================================
 
-function processStreamChunk(rawText, provider, conversationId, assistantTextEl, reasoningContentEl, reasoningBlockEl, explicitThinkingText = null) {
-    let canUpdateUI = (currentConversationId === conversationId);
-    if (!assistantTextEl && !reasoningContentEl && canUpdateUI) {
-        console.warn("[ProcessChunk] UI elements (assistantTextEl or reasoningContentEl) are null, but UI update was expected. Cannot update UI for this chunk. Provider:", provider);
-        canUpdateUI = false;
+
+
+// ★★★★★ 请用这个函数完整替换你现有的 processStreamChunk 函数 ★★★★★
+
+function processStreamChunk(replyTextPortion, provider, conversationId, assistantTextEl, reasoningContentEl, reasoningBlockEl, fullReasoningText) {
+    // 1. 基本的UI更新检查
+    if (currentConversationId !== conversationId || !assistantTextEl) {
+        return; 
     }
 
-    let replyTextPortion = "";
-    let thinkingTextPortion = "";
-
-    // ★★★ 最终修复：智能分离思考和回复部分 ★★★
-    if (explicitThinkingText && typeof explicitThinkingText === 'string' && explicitThinkingText.trim() !== '') {
-        // 1. 优先处理来自 tool_calls 的“显式思考”
-        thinkingTextPortion = explicitThinkingText;
-        replyTextPortion = (typeof rawText === 'string') ? rawText : "";
-    } else if (typeof rawText === 'string' && rawText) {
-        // 2. 如果没有显式思考，则尝试从 rawText 中分离“隐式思考” (<think>标签)
-        if (typeof extractThinkingAndReply === 'function' && (rawText.includes("<think>") || window.isCurrentlyInThinkingBlock || rawText.includes("</think>"))) {
-            try {
-                let extracted = extractThinkingAndReply(rawText, "<think>", "</think>", window.isCurrentlyInThinkingBlock);
-                replyTextPortion = extracted.replyTextPortion;
-                thinkingTextPortion = extracted.thinkingTextPortion;
-                window.isCurrentlyInThinkingBlock = extracted.newThinkingBlockState;
-            } catch (e) {
-                console.error("[ProcessChunk] Error in extractThinkingAndReply:", e, "Raw text:", rawText);
-                replyTextPortion = rawText;
-            }
+    // --- 思考过程的更新逻辑 (保持不变，因为它是覆盖式的) ---
+    if (reasoningContentEl && reasoningBlockEl) {
+        const hasValidReasoning = typeof fullReasoningText === 'string' && fullReasoningText.trim() !== '';
+        if (hasValidReasoning) {
+            reasoningContentEl.textContent = fullReasoningText;
+            reasoningBlockEl.classList.remove('reasoning-block-empty');
         } else {
-            // 3. 如果 rawText 中也没有<think>标签，则全部视为回复
-            replyTextPortion = rawText;
+            reasoningContentEl.textContent = '';
+            reasoningBlockEl.classList.add('reasoning-block-empty');
         }
     }
 
-    let uiActuallyUpdated = false;
+    // --- ★★★ 核心修改：回复内容的渲染方式 ★★★ ---
+    if (replyTextPortion) {
+        // a. 从 assistantTextEl 中获取已经累积的、未被解析的原始 Markdown 文本。
+        // 我们用一个自定义属性 `data-raw-markdown` 来存储它。
+        let accumulatedRawMarkdown = assistantTextEl.dataset.rawMarkdown || "";
 
-    // 更新思考过程 UI
-    if (canUpdateUI && thinkingTextPortion) {
-        if (reasoningContentEl && reasoningContentEl instanceof HTMLElement) {
-            reasoningContentEl.textContent += thinkingTextPortion;
-            if (reasoningBlockEl && reasoningBlockEl.classList.contains('reasoning-block-empty') && reasoningContentEl.textContent.trim() !== '') {
-                reasoningBlockEl.classList.remove('reasoning-block-empty');
-            }
-            const rce = reasoningContentEl;
-            const scrollThresholdReasoning = 10;
-            if (rce.scrollHeight > rce.clientHeight && (rce.scrollHeight - rce.clientHeight <= rce.scrollTop + scrollThresholdReasoning)) {
-                rce.scrollTop = rce.scrollHeight;
-            }
-            uiActuallyUpdated = true;
+        // b. 将新的文本块追加到累积的原始文本上。
+        accumulatedRawMarkdown += replyTextPortion;
+        assistantTextEl.dataset.rawMarkdown = accumulatedRawMarkdown; // 更新存储
+
+        // c. 使用 marked.js 将【完整的、累积后的】Markdown 文本转换为 HTML。
+        assistantTextEl.innerHTML = marked.parse(accumulatedRawMarkdown);
+
+        // d. 实时为新生成的 <pre> 块添加复制按钮。
+        // (这一步对于性能敏感的应用可以考虑在流结束后统一处理，但实时处理体验更好)
+        if (typeof processPreBlocksForCopyButtons === 'function') {
+            processPreBlocksForCopyButtons(assistantTextEl);
         }
     }
 
-    // 更新主要回复 UI
-    if (canUpdateUI && replyTextPortion) {
-        if (assistantTextEl && assistantTextEl instanceof HTMLElement) {
-            assistantTextEl.appendChild(document.createTextNode(replyTextPortion));
-            uiActuallyUpdated = true;
-        }
-    }
-
-    // 滚动整个消息列表
-    if (canUpdateUI && uiActuallyUpdated) {
-        const messagesContainer = document.getElementById('messages');
-        if (messagesContainer) {
-            setTimeout(() => {
-                const considerableScrollUpOffset = messagesContainer.clientHeight * 0.75;
-                const distanceFromBottom = messagesContainer.scrollHeight - messagesContainer.clientHeight - messagesContainer.scrollTop;
-                const isContentLessThanOneScreen = messagesContainer.scrollHeight <= messagesContainer.clientHeight;
-                let shouldAutoScroll = isContentLessThanOneScreen || (distanceFromBottom <= considerableScrollUpOffset);
-                if (shouldAutoScroll) {
-                    messagesContainer.scrollTo({ top: messagesContainer.scrollHeight, behavior: 'auto' });
-                }
-            }, 0);
+    // --- 自动滚动 (保持不变) ---
+    const messagesContainer = document.getElementById('messages');
+    if (messagesContainer) {
+        const distanceFromBottom = messagesContainer.scrollHeight - messagesContainer.clientHeight - messagesContainer.scrollTop;
+        if (distanceFromBottom < 200) {
+            requestAnimationFrame(() => {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            });
         }
     }
 }
@@ -3424,32 +3507,19 @@ if (sidebarHeader && logoDisplay && searchInput && searchWrapper) {
     }
     
     
-    if (thinkModeToggle) {
-        // 从 localStorage 读取保存的状态
-        const savedThinkMode = localStorage.getItem(THINK_MODE_STORAGE_KEY);
-        
-        if (savedThinkMode !== null) {
-            currentThinkMode = (savedThinkMode === 'true');
-        } else {
-            currentThinkMode = false; // 默认关闭
-        }
-        
-        thinkModeToggle.checked = currentThinkMode;
-        console.log("DOMContentLoaded: Think Mode initialized to:", currentThinkMode);
+    thinkModeToggle = document.getElementById('think-mode-toggle');
+if (thinkModeToggle) {
+    const savedThinkMode = localStorage.getItem(THINK_MODE_STORAGE_KEY);
+    isManualThinkModeEnabled = (savedThinkMode === 'true'); // 初始化
+    thinkModeToggle.checked = isManualThinkModeEnabled;
+    console.log("DOMContentLoaded: Manual Think Mode (isManualThinkModeEnabled) initialized to:", isManualThinkModeEnabled);
 
-        // 为开关的 change 事件添加监听器
-        thinkModeToggle.addEventListener('change', function() {
-            currentThinkMode = this.checked;
-            localStorage.setItem(THINK_MODE_STORAGE_KEY, currentThinkMode.toString());
-            console.log("Think Mode changed by toggle to:", currentThinkMode);
-        });
-    }
-
-    if (modelFormTitle) {
-        console.log("DOMContentLoaded: 'modelFormTitle' was SUCCESSFULLY INITIALIZED to:", modelFormTitle);
-    } else {
-        console.error("DOMContentLoaded: CRITICAL - 'modelFormTitle' (element with ID 'model-form-title') was NOT FOUND in the DOM during initialization. It is NULL.");
-    }
+    thinkModeToggle.addEventListener('change', function() {
+        isManualThinkModeEnabled = this.checked; // 更新
+        localStorage.setItem(THINK_MODE_STORAGE_KEY, isManualThinkModeEnabled.toString());
+        console.log("Manual Think Mode (isManualThinkModeEnabled) changed by toggle to:", isManualThinkModeEnabled);
+    });
+}
     
     console.log("DEBUG DOMContentLoaded: DOM fully loaded and parsed.");
     if (modelForm) { // 添加一个检查，确保 modelForm 元素存在
@@ -3625,13 +3695,7 @@ if (sidebarHeader && logoDisplay && searchInput && searchWrapper) {
 
     submitActionBtn = document.getElementById('submit-action-btn');
      console.log("%cDOMContentLoaded: Value of submitActionBtn after getElementById:", "color: blue;", submitActionBtn); // 日志B
-        if (submitActionBtn) {
-        console.log("%cDOMContentLoaded: Found submit-action-btn element.", "color: blue;"); // 日志C
-        submitActionBtn.addEventListener('click', handleSubmitActionClick);
-        console.log("%cDOMContentLoaded: Event listener ADDED to submit-action-btn.", "color: blue;"); // 日志D
-    } else {
-        console.error("%cDOMContentLoaded: CRITICAL - submit-action-btn NOT FOUND.", "color: red; font-weight: bold;"); // 日志E
-    }
+
      if (!submitActionBtn) {
         console.error("CRITICAL: submitActionBtn not found in DOMContentLoaded!");
     } else {

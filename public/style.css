@@ -164,7 +164,7 @@ body.sidebar-collapsed .sidebar {
 
 .conv-nav{flex:1;overflow-y:auto;margin:0;padding:0;list-style:none;}
 .conv-nav li{ /* 对话列表项 */
-  padding:10px 18px; /* 稍微调整padding */
+  padding: 10px 4px 10px 12px;
   border-radius:var(--border-radius-md); /* 使用变量 */
   white-space:nowrap;
   text-overflow:ellipsis;
@@ -948,31 +948,7 @@ body.dark-theme .messages, body.dark-theme .sidebar, body.dark-theme .settings-a
 .new-btn { /* 已在主样式区调整 */
   margin: 0 16px 16px;
 }
-.conv-nav ul { /* 已在主样式区处理 */
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-.conv-nav li { /* 已在主样式区处理 */
-  display: block; /* 保持block */
-  margin: 4px 16px 4px; /* 保持与.new-btn一致的左右边距 */
-  padding: 10px 16px;
-  border-radius:var(--border-radius-md);
-  cursor: pointer;
-}
-.conv-nav li:hover { /* 已在主样式区处理 */
-  background: rgba(var(--primary-rgb), 0.12);
-}
 
-/* 3. 优化模型选择下拉样式 - 已在头部模型选择器中处理 */
-
-/* 4. 设置界面排版调整 - 已在 .settings-area 中处理 */
-
-/* 5. 精简输入区按钮和下拉整体对齐 - 已在 .input-area 中处理 */
-.input-area { /* 补丁中的padding值，如果需要覆盖主样式 */
-  padding: 10px 16px; /* 原始补丁值，确保一致性 */
-}
-/* —— 补丁结束 —— */
 
 
 /* 1. 为消息气泡内的所有 <p> 标签设置一个默认的下边距 */
@@ -1175,6 +1151,8 @@ body.light-theme .message.user .text a:hover { color: #fff !important; }
 #conversation-list li:hover .del:hover {
   background-color: rgba(229, 62, 62, 0.3) !important; /* 红色背景浅色版 */
 }
+
+
 /* 已归档列表折叠 */
 .archived-list {
   display: none; /* 默认收起 */
@@ -1609,120 +1587,154 @@ body.dark-theme .model-group-editor {
 }
 
 
-/* 模态对话框样式 */
+/* =================================================================== */
+/* ▼▼▼ 请用此 CSS 块完整替换掉旧的 .modal 和表单相关的所有样式 ▼▼▼ */
+/* =================================================================== */
+
+/* --- 模态对话框 (Modal) 最终美化版 --- */
+
+/* 1. 模态框背景遮罩 */
 .modal {
-  position: fixed;
-  z-index: 1001;
-  left: 0;
-  top: 0;
-  width: 100%;
-  height: 100%;
-  overflow: auto; /* 如果内容过长，允许模态框内部滚动 */
-  background-color: rgba(0,0,0,0.65); /* 加深遮罩 */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px; /* 防止模态框紧贴边缘 */
+    position: fixed; z-index: 1001;
+    left: 0; top: 0; width: 100%; height: 100%;
+    background-color: rgba(0,0,0,0.7); /* 加深遮罩 */
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    backdrop-filter: blur(4px); /* 添加背景模糊效果 */
 }
+
+/* 2. 模态框内容区域 */
 .modal-content {
-  background-color: var(--bg-color);
-  margin: auto;
-  padding: 28px; /* 增大内边距 */
-  border: none; /* 移除边框，用阴影 */
-  border-radius: var(--border-radius-lg); /* 更大圆角 */
-  width: 90%; /* 响应式宽度 */
-  max-width: 520px; /* 最大宽度 */
-  box-shadow: var(--shadow-lg); /* 更明显阴影 */
-  position: relative;
-  /* animation: modal-fade-in 0.3s ease-out; 保留动画 */
+    background-color: var(--bg-color);
+    padding: 24px 28px; /* 调整内边距 */
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    width: 90%;
+    max-width: 600px; /* ★ 加宽模态框以适应两列布局 */
+    box-shadow: var(--shadow-lg);
+    position: relative;
 }
+
+/* 3. 关闭按钮 */
 .close-modal-btn {
-  color: var(--text-secondary);
-  position: absolute;
-  top: 16px; /* 调整位置 */
-  right: 16px;
-  font-size: 1.8rem; /* 图标大小 */
-  font-weight: normal; /* 不加粗 */
-  cursor: pointer;
-  line-height: 1;
-  padding: 4px; /* 增加点击区域 */
-  border-radius: 50%; /* 圆形点击区域 */
-  transition: color 0.2s ease, background-color 0.2s ease;
+    color: var(--text-secondary);
+    position: absolute; top: 12px; right: 12px;
+    font-size: 1.8rem; font-weight: normal;
+    cursor: pointer; line-height: 1;
+    padding: 4px; border-radius: 50%;
+    transition: color 0.2s ease, background-color 0.2s ease;
 }
-.close-modal-btn:hover,
-.close-modal-btn:focus {
-  color: var(--text-color);
-  background-color: rgba(var(--primary-rgb),0.08); /* 轻微背景 */
+.close-modal-btn:hover {
+    color: var(--text-color);
+    background-color: rgba(128, 128, 128, 0.1);
 }
-#model-form .form-group {
-  margin-bottom: 20px; /* 增大间距 */
+
+/* 4. 模态框标题 */
+.modal-content h3 {
+    margin: 0 0 24px 0; /* 标题与表单内容的间距 */
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+    font-size: 1.25rem;
+    font-weight: 600;
 }
-#model-form label {
-  display: block;
-  margin-bottom: 8px; /* 标签与输入框间距 */
-  font-weight: 500;
-  font-size: 0.95rem;
+
+/* --- 表单布局 (Form Layout) --- */
+
+/* 5. 表单组 (每一行) */
+.form-group {
+    display: flex;
+    align-items: flex-start; /* ★ 让标签和输入框顶部对齐 */
+    gap: 20px; /* ★ 左右两列的间距 */
+    margin-bottom: 20px;
 }
-#model-form input[type="text"] {
-  width: 100%; /* 占满 */
-  padding: 10px 14px; /* 舒适padding */
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-md);
-  background-color: var(--input-bg);
-  color: var(--text-color);
-  font-size: 0.95rem;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+
+/* 6. 表单标签 (左侧列) */
+.form-group label {
+    flex-basis: 80px;         /* ★ 核心修改：设置一个固定的基础宽度 */
+    flex-shrink: 0;
+    padding-top: 8px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    text-align: right;          /* 确保文本在固定宽度内右对齐 */
+    color: var(--text-secondary);
+    padding-right: 1em;         /* ★ 新增：给标签和输入框之间增加一点视觉间距 */
 }
-#model-form input[type="text"]:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2); /* 辉光效果 */
+
+/* 7. 表单控件容器 (右侧列) */
+.form-control-wrapper {
+    flex-grow: 1; /* ★ 占据所有剩余空间 */
+    display: flex;
+    flex-direction: column; /* 让输入框和提示文字垂直排列 */
 }
-#model-form small {
-  display: block;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  margin-top: 6px;
+
+/* 8. 所有表单输入控件的通用样式 */
+#model-form input, #preset-form input,
+#preset-form select, #preset-form textarea {
+    width: 100%;
+    /* ★ 核心修改：统一并微调内边距 */
+    padding: 10px 12px;
+    
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg); /* ★ 使用更大的圆角，与截图更匹配 */
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    font-size: 0.95rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
-#model-form .form-actions {
-  margin-top: 28px; /* 与表单内容间距 */
-  text-align: right;
-  display: flex; /* 使用flex控制按钮 */
-  justify-content: flex-end; /* 按钮靠右 */
-  gap: 12px; /* 按钮间距 */
+#model-form input:focus, #preset-form input:focus,
+#preset-form select:focus, #preset-form textarea:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
 }
-#model-form .form-actions button { /* 表单按钮通用 */
-  padding: 10px 22px; /* 舒适padding */
-  font-size: 0.95rem;
-  border-radius: var(--border-radius-md);
-  border: 1px solid var(--border-color);
-  font-weight: 500;
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+
+/* 9. Textarea 的特定样式 */
+#preset-form textarea {
+    line-height: 1.6;
+    resize: vertical;
+    min-height: 120px;
 }
-button.primary-action, /* 主要操作按钮，如保存 */
-#model-form .form-actions button#save-model-detail-btn { /* 特定ID也应用 */
-    background-color: var(--primary) !important; /* 确保覆盖 */
-    color: white !important;
-    border-color: var(--primary) !important; /* 边框与背景一致 */
-    box-shadow: var(--shadow-sm);
+
+/* 10. Select 的特定样式 (保持箭头) */
+#preset-form select {
+    appearance: none; -webkit-appearance: none;
+    background-repeat: no-repeat;
+    background-position: right 0.8rem center;
+    background-size: 1em;
 }
-button.primary-action:hover,
-#model-form .form-actions button#save-model-detail-btn:hover {
-    filter: brightness(0.9); /* 变暗一点 */
-    box-shadow: var(--shadow-md);
+body.light-theme #preset-form select { background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e"); }
+body.dark-theme #preset-form select { background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23a0aec0' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e"); }
+
+/* 11. 提示小字 (small) 的样式 */
+.form-group small {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-top: 8px; /* 与输入框的间距 */
+    line-height: 1.4;
 }
-button.secondary, /* 次要按钮，如取消 */
-#model-form .form-actions button#cancel-model-detail-btn {
-  background-color: var(--bg-secondary); /* 次要背景 */
-  color: var(--text-color);
-  border-color: var(--border-color);
+
+/* 12. 表单动作按钮区域 */
+.form-actions {
+    margin-top: 28px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
 }
-button.secondary:hover,
-#model-form .form-actions button#cancel-model-detail-btn:hover {
-  background-color: rgba(var(--primary-rgb),0.1); /* 轻微主色背景 */
-  border-color: var(--primary); /* 主色边框 */
-  color: var(--primary); /* 主色文字 */
+.form-actions button {
+    padding: 10px 24px;
+    font-size: 0.95rem;
+    border-radius: var(--border-radius-md);
+    border: 1px solid var(--border-color);
+    font-weight: 500;
+    transition: all 0.2s ease;
 }
+.form-actions button.action-btn { background-color: var(--primary); color: white; border-color: var(--primary); }
+.form-actions button.action-btn:hover { background-color: rgba(var(--primary-rgb), 0.85); border-color: rgba(var(--primary-rgb), 0.85); }
+.form-actions button.secondary { background-color: var(--bg-secondary); color: var(--text-color); }
+.form-actions button.secondary:hover { border-color: var(--primary); background-color: rgba(var(--primary-rgb), 0.1); color: var(--primary); }
 
 /* 文件预览区域 */
 .file-preview-area {
@@ -2092,6 +2104,11 @@ body:not(.dark-theme) .inline-chat-settings-panel .setting-item input[type="numb
     /* 深色主题滚动条 */
     scrollbar-width: thin;
     scrollbar-color: #666 #333; /* 滑块颜色 轨道颜色 */
+}
+.preset-list-editor {
+    display: flex;
+    flex-direction: column;
+    gap: 16px; /* ★ 核心修改：将 gap 的值增大，例如从 12px 增加到 16px */
 }
 .preset-prompts-panel::-webkit-scrollbar { width: 6px; }
 .preset-prompts-panel::-webkit-scrollbar-track { background: rgba(0,0,0,0.1); border-radius: 3px;}
@@ -2640,4 +2657,164 @@ body.dark-theme .toast.toast-error {
 #clear-prompt-btn:hover {
     background-color: var(--background-color-tertiary);
     color: var(--text-color-primary);
+}
+
+/* --- 侧边栏对话列表项 --- */
+.conversation-item {
+    display: flex;
+    align-items: center;
+    /* ★ 核心改动：减小间距，为标题腾出空间 */
+    gap: 4px;
+    padding: 10px 4px 10px 12px; /* ★ 调整右内边距，使按钮更贴近边缘 */
+    position: relative;
+    border-radius: var(--border-radius-lg);
+    cursor: pointer;
+    overflow: hidden;
+    transition: background-color 0.15s ease;
+}
+
+.conversation-item .title {
+    flex-grow: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+}
+
+.conversation-item-actions {
+    flex-shrink: 0;
+}
+
+.conversation-item .more-options-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    padding: 6px;
+    border-radius: var(--border-radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    opacity: 0;
+    visibility: hidden;
+}
+
+.conversation-item:hover .more-options-btn,
+.more-options-btn:focus-visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* 非激活状态下的悬浮效果 */
+.conversation-item:not(.active):hover .more-options-btn:hover {
+    background-color: rgba(128, 128, 128, 0.2);
+    color: var(--text-color);
+}
+body.dark-theme .conversation-item:not(.active):hover .more-options-btn:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* --- 全局菜单样式 (保持不变) --- */
+#global-actions-menu {
+    position: absolute; z-index: 9999;
+    background-color: #2c2f33; border: 1px solid #40444b;
+    border-radius: var(--border-radius-lg);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.24);
+    min-width: 180px; padding: 8px;
+    display: flex; flex-direction: column; gap: 4px;
+    opacity: 0; visibility: hidden; pointer-events: none;
+    transform: translateY(-10px) scale(0.95);
+    transition: opacity 0.15s ease, transform 0.15s ease;
+}
+body.light-theme #global-actions-menu {
+    background-color: var(--bg-light); border-color: var(--border-light);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+#global-actions-menu.show {
+    opacity: 1; visibility: visible; pointer-events: auto;
+    transform: translateY(0) scale(1);
+}
+#global-actions-menu .dropdown-item {
+    background: none; border: none; color: var(--text-dark);
+    padding: 8px 10px; text-align: left; width: 100%;
+    border-radius: var(--border-radius-md); cursor: pointer;
+    font-size: 0.9rem; font-weight: 500;
+    display: flex; align-items: center; gap: 10px;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+body.light-theme #global-actions-menu .dropdown-item { color: var(--text-light); }
+#global-actions-menu .dropdown-item svg { flex-shrink: 0; opacity: 0.8; }
+#global-actions-menu .dropdown-item:hover { background-color: var(--primary); color: #fff; }
+#global-actions-menu .dropdown-item.danger:hover { background-color: #d83c3e; color: #fff; }
+.dropdown-divider { height: 1px; background-color: var(--border-color); margin: 6px 0; }
+
+/* --- 置顶和活动状态视觉样式 --- */
+.conversation-item.pinned { background-color: rgba(255, 215, 0, 0.08); }
+.conversation-item.pinned::before {
+    content: ''; position: absolute; left: 0; top: 5px;
+    bottom: 5px; width: 3px; background-color: #ffd700;
+    border-radius: 0 3px 3px 0;
+}
+#conversation-list li.active {
+    background-color: var(--primary) !important;
+    color: #fff !important; font-weight: 500;
+}
+#conversation-list li.active::before { background-color: #fff !important; }
+
+/* ★★★ 核心改动：激活状态下“三个点”按钮的特殊样式 ★★★ */
+#conversation-list li.active .more-options-btn {
+    color: #fff; /* 图标颜色变为白色 */
+    background-color: transparent; /* 默认背景完全透明 */
+}
+#conversation-list li.active .more-options-btn:hover {
+    /* 悬浮时，背景变为半透明白色，实现截图中的融合效果 */
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.preset-management-area {
+  flex: 1;
+  display: flex; /* 由 JS 控制 */
+  flex-direction: column;
+  padding: 24px;
+  overflow-y: auto;
+  gap: 24px;
+}
+.preset-management-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-color);
+}
+.preset-management-header h2 {
+  margin: 0;
+  font-size: 1.6rem;
+}
+/* 复用模型管理头部的按钮样式 */
+.preset-management-controls button {
+  margin-left: 10px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  border-radius: var(--border-radius-md);
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-secondary);
+  color: var(--text-color);
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.preset-management-controls button:hover {
+  border-color: var(--primary);
+  background-color: rgba(var(--primary-rgb), 0.1);
+  color: var(--primary);
+}
+.preset-management-controls button.primary-action {
+  background-color: var(--primary);
+  color: white;
+  border-color: var(--primary);
+}
+.preset-management-controls button.primary-action:hover {
+  background-color: rgba(var(--primary-rgb), 0.85);
+  border-color: rgba(var(--primary-rgb), 0.85);
+  color: white;
 }

@@ -10,7 +10,10 @@ let activeModel = '';
 let conversations = [];
 let isScrollingProgrammatically = false;
 let userHasManuallyScrolledUp = false;
-
+let presetListEditor = null;
+let presetFormModal = null;
+let presetForm = null;
+let presetFormTitle = null;
 let currentConversationId = null;
 
 // 初始化
@@ -748,131 +751,195 @@ function appendLoading() {
   return loadingWrapper; 
 }
 
+
+
 /**
- * 渲染左侧的对话列表，包括未归档和已归档的对话。
- * 会保留已归档列表的展开/折叠状态。
+ * 渲染左侧的对话列表。
+ * 点击“更多操作”时，会调用一个全局函数来显示一个独立的、不受父级 transform 影响的菜单。
  */
-function renderConversationList(searchTerm = '')  {
-  const list = document.getElementById('conversation-list'); // 对话列表的UL元素
+function renderConversationList(searchTerm = '') {
+    const list = document.getElementById('conversation-list');
 
-  // 检查归档区域之前是否是展开状态
-  let isArchivePreviouslyExpanded = false;
-  const oldArchiveToggle = list.querySelector('.archive-toggle');
-  if (oldArchiveToggle && oldArchiveToggle.classList.contains('expanded')) {
-    isArchivePreviouslyExpanded = true;
-  }
-
-  list.innerHTML = ''; // 清空现有列表项
-
-    // 2. 根据搜索词过滤对话
-  const lowerCaseSearchTerm = searchTerm.toLowerCase().trim();
-  let conversationsToRender = conversations;
-  if (lowerCaseSearchTerm) {
-    conversationsToRender = conversations.filter(c => 
-      c.title.toLowerCase().includes(lowerCaseSearchTerm)
-    );
-  }
-
-  // 渲染未归档的对话
-   conversationsToRender
-    .filter(c => !c.archived)
-    .forEach(c => {
-      const li = document.createElement('li');
-      li.className = 'conversation-item';
-      li.dataset.id = c.id; // 存储对话ID
-
-      const titleSpan = document.createElement('span');
-      titleSpan.className = 'title';
-      titleSpan.textContent = c.title;
-      li.appendChild(titleSpan);
-
-      if (c.isNew) { // 如果是新创建的对话，添加 'new-conv' 样式
-        li.classList.add('new-conv');
-      }
-      if (c.id === currentConversationId) { // 如果是当前活动对话，添加 'active' 样式
-        li.classList.add('active');
-      }
-
-      // 点击加载对话
-      li.addEventListener('click', () => {
-        if (isModelManagementActive) { // 这里的 isModelManagementActive 是全局的
-       showChatArea(); // showChatArea 会设置 isModelManagementActive = false;
-  }
-
-        if (c.isNew) { // 如果点击的是新对话，清除 'isNew' 标记
-            c.isNew = false;
-            
-        }
-        loadConversation(c.id);
-      });
-      // 双击重命名对话
-      li.addEventListener('dblclick', () => renameConversation(c.id));
-
-      const delBtn = document.createElement('button'); // 删除按钮
-      delBtn.textContent = 'Del';
-      delBtn.className = 'del';
-      delBtn.addEventListener('click', e => {
-        e.stopPropagation(); // 防止触发li的点击事件
-        if (confirm(`确定要删除「${c.title}」吗？此操作无法恢复。`)) {
-          deleteConversation(c.id);
-        }
-      });
-      li.appendChild(delBtn);
-      list.appendChild(li);
-    });
-
-  // 渲染已归档的对话（如果存在）
-  const archivedConversations = conversations.filter(c => c.archived);
-  if (archivedConversations.length) {
-    const toggle = document.createElement('li'); // "已归档" 分组的切换条目
-    toggle.className = 'archive-toggle';
-    toggle.textContent = `已归档 (${archivedConversations.length})`;
-
-    if (isArchivePreviouslyExpanded) { // 恢复之前的展开状态
-      toggle.classList.add('expanded');
+    let isArchivePreviouslyExpanded = false;
+    const oldArchiveToggle = list.querySelector('.archive-toggle');
+    if (oldArchiveToggle && oldArchiveToggle.classList.contains('expanded')) {
+        isArchivePreviouslyExpanded = true;
     }
 
-    // 点击切换已归档列表的显示/隐藏
-    toggle.addEventListener('click', () => {
-        toggle.classList.toggle('expanded');
-        const subListElement = toggle.nextElementSibling; // 已归档对话的 <ul>
-        if (subListElement && subListElement.classList.contains('archived-list')) {
-            subListElement.style.display = toggle.classList.contains('expanded') ? 'block' : 'none';
-        }
-    });
-    list.appendChild(toggle);
+    list.innerHTML = '';
+    let conversationsToProcess = [...conversations];
 
-    const subList = document.createElement('ul'); // 存储已归档对话的子列表
-    subList.className = 'archived-list';
-
-    // 根据之前的状态设置初始显示
-    if (isArchivePreviouslyExpanded) {
-      subList.style.display = 'block';
-    } else {
-      subList.style.display = 'none';
+    const lowerCaseSearchTerm = searchTerm.toLowerCase().trim();
+    if (lowerCaseSearchTerm) {
+        conversationsToProcess = conversationsToProcess.filter(c =>
+            c.title.toLowerCase().includes(lowerCaseSearchTerm)
+        );
     }
 
-    archivedConversations.forEach(c => {
-      const li = document.createElement('li');
-      li.className = 'conversation-item archived'; // 添加 'archived' 样式
-      li.dataset.id = c.id;
+    const unarchivedConversations = conversationsToProcess
+        .filter(c => !c.archived)
+        .sort((a, b) => (b.isPinned || false) - (a.isPinned || false));
 
-      const titleSpan = document.createElement('span');
-      titleSpan.className = 'title';
-      titleSpan.textContent = c.title;
-      li.appendChild(titleSpan);
+    unarchivedConversations.forEach(c => {
+        const li = document.createElement('li');
+        li.className = 'conversation-item';
+        li.dataset.id = c.id;
 
-      if (c.id === currentConversationId) { // 标记活动对话（即使它已归档）
-        li.classList.add('active');
-      }
-      li.addEventListener('click', () => loadConversation(c.id));
-      li.addEventListener('dblclick', () => renameConversation(c.id));
-      subList.appendChild(li);
+        if (c.isPinned) {
+            li.classList.add('pinned');
+        }
+
+        const titleSpan = document.createElement('span');
+        titleSpan.className = 'title';
+        titleSpan.textContent = c.title;
+        li.appendChild(titleSpan);
+
+        const actionsWrapper = document.createElement('div');
+        actionsWrapper.className = 'conversation-item-actions';
+
+        const moreBtn = document.createElement('button');
+        moreBtn.className = 'action-btn more-options-btn';
+        moreBtn.title = '更多操作';
+        moreBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-three-dots-vertical" viewBox="0 0 16 16">
+                <path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/>
+            </svg>
+        `;
+        
+        // ★ 核心改动：点击按钮时，调用全局菜单显示函数
+        moreBtn.onclick = (e) => {
+            e.stopPropagation();
+            showGlobalActionsMenu(moreBtn, c.id, c.title, c.isPinned);
+        };
+        
+        actionsWrapper.appendChild(moreBtn);
+        li.appendChild(actionsWrapper);
+
+        if (c.isNew) li.classList.add('new-conv');
+        if (c.id === currentConversationId) li.classList.add('active');
+
+        li.addEventListener('click', () => {
+            if (isModelManagementActive) showChatArea();
+            if (c.isNew) c.isNew = false;
+            loadConversation(c.id);
+        });
+        li.addEventListener('dblclick', () => renameConversation(c.id));
+
+        list.appendChild(li);
     });
-    list.appendChild(subList);
-  }
 
-  enableConversationDrag(); // 启用/重新启用对话列表的拖拽排序
+    // 渲染已归档对话 (保持不变)
+    const archivedConversations = conversationsToProcess.filter(c => c.archived);
+    if (archivedConversations.length > 0) {
+        const toggle = document.createElement('li');
+        toggle.className = 'archive-toggle';
+        toggle.textContent = `已归档 (${archivedConversations.length})`;
+        if (isArchivePreviouslyExpanded) toggle.classList.add('expanded');
+        toggle.addEventListener('click', () => {
+            toggle.classList.toggle('expanded');
+            const subListElement = toggle.nextElementSibling;
+            if (subListElement) subListElement.style.display = toggle.classList.contains('expanded') ? 'block' : 'none';
+        });
+        list.appendChild(toggle);
+        const subList = document.createElement('ul');
+        subList.className = 'archived-list';
+        if (isArchivePreviouslyExpanded) subList.style.display = 'block';
+        else subList.style.display = 'none';
+        archivedConversations.forEach(c => {
+            const li = document.createElement('li');
+            li.className = 'conversation-item archived';
+            li.dataset.id = c.id;
+            const titleSpan = document.createElement('span');
+            titleSpan.className = 'title';
+            titleSpan.textContent = c.title;
+            li.appendChild(titleSpan);
+            if (c.id === currentConversationId) li.classList.add('active');
+            li.addEventListener('click', () => loadConversation(c.id));
+            li.addEventListener('dblclick', () => renameConversation(c.id));
+            subList.appendChild(li);
+        });
+        list.appendChild(subList);
+    }
+    
+    enableConversationDrag();
+}
+
+/**
+ * 显示全局的操作菜单，包含置顶、重命名、删除功能。
+ * @param {HTMLElement} buttonElement - 被点击的“三个点”按钮元素。
+ * @param {string} convId - 对话的 ID。
+ * @param {string} convTitle - 对话的标题。
+ * @param {boolean} isPinned - 对话是否已置顶。
+ */
+function showGlobalActionsMenu(buttonElement, convId, convTitle, isPinned) {
+    const menu = document.getElementById('global-actions-menu');
+    if (!menu) return;
+
+    // --- 1. 动态填充菜单项 ---
+    menu.innerHTML = '';
+
+    // A. 置顶/取消置顶
+    const pinMenuItem = document.createElement('button');
+    pinMenuItem.className = 'dropdown-item';
+    pinMenuItem.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.902-1.414.707-.195-.195.512-1.22.707-1.414l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146"/>
+        </svg>
+        <span>${isPinned ? '取消置顶' : '置顶对话'}</span>
+    `;
+    pinMenuItem.onclick = () => togglePin(convId);
+    menu.appendChild(pinMenuItem);
+
+    // B. 重命名
+    const renameMenuItem = document.createElement('button');
+    renameMenuItem.className = 'dropdown-item';
+    renameMenuItem.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11z"/>
+        </svg>
+        <span>重命名</span>
+    `;
+    renameMenuItem.onclick = () => renameConversation(convId);
+    menu.appendChild(renameMenuItem);
+    
+    // C. 添加分隔线
+    const divider = document.createElement('div');
+    divider.className = 'dropdown-divider';
+    menu.appendChild(divider);
+
+    // D. 删除
+    const deleteMenuItem = document.createElement('button');
+    deleteMenuItem.className = 'dropdown-item danger';
+    deleteMenuItem.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M11 1.5v1h3.5a.5.5 0 0 1 0 1h-.538l-.853 10.66A2 2 0 0 1 11.115 16h-6.23a2 2 0 0 1-1.994-1.84L2.038 3.5H1.5a.5.5 0 0 1 0-1H5v-1A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5m-5 0v1h4v-1a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5"/>
+        </svg>
+        <span>删除对话</span>
+    `;
+    deleteMenuItem.onclick = () => {
+        if (confirm(`确定要删除对话「${convTitle}」吗？此操作无法恢复。`)) {
+            deleteConversation(convId);
+        }
+    };
+    menu.appendChild(deleteMenuItem);
+
+    // --- 2. 定位并显示菜单 ---
+    const rect = buttonElement.getBoundingClientRect();
+    menu.style.top = `${rect.bottom + window.scrollY + 6}px`; // 增加一点间距
+    menu.style.left = `${rect.right + window.scrollX - menu.offsetWidth}px`;
+
+    menu.classList.add('show');
+
+    // --- 3. 添加关闭逻辑 ---
+    const closeMenu = (e) => {
+        if (!menu.contains(e.target)) {
+            menu.classList.remove('show');
+            document.removeEventListener('click', closeMenu);
+        }
+    };
+    setTimeout(() => {
+        document.addEventListener('click', closeMenu);
+    }, 0);
 }
 
 /**
@@ -912,6 +979,21 @@ function enableConversationDrag() {
       renderConversationList(); // 重新渲染列表以反映新顺序（并重新应用Sortable）
     }
   });
+}
+
+
+/**
+ * 切换指定ID对话的置顶状态。
+ * @param {string} id - 要操作的对话的ID。
+ */
+function togglePin(id) {
+    const conv = conversations.find(c => c.id === id);
+    if (conv) {
+        // 在对话对象上添加或切换 isPinned 属性
+        conv.isPinned = !conv.isPinned; 
+        saveConversations();      // 保存更改到 localStorage
+        renderConversationList(); // 重新渲染列表以反映新的顺序和状态
+    }
 }
 
 // --- 对话逻辑 ---
@@ -1912,47 +1994,45 @@ function showSettings() {
 }
 window.showSettings = showSettings; // 暴露到全局
 
+/**
+ * 显示聊天主界面，并隐藏所有其他管理界面（如设置、模型管理、模板管理）。
+ * 这是一个“重置”函数，用于确保返回聊天时 UI 状态正确。
+ */
 function showChatArea() {
+    // 1. 获取所有需要控制显示/隐藏的顶级区域元素
     const settingsArea = document.getElementById('settings-area');
     const chatArea = document.getElementById('chat-area');
-    const modelMgmtArea = document.getElementById('model-management-area'); // 获取模型管理区域元素
-    const sidebar = document.querySelector('.sidebar'); // 获取侧边栏元素
+    const modelMgmtArea = document.getElementById('model-management-area');
+    const presetMgmtArea = document.getElementById('preset-management-area'); // ★ 新增获取模板管理区
+    const sidebar = document.querySelector('.sidebar');
 
-    // 1. 控制主内容区域的显示
+    // 2. 隐藏所有非聊天区域
     if (settingsArea) settingsArea.style.display = 'none';
-    if (modelMgmtArea) modelMgmtArea.style.display = 'none'; // 确保模型管理区域被隐藏
-    if (chatArea) chatArea.style.display = 'flex'; // 显示聊天区域
+    if (modelMgmtArea) modelMgmtArea.style.display = 'none';
+    if (presetMgmtArea) presetMgmtArea.style.display = 'none'; // ★ 新增隐藏模板管理区
 
-    // 2. 控制侧边栏的显示
-    if (sidebar) {
-  
-        sidebar.style.display = 'flex';
-    }
+    // 3. 显示聊天区域和侧边栏
+    if (chatArea) chatArea.style.display = 'flex';
+    if (sidebar) sidebar.style.display = 'flex'; // ★ 核心修复：确保侧边栏总是被显示
 
-    // 3. 更新状态变量
-    isModelManagementActive = false; // 明确表示已不在模型管理激活状态
+    // 4. 更新全局状态变量
+    isModelManagementActive = false; // 无论从哪里返回，都重置此状态
 
-    // 4. 处理聊天内容的加载或创建
+    // 5. 加载或创建对话 (这部分逻辑保持不变，非常重要)
     if (!currentConversationId || !conversations.find(c => c.id === currentConversationId)) {
-        // 如果没有当前对话ID，或者当前对话ID无效（例如从模型管理返回且该对话被删了）
         if (conversations.length > 0) {
-            // 加载第一个未归档对话，或第一个对话（如果都是归档的）
-            const firstNonArchived = conversations.filter(c => !c.archived)[0];
+            const firstNonArchived = conversations.find(c => !c.archived);
             const targetIdToLoad = firstNonArchived ? firstNonArchived.id : conversations[0].id;
-            loadConversation(targetIdToLoad); // loadConversation 应处理模型列表变化
+            loadConversation(targetIdToLoad);
         } else {
-            // 没有对话存在，创建一个新的
             createNewConversation();
         }
     } else {
-        // 如果有有效的当前对话ID，重新加载它以确保UI同步
-        // (特别是从模型管理界面返回，模型列表或当前对话的模型可能已更改)
+        // 重新加载当前对话，以确保任何可能在管理界面中发生的更改（如模型列表）能反映到UI上
         loadConversation(currentConversationId);
     }
 
-    // 5. （可选但推荐）重新渲染对话列表
-    // 因为切换回聊天视图时，可能需要更新列表项的 'active' 状态，
-    // 或者如果之前因为 isModelManagementActive 而未正确渲染 active 状态。
+    // 6. 重新渲染对话列表，以更新 'active' 状态
     renderConversationList();
 }
 
@@ -2160,6 +2240,145 @@ function handleTitleClick() {
         enableInlineTitleEdit(); // 重新启用编辑功能
       }
     });
+}
+
+/**
+ * 渲染预设模板管理界面列表。
+ */
+function renderPresetManagementUI() {
+    if (!presetListEditor || !loadedPresetPrompts) {
+        return;
+    }
+    presetListEditor.innerHTML = '';
+
+    loadedPresetPrompts.forEach((preset, index) => {
+        const presetItemDiv = document.createElement('div');
+        presetItemDiv.className = 'model-option-editor'; // 复用模型管理的样式
+
+        const safeName = escapeHtml(preset.name || "");
+        const safeDesc = escapeHtml(preset.description || "无描述");
+        const safeType = preset.type === 'system_prompt' ? '系统角色' : '输入框填充';
+
+        presetItemDiv.innerHTML = `
+            <div class="details">
+                <strong>${safeName}</strong>
+                <span>类型: ${safeType} | 描述: ${safeDesc}</span>
+            </div>
+            <div class="actions">
+                <button onclick="openPresetFormForEdit(${index})">编辑</button>
+                <button class="danger-text" onclick="deletePresetPrompt(${index})">删除</button>
+            </div>
+        `;
+        presetListEditor.appendChild(presetItemDiv);
+    });
+}
+
+/**
+ * 打开预设模板表单进行添加或编辑。
+ * @param {number} [index] - 编辑时提供，预设在数组中的索引。
+ */
+function openPresetFormForEdit(index) {
+    presetForm.reset();
+    document.getElementById('edit-preset-index').value = '';
+
+    if (typeof index !== 'undefined' && loadedPresetPrompts[index]) {
+        // 编辑模式
+        const preset = loadedPresetPrompts[index];
+        presetFormTitle.textContent = '编辑模板';
+        document.getElementById('edit-preset-index').value = index;
+        document.getElementById('preset-name').value = preset.name;
+        document.getElementById('preset-description').value = preset.description || '';
+        document.getElementById('preset-type').value = preset.type;
+        document.getElementById('preset-prompt').value = preset.prompt;
+    } else {
+        // 添加模式
+        presetFormTitle.textContent = '添加新模板';
+    }
+    presetFormModal.style.display = 'flex';
+}
+
+/**
+ * 关闭预设模板表单。
+ */
+function closePresetForm() {
+    presetFormModal.style.display = 'none';
+}
+
+/**
+ * 删除指定索引的预设模板。
+ * @param {number} index - 要删除的预设在数组中的索引。
+ */
+function deletePresetPrompt(index) {
+    if (confirm(`确定要删除模板 "${loadedPresetPrompts[index].name}" 吗？`)) {
+        loadedPresetPrompts.splice(index, 1);
+        savePresetsToFile(); // 保存更改
+        renderPresetManagementUI(); // 刷新管理列表
+        populatePresetPromptsList(); // 刷新输入框旁的模板列表
+    }
+}
+
+/**
+ * 处理预设模板表单的提交事件。
+ */
+function handlePresetFormSubmit(event) {
+    event.preventDefault();
+
+    const name = document.getElementById('preset-name').value.trim();
+    const description = document.getElementById('preset-description').value.trim();
+    const type = document.getElementById('preset-type').value;
+    const prompt = document.getElementById('preset-prompt').value.trim();
+    const editIndex = document.getElementById('edit-preset-index').value;
+
+    if (!name || !prompt) {
+        showToast('模板名称和内容均为必填项！', 'warning');
+        return;
+    }
+
+    const newPresetData = {
+        // 生成一个简单的唯一ID
+        id: `custom_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name,
+        description,
+        type,
+        prompt
+    };
+
+    if (editIndex !== '') {
+        // 编辑现有模板
+        loadedPresetPrompts[parseInt(editIndex, 10)] = newPresetData;
+    } else {
+        // 添加新模板
+        loadedPresetPrompts.push(newPresetData);
+    }
+
+    savePresetsToFile(); // 保存更改到文件
+    renderPresetManagementUI(); // 刷新管理列表
+    populatePresetPromptsList(); // 刷新输入框旁的模板列表
+    closePresetForm();
+}
+
+/**
+ * 将当前的 `loadedPresetPrompts` 数组保存到 prompts.json 文件。
+ * (这需要一个后端接口来实现，我们先假设有一个)
+ */
+async function savePresetsToFile() {
+    try {
+        const response = await fetch('/.netlify/functions/save-prompts-local', { // 假设的后端接口
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompts: loadedPresetPrompts }),
+        });
+
+        if (response.ok) {
+            showToast('预设模板已成功保存！', 'success');
+        } else {
+            const errorData = await response.json();
+            throw new Error(errorData.message || '保存失败');
+        }
+    } catch (error) {
+        console.error("保存预设模板失败:", error);
+        showToast(`保存失败：${error.message}`, 'error');
+    }
 }
 
 /**
@@ -3039,7 +3258,7 @@ function applyPresetPrompt(preset) {
                 saveConversations(); // 保存对话更改
             }
 
-            showToast(`系统角色已设置为："${preset.name}"。\n提示内容: "${preset.prompt.substring(0, 100)}${preset.prompt.length > 100 ? '...' : ''}"\n此设置将影响接下来的对话。`);
+            showToast(`系统角色已设置为：“${preset.name}”`, 'success');
 
             // 可选：你可能想在这里做一些UI提示或操作，例如：
             // - 清空当前聊天消息区的助手回复（如果适用）
@@ -3161,6 +3380,13 @@ modelListEditor = document.getElementById('model-list-editor'); // 确保 modelL
 const resizer = document.getElementById('sidebar-resizer');
 const body = document.body;
 sidebar = document.querySelector('.sidebar');
+presetListEditor = document.getElementById('preset-list-editor');
+    presetFormModal = document.getElementById('preset-form-modal');
+    presetForm = document.getElementById('preset-form');
+    presetFormTitle = document.getElementById('preset-form-title');
+    const showPresetManagementBtn = document.getElementById('show-preset-management-btn');
+    const presetManagementArea = document.getElementById('preset-management-area');
+    const backToChatFromPresetBtn = document.getElementById('back-to-chat-from-preset-management-btn');
 
 
 console.log("%cDOMContentLoaded: Script fully loaded and parsed.", "color: blue;"); // 日志A
@@ -3216,6 +3442,31 @@ console.log("%cDOMContentLoaded: Script fully loaded and parsed.", "color: blue;
         });
     } else {
         console.warn("DOMContentLoaded: Streaming toggle 'streaming-toggle' not found.");
+    }
+
+    if (showPresetManagementBtn && presetManagementArea) {
+        showPresetManagementBtn.addEventListener('click', () => {
+            // 隐藏其他主区域
+            document.getElementById('chat-area').style.display = 'none';
+            document.getElementById('settings-area').style.display = 'none';
+            document.getElementById('model-management-area').style.display = 'none';
+            // 显示模板管理区
+            presetManagementArea.style.display = 'flex';
+            // (可选) 隐藏侧边栏
+            document.querySelector('.sidebar').style.display = 'none';
+            // 渲染列表
+            renderPresetManagementUI();
+        });
+    }
+
+    if (backToChatFromPresetBtn) {
+        backToChatFromPresetBtn.addEventListener('click', showChatArea); // 复用 showChatArea 函数
+    }
+    
+    // 绑定保存按钮
+    const savePresetsBtn = document.getElementById('save-presets-to-file-btn');
+    if (savePresetsBtn) {
+        savePresetsBtn.addEventListener('click', savePresetsToFile);
     }
   // --- 初始化最大 Token 输入框 ---
     if (maxTokensInputInline) {
@@ -3275,6 +3526,17 @@ try {
     } catch (error) {
         console.error("Error fetching or parsing prompts.json:", error);
         loadedPresetPrompts = []; // 出错则为空
+    }
+
+      document.getElementById('add-new-preset-btn')?.addEventListener('click', () => {
+        openPresetFormForEdit(); // 打开空的表单
+    });
+
+    presetForm?.addEventListener('submit', handlePresetFormSubmit);
+    
+    // 初始化时就渲染一次管理列表
+    if (presetListEditor) {
+        renderPresetManagementUI();
     }
 
 if (showPresetPromptsBtn && presetPromptsListPanel && presetPromptsUl) {
@@ -3909,21 +4171,7 @@ if (exportCurrentBtn) {
     const showModelManagementBtn = document.getElementById('show-model-management-btn');
 if (showModelManagementBtn) {
     showModelManagementBtn.addEventListener('click', () => {
-        console.log("======================================================");
-        console.log("[Click Event] 'Show Model Management' BUTTON CLICKED!");
-        console.log("[Click Event] Checking condition: editableModelConfig");
-        console.log("  - Value:", editableModelConfig); // 打印原始值
-        console.log("  - Is Truthy?:", !!editableModelConfig); // 明确判断是否为真值
-        if (editableModelConfig) { // 如果存在，打印其 models 属性
-            console.log("  - editableModelConfig.models:", JSON.parse(JSON.stringify(editableModelConfig.models)));
-            console.log("  - Is models an array?:", Array.isArray(editableModelConfig.models));
-            console.log("  - models length:", editableModelConfig.models ? editableModelConfig.models.length : 'N/A');
-        }
 
-        console.log("[Click Event] Checking condition: typeof renderModelManagementUI");
-        console.log("  - typeof:", typeof renderModelManagementUI);
-        console.log("  - Is function?:", typeof renderModelManagementUI === 'function');
-        console.log("======================================================");
 
         // 原来的切换显示区域的逻辑
         const chatArea = document.getElementById('chat-area');
@@ -4106,6 +4354,7 @@ if (showModelManagementBtn) {
             });
         }
     };
+
 });
 
 

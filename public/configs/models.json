@@ -186,6 +186,11 @@
           "text": "SF GLM-4-9B",
           "value": "siliconflow::THUDM/GLM-4-9B-0414",
           "isHidden": true
+        },
+        {
+          "text": "SF MiniMax-M1",
+          "value": "siliconflow::MiniMaxAI/MiniMax-M1-80k",
+          "isHidden": false
         }
       ]
     },
@@ -335,7 +340,7 @@
         {
           "text": "Doubao 1.6 Thinking",
           "value": "volcengine::doubao-seed-1.6-thinking-250615",
-          "isHidden": false
+          "isHidden": true
         }
       ]
     }

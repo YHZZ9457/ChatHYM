@@ -1485,21 +1485,54 @@ async function send() {
     const assistantRoleForDisplay = (providerToUse === 'gemini') ? 'model' : 'assistant';
     
     try {
-        // --- 5. 构建请求体 (保持不变) ---
+        // --- 5. 构建请求体 ---
         const currentTemperature = parseFloat(localStorage.getItem('model-temperature')) || 0.7;
         const maxTokensSetting = parseInt(localStorage.getItem(MAX_TOKENS_STORAGE_KEY), 10) || null;
         const providerSupportsStreaming = ['openai', 'anthropic', 'deepseek', 'siliconflow', 'ollama', 'suanlema', 'openrouter', 'volcengine', 'gemini'].includes(providerToUse);
         shouldUseStreaming = providerSupportsStreaming && isStreamingEnabled;
 
+        // ★★★ 核心修改：这是处理参数的最终版本 ★★★
+
+        // 1. 创建一个不含 max_tokens 的基础请求体
         bodyPayload = {
             model: modelNameForAPI,
             temperature: currentTemperature,
             stream: shouldUseStreaming,
-            ...(maxTokensSetting && { max_tokens: maxTokensSetting })
         };
         
         const modelNameLower = modelNameForAPI.toLowerCase();
 
+        // 1. 创建基础请求体
+        bodyPayload = {
+            model: modelNameForAPI,
+            stream: shouldUseStreaming,
+        };
+        
+        // 2. 智能处理 Temperature 参数
+        // 检查当前模型是否是不支持自定义 temperature 的 o4-mini
+        if (modelNameLower.includes('o4-mini')) {
+            // 对于 o4-mini，不向 bodyPayload 添加 temperature 参数，让 API 使用其默认值。
+            // 或者如果 API 要求必须传，则设置为 bodyPayload.temperature = 1;
+            // 通常不传是更安全的选择。
+            console.log(`[Send - Payload] Ignoring custom temperature for model: ${modelNameForAPI}`);
+        } else {
+            // 对于所有其他模型，正常使用用户设置的 temperature
+            bodyPayload.temperature = currentTemperature;
+            console.log(`[Send - Payload] Using custom temperature: ${currentTemperature}`);
+        }
+
+        // 3. 动态处理 max_tokens 参数 (保留之前的逻辑)
+        if (maxTokensSetting) {
+            if (providerToUse === 'openai' && (modelNameLower.includes('o4-mini') || modelNameLower.includes('o3'))) {
+                bodyPayload.max_completion_tokens = maxTokensSetting;
+                console.log(`[Send - Payload] Using 'max_completion_tokens: ${maxTokensSetting}' for model: ${modelNameForAPI}`);
+            } else {
+                bodyPayload.max_tokens = maxTokensSetting;
+                console.log(`[Send - Payload] Using default 'max_tokens: ${maxTokensSetting}' for model: ${modelNameForAPI}`);
+            }
+        }
+
+        // 3. 处理思考模式参数
         if (!isAutoThinkModeEnabled) {
             console.log("[Send - Payload] Applying manual thinking settings...");
             if (providerToUse === 'gemini') bodyPayload.isManualThinkModeEnabled = isManualThinkModeEnabled;
@@ -1510,6 +1543,7 @@ async function send() {
             console.log("[Send - Payload] Auto-Thinking Mode is ON. No thinking parameters will be sent.");
         }
 
+        // 4. 根据 Provider 准备最终的 API URL 和 messages 结构
         if (providerToUse === 'gemini') {
             apiUrl = `/.netlify/functions/gemini-proxy`;
             bodyPayload.messages = conversationAtRequestTime.messages;
@@ -1519,12 +1553,14 @@ async function send() {
             if (providerToUse === 'anthropic') {
                 const sysMsg = conversationAtRequestTime.messages.find(m => m.role === 'system');
                 if (sysMsg?.content) bodyPayload.system = sysMsg.content;
-                if (!bodyPayload.max_tokens) bodyPayload.max_tokens = 4096;
+                // Anthropic 如果没有设置 max_tokens，会报错，给一个默认值
+                if (!bodyPayload.max_tokens) {
+                    bodyPayload.max_tokens = 4096;
+                }
             }
         } else {
              throw new Error(`模型 "${modelValueFromOption}" 配置错误，无法确定服务商。`);
         }
-        
         // --- 6. 发送网络请求 (保持不变) ---
         console.log(`[Send] Fetching ${apiUrl} with payload:`, JSON.parse(JSON.stringify(bodyPayload)));
         response = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(bodyPayload), signal });
@@ -1549,23 +1585,31 @@ async function send() {
 
             for await (const chunk of stream) {
                 buffer += chunk;
-                // ★★★ 核心修复 1: 统一使用 '\n\n' 作为分隔符，因为它适用于所有SSE ★★★
-                const separator = '\n\n'; 
+                // ★★★ 核心修改 1: 根据 provider 选择正确的分隔符 ★★★
+                const separator = (providerToUse === 'ollama') ? '\n' : '\n\n';
+                
                 let boundaryIndex;
                 while ((boundaryIndex = buffer.indexOf(separator)) !== -1) {
                     const rawUnit = buffer.substring(0, boundaryIndex);
                     buffer = buffer.substring(boundaryIndex + separator.length);
                     if (!rawUnit.trim()) continue;
 
-                    // ★★★ 核心修复 2: 改进的SSE解析器，可以处理多行事件 ★★★
+                    // ★★★ 核心修改 2: 根据 provider 选择正确的解析方式 ★★★
                     let jsonDataString = null;
-                    const lines = rawUnit.split('\n');
-                    for (const line of lines) {
-                        if (line.startsWith('data:')) {
-                            jsonDataString = line.substring(5).trim(); // 获取 "data:" 后面的内容
-                            break; 
+                    if (providerToUse === 'ollama') {
+                        // Ollama 的每一行（如果非空）就是一个 JSON 对象
+                        jsonDataString = rawUnit.trim();
+                    } else {
+                        // 其他 SSE 标准的 API，从多行中找到 'data:' 行
+                        const lines = rawUnit.split('\n');
+                        for (const line of lines) {
+                            if (line.startsWith('data:')) {
+                                jsonDataString = line.substring(5).trim();
+                                break; 
+                            }
                         }
                     }
+
                     if (!jsonDataString || jsonDataString === '[DONE]') continue;
                     
                     try {
@@ -1574,46 +1618,45 @@ async function send() {
                         
                         let rawTextFromChunk = '', reasoningForUnit = null;
 
-                        // ★★★ 核心修复 3: 完整的 Anthropic 事件处理 ★★★
+                        // ★★★ 核心修改 3: 确认 ollama case 的逻辑正确 ★★★
                         switch(providerToUse) {
-                            case 'anthropic':
-                                // 1. 在流开始时，捕获输入token
-                                if (chunkObj.type === 'message_start') {
-                                    if (chunkObj.message?.usage?.input_tokens) {
-                                        usageData = { input_tokens: chunkObj.message.usage.input_tokens, output_tokens: 0 }; // 初始化
+                            case 'ollama':
+                                // Ollama 的内容直接在 message.content 中
+                                if (chunkObj?.message?.content) {
+                                    rawTextFromChunk = chunkObj.message.content; 
+                                }
+                                // 在流的最后一条消息中获取 token usage
+                                if (chunkObj.done === true && chunkObj.total_duration) { 
+                                    usageData = { prompt_tokens: chunkObj.prompt_eval_count || 0, completion_tokens: chunkObj.eval_count || 0 };
+                                    if (tempMsgElementWrapper && tempMsgElementWrapper.usageElement) {
+                                        tempMsgElementWrapper.usageElement.textContent = `提示: ${usageData.prompt_tokens} tokens, 回复: ${usageData.completion_tokens} tokens`;
                                     }
                                 }
-                                // 2. 处理文本内容块
+                                break;
+                            
+                            // 其他 provider 的 case 保持不变
+                            case 'anthropic':
+                                if (chunkObj.type === 'message_start') {
+                                    if (chunkObj.message?.usage?.input_tokens) {
+                                        usageData = { input_tokens: chunkObj.message.usage.input_tokens, output_tokens: 0 };
+                                    }
+                                }
                                 else if (chunkObj.type === 'content_block_delta' && chunkObj.delta?.type === 'text_delta') {
                                     rawTextFromChunk = chunkObj.delta.text || '';
                                 }
-                                // 3. 在流过程中，更新输出token
                                 else if (chunkObj.type === 'message_delta' && chunkObj.usage?.output_tokens) {
                                     usageData = { ...usageData, output_tokens: chunkObj.usage.output_tokens };
                                 }
-
-                                // 4. 在每次有效事件后，都尝试更新UI上的token显示
                                 if (usageData && tempMsgElementWrapper?.usageElement) {
                                     const promptTokens = usageData.input_tokens ?? '...';
                                     const completionTokens = usageData.output_tokens ?? '...';
                                     tempMsgElementWrapper.usageElement.textContent = `提示: ${promptTokens} tokens, 回复: ${completionTokens} tokens`;
                                 }
                                 break;
-                                
-                            // ... 其他 provider 的 case 保持不变 ...
                             case 'gemini': 
                                 rawTextFromChunk = chunkObj.candidates?.[0]?.content?.parts?.[0]?.text || '';
                                 if (chunkObj.usageMetadata) {
                                     usageData = { prompt_tokens: chunkObj.usageMetadata.promptTokenCount, completion_tokens: chunkObj.usageMetadata.candidatesTokenCount || 0 };
-                                }
-                                break;
-                            case 'ollama':
-                                if (chunkObj?.message?.content) rawTextFromChunk = chunkObj.message.content; 
-                                if (chunkObj.done === true && chunkObj.total_duration) { 
-                                    usageData = { prompt_tokens: chunkObj.prompt_eval_count || 0, completion_tokens: chunkObj.eval_count || 0 };
-                                    if (tempMsgElementWrapper && tempMsgElementWrapper.usageElement) {
-                                        tempMsgElementWrapper.usageElement.textContent = `提示: ${usageData.prompt_tokens} tokens, 回复: ${usageData.completion_tokens} tokens`;
-                                    }
                                 }
                                 break;
                             default: // OpenAI, Deepseek, Qwen, OpenRouter, Volcengine, etc.
@@ -1654,7 +1697,8 @@ async function send() {
                     }
                 }
             }
-        } 
+        }
+ 
         // --- 6b. 处理非流式响应 (保持不变) ---
         else {
             const responseData = await response.json();

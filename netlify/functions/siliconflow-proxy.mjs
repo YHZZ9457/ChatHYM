@@ -1,7 +1,3 @@
-// =====================================================================
-// START: 终极健壮版 siliconflow-proxy.mjs (带增强日志)
-// =====================================================================
-
 // netlify/functions/siliconflow-proxy.mjs
 console.log("SiliconFlow Proxy Function Loaded (v-Final - Robust Manual Pumping with Logging)");
 

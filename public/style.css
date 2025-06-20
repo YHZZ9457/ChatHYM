@@ -2102,14 +2102,17 @@ body:not(.dark-theme) .inline-chat-settings-panel .setting-item input[type="numb
     margin: 0 0 10px 0;
     font-size: 1em;
     /* 深色主题标题颜色 */
-    color: #c0c8d8; 
+    color: #c3cada; 
     font-weight: 500;
     /* 深色主题分隔线颜色 */
     border-bottom: 1px solid #383a40;
-    padding-bottom: 8px;
+    padding-bottom: 4px;
     text-align: left;
 }
-
+body:not(.dark-theme) .preset-prompts-title {
+  color: #292a2b; 
+  border-bottom: 1px solid #a9adb9;
+}
 
 body:not(.dark-theme) .preset-prompts-panel {
     /* 浅色主题背景和颜色 */

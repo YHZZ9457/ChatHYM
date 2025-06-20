@@ -2242,8 +2242,9 @@ function handleTitleClick() {
     });
 }
 
+
 /**
- * 渲染预设模板管理界面列表。
+ * 渲染预设模板管理界面列表，并启用拖拽排序和事件监听。
  */
 function renderPresetManagementUI() {
     if (!presetListEditor || !loadedPresetPrompts) {
@@ -2251,26 +2252,91 @@ function renderPresetManagementUI() {
     }
     presetListEditor.innerHTML = '';
 
+    if (typeof Sortable !== 'undefined') {
+        if (presetListEditor.sortableInstance) {
+            presetListEditor.sortableInstance.destroy();
+        }
+        presetListEditor.sortableInstance = Sortable.create(presetListEditor, {
+            animation: 150,
+            handle: '.model-option-editor',
+            onEnd: (evt) => {
+                const movedItem = loadedPresetPrompts.splice(evt.oldIndex, 1)[0];
+                loadedPresetPrompts.splice(evt.newIndex, 0, movedItem);
+                savePresetsToFile();
+            }
+        });
+    }
+
     loadedPresetPrompts.forEach((preset, index) => {
         const presetItemDiv = document.createElement('div');
-        presetItemDiv.className = 'model-option-editor'; // 复用模型管理的样式
+        presetItemDiv.className = 'model-option-editor';
+        
+        if (preset.isHidden) {
+            presetItemDiv.classList.add('model-option-hidden');
+        }
 
-        const safeName = escapeHtml(preset.name || "");
-        const safeDesc = escapeHtml(preset.description || "无描述");
-        const safeType = preset.type === 'system_prompt' ? '系统角色' : '输入框填充';
+        // --- ★ 核心修改：移除内联 onclick，改用 addEventListener ---
 
-        presetItemDiv.innerHTML = `
-            <div class="details">
-                <strong>${safeName}</strong>
-                <span>类型: ${safeType} | 描述: ${safeDesc}</span>
-            </div>
-            <div class="actions">
-                <button onclick="openPresetFormForEdit(${index})">编辑</button>
-                <button class="danger-text" onclick="deletePresetPrompt(${index})">删除</button>
-            </div>
+        const detailsDiv = document.createElement('div');
+        detailsDiv.className = 'details';
+        detailsDiv.innerHTML = `
+            <strong>${escapeHtml(preset.name || "")}</strong>
+            <span>类型: ${preset.type === 'system_prompt' ? '系统角色' : '输入框填充'} | 描述: ${escapeHtml(preset.description || "无描述")}</span>
         `;
+
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'actions';
+
+        // 1. 创建“显示/隐藏”按钮并绑定事件
+        const toggleBtn = document.createElement('button');
+        toggleBtn.textContent = preset.isHidden ? '显示' : '隐藏';
+        toggleBtn.addEventListener('click', () => {
+            togglePresetVisibility(index);
+        });
+        actionsDiv.appendChild(toggleBtn);
+
+        // 2. 创建“编辑”按钮并绑定事件
+        const editBtn = document.createElement('button');
+        editBtn.textContent = '编辑';
+        editBtn.addEventListener('click', () => {
+            openPresetFormForEdit(index);
+        });
+        actionsDiv.appendChild(editBtn);
+
+        // 3. 创建“删除”按钮并绑定事件
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'danger-text';
+        deleteBtn.textContent = '删除';
+        deleteBtn.addEventListener('click', () => {
+            deletePresetPrompt(index);
+        });
+        actionsDiv.appendChild(deleteBtn);
+        
+        presetItemDiv.appendChild(detailsDiv);
+        presetItemDiv.appendChild(actionsDiv);
         presetListEditor.appendChild(presetItemDiv);
     });
+}
+
+/**
+ * 切换指定索引的预设模板的可见性。
+ * @param {number} index - 模板在数组中的索引。
+ */
+function togglePresetVisibility(index) {
+    if (loadedPresetPrompts[index]) {
+        // 1. 切换 isHidden 状态
+        // 如果 isHidden 属性不存在，!undefined 会是 true，所以第一次点击会设为 true
+        loadedPresetPrompts[index].isHidden = !loadedPresetPrompts[index].isHidden;
+        
+        // 2. 静默保存更改到文件
+        savePresetsToFile();
+        
+        // 3. 刷新管理界面UI
+        renderPresetManagementUI();
+        
+        // 4. 刷新输入框旁的模板选择菜单，确保隐藏的模板不会出现
+        populatePresetPromptsList();
+    }
 }
 
 /**
@@ -2311,7 +2377,7 @@ function closePresetForm() {
 function deletePresetPrompt(index) {
     if (confirm(`确定要删除模板 "${loadedPresetPrompts[index].name}" 吗？`)) {
         loadedPresetPrompts.splice(index, 1);
-        savePresetsToFile(); // 保存更改
+        savePresetsToFile();
         renderPresetManagementUI(); // 刷新管理列表
         populatePresetPromptsList(); // 刷新输入框旁的模板列表
     }
@@ -2359,27 +2425,33 @@ function handlePresetFormSubmit(event) {
 
 /**
  * 将当前的 `loadedPresetPrompts` 数组保存到 prompts.json 文件。
- * (这需要一个后端接口来实现，我们先假设有一个)
+ * @param {boolean} [showNotification=false] - 是否在成功后显示 toast 提示。
  */
-async function savePresetsToFile() {
+async function savePresetsToFile(showNotification = false) {
     try {
-        const response = await fetch('/.netlify/functions/save-prompts-local', { // 假设的后端接口
+        const response = await fetch('/.netlify/functions/save-prompts-local', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompts: loadedPresetPrompts }),
         });
 
         if (response.ok) {
-            showToast('预设模板已成功保存！', 'success');
+            // ★ 核心修改：只有在 showNotification 为 true 时才显示提示
+            if (showNotification) {
+                showToast('预设模板已成功保存！', 'success');
+            }
+            console.log("Presets saved successfully. Notification shown: ", showNotification);
         } else {
             const errorData = await response.json();
             throw new Error(errorData.message || '保存失败');
         }
     } catch (error) {
         console.error("保存预设模板失败:", error);
+        // 失败的提示总是需要显示的
         showToast(`保存失败：${error.message}`, 'error');
     }
 }
+
 
 /**
  * 从给定的文本块中提取被特定标签包裹的“思考”部分和其余的“回复”部分。
@@ -3277,35 +3349,35 @@ function applyPresetPrompt(preset) {
 }
 
 function populatePresetPromptsList() {
-    if (!presetPromptsUl) { // presetPromptsUl 应该是全局获取的 <ul> 元素
+    if (!presetPromptsUl) {
         console.error("[populatePresetPromptsList] presetPromptsUl is not defined or null.");
         return;
     }
-     console.log("[populatePresetPromptsList] loadedPresetPrompts at entry:", 
-                loadedPresetPrompts ? `Array with ${loadedPresetPrompts.length} items` : loadedPresetPrompts,
-                JSON.parse(JSON.stringify(loadedPresetPrompts || [])) );
-    if (!loadedPresetPrompts || loadedPresetPrompts.length === 0) { // loadedPresetPrompts 是包含预设数据的数组
+
+    // ★ 核心修改：在渲染前，先过滤掉 isHidden 为 true 的模板
+    const visiblePresets = loadedPresetPrompts.filter(p => !p.isHidden);
+
+    if (visiblePresets.length === 0) {
         presetPromptsUl.innerHTML = '<li>没有可用的预设。</li>';
-        console.warn("[populatePresetPromptsList] No presets loaded or preset list is empty.");
+        console.warn("[populatePresetPromptsList] No visible presets available.");
         return;
     }
 
     presetPromptsUl.innerHTML = ''; // 清空旧列表
 
-    loadedPresetPrompts.forEach(preset => {
+    visiblePresets.forEach(preset => {
         const li = document.createElement('li');
-        li.className = 'preset-prompt-item'; // 确保 CSS 中有这个类
-        li.textContent = preset.name; // 预设的显示名称
+        li.className = 'preset-prompt-item';
+        li.textContent = preset.name;
         if (preset.description) {
-            li.title = preset.description; // 鼠标悬浮提示
+            li.title = preset.description;
         }
 
-        // 为每个列表项添加点击事件监听器
         li.addEventListener('click', () => {
             if (typeof applyPresetPrompt === 'function') {
-                applyPresetPrompt(preset); // 调用应用预设的函数
-                if (presetPromptsListPanel) { // presetPromptsListPanel 是预设面板的 DOM 元素
-                    presetPromptsListPanel.style.display = 'none'; // 选择后关闭列表
+                applyPresetPrompt(preset);
+                if (presetPromptsListPanel) {
+                    presetPromptsListPanel.style.display = 'none';
                 }
             } else {
                 console.error("[populatePresetPromptsList] applyPresetPrompt function is not defined.");
@@ -3313,7 +3385,7 @@ function populatePresetPromptsList() {
         });
         presetPromptsUl.appendChild(li);
     });
-    console.log("[populatePresetPromptsList] Preset prompts list populated.");
+    console.log("[populatePresetPromptsList] Preset prompts list populated with visible items.");
 }
 /**
  * 导出单个对话为指定格式的文件。

@@ -164,7 +164,7 @@ body.sidebar-collapsed .sidebar {
 
 .conv-nav{flex:1;overflow-y:auto;margin:0;padding:0;list-style:none;}
 .conv-nav li{ /* 对话列表项 */
-  padding: 10px 4px 10px 12px;
+  padding: 10px 4px 10px 18px;
   border-radius:var(--border-radius-md); /* 使用变量 */
   white-space:nowrap;
   text-overflow:ellipsis;

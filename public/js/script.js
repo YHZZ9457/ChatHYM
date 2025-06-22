@@ -34,15 +34,48 @@ async function handleSubmitActionClick(isRegenerating = false) {
     // ★ 修复：使用 'ui.ui' 访问DOM元素
     utils.updateSubmitButtonState(true, ui.ui.submitActionBtn);
 
-    if (!isRegenerating) {
-        // ★ 修复：使用 'ui.ui' 访问DOM元素
-        const userMessageContent = { text: ui.ui.promptInput.value.trim(), files: [...state.uploadedFilesData] };
-        conv.messages.push({ role: 'user', content: userMessageContent, model: conv.model });
-        ui.appendMessage('user', userMessageContent, null, null, conv.id, conv.messages.length - 1);
-        ui.ui.promptInput.value = ''; // ★ 修复
-        ui.autoResizePromptInput();
-        state.setUploadedFiles([]);
-        ui.renderFilePreview();
+    // 在 script.js 的 handleSubmitActionClick 函数中
+
+if (!isRegenerating) {
+    // 1. 从 state 中获取待上传文件的信息（现在包含 fileObject 和 previewUrl）
+    const filesToProcess = [...state.uploadedFilesData];
+    const originalPromptText = ui.ui.promptInput.value.trim();
+
+    // 2. 立即清空UI和临时的state，让界面感觉更流畅
+    ui.ui.promptInput.value = '';
+    ui.autoResizePromptInput();
+    state.setUploadedFiles([]); // 清空全局的待上传文件列表
+    ui.renderFilePreview();     // 清空文件预览区
+
+    // 3. 异步处理文件：将 File 对象转换为 Base64
+    //    这是发送给模型和存入历史记录的最终数据结构
+    const processedFilesForMessage = [];
+    for (const fileData of filesToProcess) {
+        // 如果文件对象存在，就进行转换
+        if (fileData.fileObject) {
+            const base64String = await utils.readFileAsBase64(fileData.fileObject);
+            processedFilesForMessage.push({
+                name: fileData.name,
+                type: fileData.type,
+                base64: base64String
+                // 注意：这里不再包含 fileObject 和 previewUrl
+            });
+        }
+        // 4. 释放临时的内存URL，防止内存泄漏
+        if (fileData.previewUrl) {
+            URL.revokeObjectURL(fileData.previewUrl);
+        }
+    }
+
+    // 5. 构建最终要存入历史和显示的消息内容
+    const userMessageContent = { text: originalPromptText, files: processedFilesForMessage };
+    
+    // 6. 将处理好的消息推入对话历史
+    conv.messages.push({ role: 'user', content: userMessageContent, model: conv.model });
+    
+    // 7. 在UI上渲染这条用户消息
+    //    ui.appendMessage 需要能正确处理这种新的 userMessageContent 结构
+    ui.appendMessage('user', userMessageContent, null, null, conv.id, conv.messages.length - 1);
     }
 
     const loadingDiv = ui.appendLoading();
@@ -93,31 +126,44 @@ async function handleSubmitActionClick(isRegenerating = false) {
     }
 }
 
+// 在 script.js 中
+
 /**
- * 协调文件选择流程
+ * 协调文件选择流程 (最终正确版本)
  */
 async function handleFileSelection(event) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
+
+    // --- 检查文件数量 ---
     const MAX_FILES = 5;
+    // 在追加前，检查总数是否会超限
     if (state.uploadedFilesData.length + files.length > MAX_FILES) {
         utils.showToast(`一次最多只能上传 ${MAX_FILES} 个文件。`, 'warning');
         return;
     }
+
+    // --- 遍历并处理新选择的文件 ---
     for (const file of files) {
-        if (file.size > 10 * 1024 * 1024) {
+        // 检查单个文件大小
+        if (file.size > 10 * 1024 * 1024) { // 10MB
             utils.showToast(`文件 "${file.name}" 过大 (超过 10MB)。`, 'warning');
-            continue;
+            continue; // 跳过这个文件，继续处理下一个
         }
-        try {
-            const base64String = await utils.readFileAsBase64(file);
-            state.uploadedFilesData.push({ name: file.name, type: file.type, base64: base64String, fileObject: file });
-        } catch (error) {
-            utils.showToast(`无法读取文件 "${file.name}"。`, 'error');
-        }
+        
+        // ★ 核心逻辑：只执行一次 push，只存储预览所需的信息 ★
+        const objectURL = URL.createObjectURL(file);
+        state.uploadedFilesData.push({ 
+            name: file.name, 
+            type: file.type, 
+            fileObject: file,      // 存储原始文件对象，用于未来发送
+            previewUrl: objectURL  // 存储临时URL，用于UI预览
+        });
     }
-    ui.renderFilePreview(); // ★ 调用函数使用 'ui.'
-    event.target.value = null;
+
+    // --- 更新UI并清空input ---
+    ui.renderFilePreview();
+    event.target.value = null; // 清空<input>的值，以便可以再次选择同一个文件
 }
 
 /**
@@ -142,10 +188,20 @@ function loadConversationFlow(conversationId) {
 // 3. 应用主逻辑函数
 // ========================================================================
 
+// 在函数外部定义一个标志位
+let eventListenersBound = false;
+
 /**
  * 绑定所有事件监听器。此函数应在UI初始化后调用。
  */
 function bindEventListeners() {
+    // 如果已经绑定过了，就直接返回，不再执行任何操作
+    if (eventListenersBound) {
+        console.warn("bindEventListeners called more than once. Aborting to prevent duplicates.");
+        return;
+    }
+
+
     const bindEvent = (element, event, handler) => {
         if (element) element.addEventListener(event, handler);
     };
@@ -219,15 +275,25 @@ function bindEventListeners() {
         localStorage.setItem(state.THINK_MODE_STORAGE_KEY, state.isManualThinkModeEnabled.toString());
     });
 
-    // --- 聊天设置与面板 (★ 全部修复) ---
     bindEvent(ui.ui.chatSettingsBtnInline, 'click', e => { e.stopPropagation(); ui.toggleInlineSettingsPanel(); });
-    bindEvent(ui.ui.showPresetPromptsBtn, 'click', e => { e.stopPropagation(); ui.togglePresetPromptsPanel(); });
-    bindEvent(document, 'click', () => {
-        ui.closeInlineSettingsPanel();
-        ui.closePresetPromptsPanel();
-    });
-    bindEvent(ui.ui.inlineChatSettingsPanel, 'click', e => e.stopPropagation());
-    bindEvent(ui.ui.presetPromptsListPanel, 'click', e => e.stopPropagation());
+
+// ★ 核心修复：修改这个按钮的点击事件 ★
+bindEvent(ui.ui.showPresetPromptsBtn, 'click', e => { 
+    e.stopPropagation(); 
+    
+    // 在切换面板显示之前，先调用函数来填充和绑定列表
+    ui.populatePresetPromptsList(); 
+    
+    // 然后再切换面板的可见性
+    ui.togglePresetPromptsPanel(); 
+});
+
+bindEvent(document, 'click', () => {
+    ui.closeInlineSettingsPanel();
+    ui.closePresetPromptsPanel();
+});
+bindEvent(ui.ui.inlineChatSettingsPanel, 'click', e => e.stopPropagation());
+bindEvent(ui.ui.presetPromptsListPanel, 'click', e => e.stopPropagation());
 
     // --- 页面导航与设置 (★ 全部修复) ---
     bindEvent(ui.ui.showSettingsBtn, 'click', ui.showSettings);
@@ -330,6 +396,16 @@ function bindEventListeners() {
                 }
                 break;
         }
+        document.addEventListener('presetPromptApplied', (event) => {
+        // 从事件的 detail 中获取被点击的 preset 对象
+        const presetToApply = event.detail.preset;
+        
+        if (presetToApply) {
+            console.log("script.js 监听到 presetPromptApplied 事件，正在调用 conversation.applyPresetPrompt...");
+            // 调用 conversation 模块的函数来处理逻辑
+            conversation.applyPresetPrompt(presetToApply);
+        }
+    });
     });
 }
 
@@ -369,6 +445,8 @@ async function initializeApp() {
     ui.renderConversationList();
     ui.enableInlineTitleEdit();
     ui.autoResizePromptInput();
+    eventListenersBound = true;
+    console.log("Event listeners have been bound successfully.");
 }
 
 // ========================================================================

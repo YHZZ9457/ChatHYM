@@ -185,6 +185,36 @@ export function setupForEditLastUserMessage() {
     return textToEdit;
 }
 
+export function applyPresetPrompt(preset) {
+  if (!preset) return;
+
+  const conv = state.getCurrentConversation();
+  if (!conv) {
+    utils.showToast("没有活动的对话，无法应用模板。", 'warning');
+    return;
+  }
+
+  // 只处理 'system_prompt' 类型，因为这会修改对话数据
+  if (preset.type === 'system_prompt') {
+    let systemMessage = conv.messages.find(m => m.role === 'system');
+    if (systemMessage) {
+      systemMessage.content = preset.prompt;
+    } else {
+      conv.messages.unshift({ role: 'system', content: preset.prompt });
+    }
+    saveConversations();
+    utils.showToast(`系统角色已设置为: "${preset.name}"`, 'success');
+    
+    // 返回一个信号，告诉调用者UI需要更新
+    return { needsUiUpdate: true }; 
+  }
+
+  // 对于其他类型 (如 'user_input')，此函数不再做任何事
+  // 因为这是 UI 的职责，将由 ui.js 自己处理
+  return { needsUiUpdate: false };
+}
+
+
 
 /**
  * 从指定索引处截断对话历史。

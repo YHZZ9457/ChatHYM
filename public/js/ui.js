@@ -13,9 +13,9 @@ import * as api from './api.js';
 // ========================================================================
 export const ui = {};
 
-// 用于 SortableJS 的实例变量
-let groupSortableInstance = null;
-const optionSortableInstances = [];
+let modelGroupSortable = null;
+const modelOptionSortables = [];
+let presetSortable = null;
 
 // ========================================================================
 // 3. UI 初始化
@@ -105,19 +105,33 @@ export function initializeUI() {
 // ========================================================================
 
 // --- 内部辅助函数 ---
-function renderModelManagementUI() {
+// 在 ui.js 中
+
+export function renderModelManagementUI() {
     if (!ui.modelListEditor || !state.editableModelConfig || !Array.isArray(state.editableModelConfig.models)) {
         ui.modelListEditor.innerHTML = '<p>模型配置为空或格式不正确。</p>';
         return;
     }
+
+    // --- 1. 清理旧的拖拽实例，防止内存泄漏 ---
+    if (modelGroupSortable) modelGroupSortable.destroy();
+    modelOptionSortables.forEach(instance => instance.destroy());
+    modelOptionSortables.length = 0;
+
+    // --- 2. 渲染列表 (在您的基础上增加了拖拽手柄和data-index) ---
     ui.modelListEditor.innerHTML = '';
     state.editableModelConfig.models.forEach((group, groupIndex) => {
         const groupDiv = document.createElement('div');
         groupDiv.className = 'model-group-editor';
+        groupDiv.dataset.groupIndex = groupIndex; // ★ 新增：为拖拽提供索引
         if (group.isGroupHidden) groupDiv.classList.add('model-group-content-hidden');
         
         const groupHeader = document.createElement('div');
         groupHeader.className = 'model-group-header';
+        
+        // ★ 新增：添加拖拽手柄
+        groupHeader.innerHTML = `<span class="drag-handle" title="拖动排序">⠿</span>`;
+
         const groupLabelInput = document.createElement('input');
         groupLabelInput.type = 'text';
         groupLabelInput.className = 'group-label-editor';
@@ -154,11 +168,14 @@ function renderModelManagementUI() {
         
         const optionsUl = document.createElement('ul');
         optionsUl.className = 'model-group-options';
+        optionsUl.dataset.groupIndex = groupIndex; // ★ 新增：为拖拽提供索引
         (group.options || []).forEach((option, optionIndex) => {
             const optionLi = document.createElement('li');
             optionLi.className = 'model-option-editor';
             optionLi.classList.toggle('model-option-hidden', !!option.isHidden);
+            // ★ 新增：添加拖拽手柄
             optionLi.innerHTML = `
+                <span class="drag-handle" title="拖动排序">⠿</span>
                 <div class="details"><strong>${utils.escapeHtml(option.text)}</strong><span>Value: ${utils.escapeHtml(option.value)}</span></div>
                 <div class="actions">
                     <button class="toggle-visibility-btn">${option.isHidden ? '显示' : '隐藏'}</button>
@@ -182,16 +199,56 @@ function renderModelManagementUI() {
         groupDiv.appendChild(optionsUl);
         ui.modelListEditor.appendChild(groupDiv);
     });
+
+    // --- 3. 初始化 SortableJS 实例 ---
+    if (typeof Sortable !== 'undefined') {
+        // 让模型组可以排序
+        modelGroupSortable = Sortable.create(ui.modelListEditor, {
+            animation: 150,
+            handle: '.drag-handle',
+            onEnd: (evt) => {
+                const [movedItem] = state.editableModelConfig.models.splice(evt.oldIndex, 1);
+                state.editableModelConfig.models.splice(evt.newIndex, 0, movedItem);
+                renderModelManagementUI();
+            }
+        });
+
+        // 让每个组内的模型可以排序，并支持跨组拖拽
+        ui.modelListEditor.querySelectorAll('.model-group-options').forEach(ul => {
+            const sortable = Sortable.create(ul, {
+                group: 'models',
+                animation: 150,
+                handle: '.drag-handle',
+                onEnd: (evt) => {
+                    const fromGroupIndex = parseInt(evt.from.dataset.groupIndex, 10);
+                    const toGroupIndex = parseInt(evt.to.dataset.groupIndex, 10);
+                    const [movedOption] = state.editableModelConfig.models[fromGroupIndex].options.splice(evt.oldIndex, 1);
+                    state.editableModelConfig.models[toGroupIndex].options.splice(evt.newIndex, 0, movedOption);
+                    renderModelManagementUI();
+                }
+            });
+            modelOptionSortables.push(sortable);
+        });
+    }
 }
 
-function renderPresetManagementUI() {
+// 在 ui.js 中
+
+export function renderPresetManagementUI() {
     if (!ui.presetListEditor) return;
+
+    // --- 1. 清理旧的拖拽实例 ---
+    if (presetSortable) presetSortable.destroy();
+
+    // --- 2. 渲染列表 (在您的基础上增加了拖拽手柄) ---
     ui.presetListEditor.innerHTML = '';
     state.loadedPresetPrompts.forEach((preset, index) => {
         const presetItemDiv = document.createElement('div');
-        presetItemDiv.className = 'model-option-editor';
+        presetItemDiv.className = 'model-option-editor'; // 复用样式
         presetItemDiv.classList.toggle('model-option-hidden', !!preset.isHidden);
+        // ★ 新增：添加拖拽手柄
         presetItemDiv.innerHTML = `
+            <span class="drag-handle" title="拖动排序">⠿</span>
             <div class="details"><strong>${utils.escapeHtml(preset.name)}</strong><span>类型: ${preset.type === 'system_prompt' ? '系统角色' : '输入框填充'} | 描述: ${utils.escapeHtml(preset.description || "无")}</span></div>
             <div class="actions">
                 <button class="toggle-visibility-btn">${preset.isHidden ? '显示' : '隐藏'}</button>
@@ -212,9 +269,22 @@ function renderPresetManagementUI() {
         };
         ui.presetListEditor.appendChild(presetItemDiv);
     });
+
+    // --- 3. 初始化 SortableJS 实例 ---
+    if (typeof Sortable !== 'undefined') {
+        presetSortable = Sortable.create(ui.presetListEditor, {
+            animation: 150,
+            handle: '.drag-handle',
+            onEnd: (evt) => {
+                const [movedItem] = state.loadedPresetPrompts.splice(evt.oldIndex, 1);
+                state.loadedPresetPrompts.splice(evt.newIndex, 0, movedItem);
+                renderPresetManagementUI(); // 重新渲染以固化顺序
+            }
+        });
+    }
 }
 
-function processPreBlocksForCopyButtons(containerElement) {
+export function processPreBlocksForCopyButtons(containerElement) {
     if (!containerElement || typeof marked === 'undefined') return;
     containerElement.querySelectorAll('pre').forEach((pre) => {
         if (pre.querySelector('.copy-btn')) return;
@@ -466,26 +536,61 @@ export function handlePresetFormSubmit(event) {
     closePresetForm();
 }
 
+
+// 在 ui.js 中
+
 export function renderFilePreview() {
+    // 确保 ui.filePreviewArea 存在
     if (!ui.filePreviewArea) return;
+
+    // 清空现有的所有预览
     ui.filePreviewArea.innerHTML = '';
+
+    // 如果有待上传的文件，则开始渲染
     if (state.uploadedFilesData?.length > 0) {
         ui.filePreviewArea.style.display = 'flex';
+
+        // ★ 核心修改在这里的循环逻辑 ★
         state.uploadedFilesData.forEach((fileData, index) => {
+            // 为每一个文件创建一个预览项的容器
             const previewItem = document.createElement('div');
             previewItem.className = 'file-preview-item-sleek';
             previewItem.title = fileData.name;
-            previewItem.innerHTML = `<div class="file-name-sleek">${utils.escapeHtml(fileData.name)}</div><button type="button" class="remove-file-btn-sleek" title="移除 ${utils.escapeHtml(fileData.name)}">×</button>`;
+
+            // 根据文件类型，决定预览项的内容 (innerContent)
+            let innerContent = '';
+            if (fileData.type.startsWith('image/') && fileData.previewUrl) {
+                // 如果是图片，内容就是 <img> 标签
+                innerContent = `<img src="${fileData.previewUrl}" alt="${utils.escapeHtml(fileData.name)}" class="file-preview-image">`;
+            } else {
+                // 如果是其他文件，内容就是包含文件名的 <div>
+                innerContent = `<div class="file-name-sleek">${utils.escapeHtml(fileData.name)}</div>`;
+            }
+
+            // 将内容和统一的删除按钮组合起来，一次性赋给 previewItem
+            previewItem.innerHTML = `
+                ${innerContent}
+                <button type="button" class="remove-file-btn-sleek" title="移除 ${utils.escapeHtml(fileData.name)}">×</button>
+            `;
+
+            // 为删除按钮绑定事件
             previewItem.querySelector('.remove-file-btn-sleek').addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (index >= 0 && index < state.uploadedFilesData.length) {
-                    state.uploadedFilesData.splice(index, 1);
-                    renderFilePreview();
+                // 如果存在临时的预览URL，就释放它
+                if (fileData.previewUrl) {
+                    URL.revokeObjectURL(fileData.previewUrl);
                 }
+                // 从 state 数组中移除这个文件的数据
+                state.uploadedFilesData.splice(index, 1);
+                // 重新渲染整个预览区
+                renderFilePreview();
             });
+
+            // 将这个创建好的预览项添加到预览区
             ui.filePreviewArea.appendChild(previewItem);
         });
     } else {
+        // 如果没有待上传的文件，则隐藏预览区
         ui.filePreviewArea.style.display = 'none';
     }
 }
@@ -900,24 +1005,55 @@ export function closePresetPromptsPanel() {
 }
 
 export function populatePresetPromptsList() {
-    if (!ui.presetPromptsUl) return;
+    if (!ui.presetPromptsUl) {
+        console.error("populatePresetPromptsList: ui.presetPromptsUl is not found.");
+        return;
+    }
+    
     const visiblePresets = state.loadedPresetPrompts.filter(p => !p.isHidden);
+    
+    ui.presetPromptsUl.innerHTML = ''; // 清空旧列表
+
     if (visiblePresets.length === 0) {
         ui.presetPromptsUl.innerHTML = '<li>没有可用的预设。</li>';
         return;
     }
-    ui.presetPromptsUl.innerHTML = '';
+
     visiblePresets.forEach(preset => {
         const li = document.createElement('li');
         li.className = 'preset-prompt-item';
         li.textContent = preset.name;
-        if (preset.description) li.title = preset.description;
+        if (preset.description) {
+            li.title = preset.description;
+        }
+
+        // ★★★ 核心修复：在这里根据模板类型执行不同操作 ★★★
         li.addEventListener('click', () => {
-            if (typeof applyPresetPrompt === 'function') {
-                applyPresetPrompt(preset);
-                if (ui.presetPromptsListPanel) ui.presetPromptsListPanel.style.display = 'none';
+            if (preset.type === 'user_input') {
+                // 如果是填充输入框，直接在这里操作 UI 元素
+                // 这是 ui.js 的职责，所以在这里是完全正确的
+                if (ui.promptInput) {
+                    ui.promptInput.value = preset.prompt;
+                    autoResizePromptInput(); // 调用 ui.js 内部的函数
+                    ui.promptInput.focus();
+                    utils.showToast(`模板 "${preset.name}" 已填充到输入框`, 'success');
+                }
+            } else if (preset.type === 'system_prompt') {
+                // 如果是设置系统角色，调用 conversation 模块处理数据
+                const result = conversation.applyPresetPrompt(preset);
+                // 如果数据显示需要更新，则重新加载对话UI
+                if (result.needsUiUpdate) {
+                    const currentConv = state.getCurrentConversation();
+                    if (currentConv) {
+                        loadAndRenderConversationUI(currentConv);
+                    }
+                }
             }
+            
+            // 无论哪种情况，点击后都关闭面板
+            closePresetPromptsPanel();
         });
+
         ui.presetPromptsUl.appendChild(li);
     });
 }

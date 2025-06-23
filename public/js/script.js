@@ -190,21 +190,28 @@ function loadConversationFlow(conversationId) {
 
 // 在函数外部定义一个标志位
 let eventListenersBound = false;
-
 /**
  * 绑定所有事件监听器。此函数应在UI初始化后调用。
  */
 function bindEventListeners() {
-    // 如果已经绑定过了，就直接返回，不再执行任何操作
+    // 如果已经绑定过了，就直接返回
     if (eventListenersBound) {
         console.warn("bindEventListeners called more than once. Aborting to prevent duplicates.");
         return;
     }
 
-
-    const bindEvent = (element, event, handler) => {
-        if (element) element.addEventListener(event, handler);
+    const bindEvent = (element, event, handler, options) => {
+        if (element) element.addEventListener(event, handler, options);
     };
+
+    // --- 侧边栏交互 (最终简化、稳固版) ---
+    // 1. 展开/收起按钮的单击事件
+    bindEvent(ui.ui.sidebarToggleBtn, 'click', (e) => {
+        e.stopPropagation(); // 阻止事件冒泡到侧边栏
+        ui.toggleSidebar();
+    });
+
+
 
     // --- 核心交互 (★ 全部修复) ---
     bindEvent(ui.ui.submitActionBtn, 'click', () => handleSubmitActionClick(false));
@@ -353,7 +360,8 @@ bindEvent(ui.ui.presetPromptsListPanel, 'click', e => e.stopPropagation());
     bindEvent(document.getElementById('cancel-model-detail-btn'), 'click', ui.closeModelForm);
     bindEvent(ui.ui.presetFormModal.querySelector('.close-modal-btn'), 'click', ui.closePresetForm);
     bindEvent(document.getElementById('cancel-preset-detail-btn'), 'click', ui.closePresetForm);
-
+    
+    bindEvent(ui.ui.systemPromptBtn, 'click', ui.toggleSystemPromptEditor);
     // --- 侧边栏搜索 (★ 全部修复) ---
     bindEvent(ui.ui.logoDisplay, 'click', e => { e.stopPropagation(); ui.showSearchView(); });
     bindEvent(ui.ui.searchInput, 'input', () => ui.renderConversationList(ui.ui.searchInput.value));
@@ -407,12 +415,20 @@ bindEvent(ui.ui.presetPromptsListPanel, 'click', e => e.stopPropagation());
         }
     });
     });
+
+    eventListenersBound = true;
+    console.log("Event listeners have been bound successfully.");
 }
+
 
 /**
  * 应用程序的异步初始化流程。
  */
 async function initializeApp() {
+
+    const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+    ui.applyInitialSidebarState(sidebarCollapsed);
+    
     // 应用保存的设置
     utils.applyTheme(localStorage.getItem('theme') || 'dark');
     // ★ 修复：使用 'ui.ui' 访问DOM元素
@@ -424,6 +440,8 @@ async function initializeApp() {
     state.setIsManualThinkModeEnabled(localStorage.getItem(state.THINK_MODE_STORAGE_KEY) === 'true');
     if (ui.ui.thinkModeToggle) ui.ui.thinkModeToggle.checked = state.isManualThinkModeEnabled; // ★ 修复
     ui.updateManualThinkModeState();
+    
+
 
     // 加载外部配置
     await Promise.all([
@@ -445,28 +463,27 @@ async function initializeApp() {
     ui.renderConversationList();
     ui.enableInlineTitleEdit();
     ui.autoResizePromptInput();
-    eventListenersBound = true;
-    console.log("Event listeners have been bound successfully.");
 }
 
 // ========================================================================
 // 4. 应用启动入口
 // ========================================================================
+
 document.addEventListener('DOMContentLoaded', () => {
     console.log("DOM fully loaded and parsed. Starting app initialization...");
     
     // 步骤 1: 初始化UI元素获取
-    if (!ui.initializeUI()) { // ★ 调用函数使用 'ui.'
-        // 如果关键元素找不到，这是一个致命错误
+    if (!ui.initializeUI()) {
         alert("Application failed to start: Critical UI elements could not be found. Please check the console and try refreshing the page.");
         return;
     }
 
-    // 步骤 2: 绑定所有事件监听器
-    bindEventListeners();
-
-    // 步骤 3: 执行所有异步加载和应用逻辑
-    initializeApp().catch(error => {
+    // 步骤 2: 执行所有异步加载和渲染
+    initializeApp().then(() => {
+        // 步骤 3: 在所有内容都渲染完毕后，再绑定事件监听器
+        bindEventListeners();
+        console.log("Application fully initialized and interactive.");
+    }).catch(error => {
         console.error("Fatal error during application initialization:", error);
         utils.showToast("应用启动失败，请查看控制台！", "error");
     });

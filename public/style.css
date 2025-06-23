@@ -130,39 +130,120 @@ button {
   display: flex;
   height: 100%;
   width: 100%;
+  position: relative; /* ★ 新增：为绝对定位的按钮提供参考系 */
 }
 
 /* ===== 4. 侧边栏 ===== */
 .sidebar {
   width: 260px;
+  min-width: 260px;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
   padding: 16px 0;
   flex-shrink: 0;
-  transition: width 0.3s ease-in-out, padding 0.3s ease-in-out, background-color 0.3s ease, border-color 0.3s ease;
+  position: relative; 
+  display: flex; /* ★ 核心修复：将侧边栏自身也设置为 flex 容器 */
+  flex-direction: column; /* ★ 核心修复：让其子元素垂直排列 */
+  background-color: var(--sidebar-bg);
+  border-right: 1px solid var(--border-color);
+  transition: width 0.3s ease, min-width 0.3s ease, padding 0.3s ease; /* 增加 padding 过渡 */
+}
+/* --- 2. 创建一个新的、独立的、只负责拖拽的 div (虽然HTML里没有，但CSS里可以先准备好) --- */
+/* 我们将用 JS 创建这个元素，这里先定义样式 */
+.sidebar-drag-handle {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 8px; /* 拖拽热区宽度 */
+    cursor: ew-resize;
+    z-index: 9;
+    /* 通过 JS 计算 left 值 */
 }
 
-#sidebar-resizer {
-  flex-shrink: 0;
-  width: 8px;
-  background: transparent;
-  position: relative;
-  cursor: ew-resize; /* 更精确的水平调整光标 */
-  transition: background-color 0.2s ease;
+
+/* 2. 为侧边栏的直接子元素（头部、导航、脚部）设置 Flex 属性 */
+.sidebar-header,
+.sidebar-footer {
+  flex-shrink: 0; /* ★ 核心修复：防止头部和脚部被压缩 */
 }
 
-#sidebar-resizer:hover {
-  background-color: var(--primary);
+
+/* --- 3. 修改展开/收起按钮的样式，让它根据侧边栏宽度定位 --- */
+/* style.css (修改后) */
+
+/* ... 找到 .sidebar-toggle-btn 规则 ... */
+.sidebar-toggle-btn {
+    position: absolute;
+    top: 50%;
+    
+    /* ★ 核心修改 1：改变 left 的计算方式，让按钮更贴合边缘 */
+    left: calc(var(--sidebar-width, 260px) - 12px); /* 按钮宽度的一半 */
+    
+    transform: translateY(-50%);
+    z-index: 10;
+    
+    /* ★ 核心修改 2：改变尺寸和形状 */
+    width: 24px;
+    height: 48px;
+    background-color: var(--sidebar-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md); /* 使用中等圆角 */
+    
+    box-shadow: var(--shadow-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.3s ease; /* 简化过渡 */
 }
 
-body.sidebar-collapsed .sidebar {
-  width: 0;
-  padding-left: 0;
-  padding-right: 0;
-  overflow: hidden;
+/* ★ 核心修改 3：调整收起状态下按钮的位置和样式 */
+.container.sidebar-collapsed .sidebar-toggle-btn {
+  /* 当收起时，按钮移动到最左侧，并旋转图标 */
+  left: 8px; /* 距离左边缘一点距离 */
+  transform: translateY(-50%) rotate(180deg);
 }
+
+.container.sidebar-collapsed .sidebar-toggle-btn:hover {
+    /* 悬浮时稍微变大一点点 */
+    transform: translateY(-50%) rotate(180deg) scale(1.05);
+}
+
+
+.sidebar-toggle-btn:hover {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: #fff;
+}
+.sidebar-toggle-btn svg {
+    transition: transform 0.3s ease;
+}
+
+/* --- 4. 修改侧边栏收起时的按钮样式 --- */
+.container.sidebar-collapsed .sidebar-toggle-btn {
+  /* 当收起时，按钮固定在左侧边缘 */
+  left: -10px; 
+  transform: translateY(-50%) rotate(180deg);
+}
+
+.container.sidebar-collapsed .sidebar-toggle-btn:hover {
+    transform: translateY(-50%) rotate(180deg) scale(1.05);
+}
+
+.container.sidebar-collapsed .sidebar-toggle-btn:hover {
+    /* 保持翻转状态并放大 */
+    transform: translateY(-50%) rotate(180deg) scale(1.05);
+}
+
+body.is-resizing .sidebar {
+  border-right-color: var(--primary);
+}
+
+
+
 
 .sidebar-header {
   padding: 0 16px;
@@ -170,7 +251,7 @@ body.sidebar-collapsed .sidebar {
   display: flex;
   align-items: center;
   margin-bottom: 5px;
-  position: relative;
+  overflow: hidden; 
 }
 
 .logo,
@@ -230,6 +311,7 @@ body.sidebar-collapsed .sidebar {
 }
 
 .new-btn {
+  flex-shrink: 0;
   margin: 0 16px 16px;
   padding: 10px 0;
   width: auto;
@@ -337,6 +419,326 @@ body.dark-theme .conversation-item:not(.active):hover .more-options-btn:hover {
   color: var(--primary);
 }
 
+/* 1. 设置组（卡片）的基础样式 */
+.setting-group {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    padding: 8px 20px; /* 上下内边距小，左右大 */
+    margin-bottom: 16px; /* 组与组之间的间距 */
+}
+
+/* --- 1. 组（卡片）的基础样式 --- */
+.setting-group {
+    background-color: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    padding: 4px 20px;
+    margin-bottom: 15px;
+}
+
+/* --- 2. 组内的行（setting-item）布局 --- */
+.setting-group .setting-item {
+    display: grid;
+    grid-template-columns: 200px 1fr;
+    gap: 24px;
+    align-items: center;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.setting-group .setting-item:last-child {
+    border-bottom: none;
+}
+
+/* --- 3. 标签（label）样式 --- */
+.setting-group .setting-item > label {
+    justify-self: end;
+    text-align: right;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+/* --- 4. 控件容器（controls-group）样式 --- */
+.setting-group .setting-item > .controls-group {
+    /* ★ 核心修改 1: 默认让所有控件组都靠右对齐 ★ */
+    justify-content: flex-end; 
+    
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    width: 100%; /* 占满第二列 */
+}
+
+/* ★ 核心修改 2: 创建一个特例，只让包含输入框或下拉菜单的组靠左 ★ */
+.setting-group .setting-item > .controls-group:has(input[type="password"]),
+.setting-group .setting-item > .controls-group:has(input[type="text"]),
+.setting-group .setting-item > .controls-group:has(select) {
+    justify-content: flex-start; /* 只有这些组才靠左 */
+}
+
+
+/* ======================================= */
+/*  控件具体样式 (整合自您的残留样式)
+/* ======================================= */
+
+/* --- 5. 通用按钮样式 --- */
+
+
+/* --- 6. 界面缩放按钮组（.scale-options）样式 (最终分段控件版) --- */
+
+/* 1. 容器（.scale-options）样式 */
+.controls-group .scale-options {
+    display: inline-flex; /* 依然使用 flex 布局 */
+    height: 36px;
+    
+    /* ★ 核心：容器只负责提供一个外边框和圆角 */
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md); /* 您可以根据喜好调整圆角大小 */
+    overflow: hidden; /* 隐藏内部按钮超出的边角 */
+}
+
+/* 1. 容器（.scale-options）负责外框和布局 */
+.setting-item .controls-group .scale-options {
+    display: inline-flex;
+    height: 36px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+}
+
+/* 2. 内部按钮的样式 */
+/* ★★★ 使用非常高的特异性，确保覆盖所有全局样式 ★★★ */
+.setting-item .controls-group .scale-options button {
+    /* --- 重置所有可能继承的样式 --- */
+    margin: 0 !important;
+    padding: 0 16px !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important; /* 默认透明 */
+
+    /* --- 设置我们期望的样式 --- */
+    height: 100%;
+    line-height: 36px; /* 确保垂直居中 */
+    color: var(--text-color);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    
+    /* 用右边框创建分隔线 */
+    border-right: 1px solid var(--border-color) !important;
+}
+
+/* 3. 最后一个按钮不需要右边框 */
+.setting-item .controls-group .scale-options button:last-child {
+    border-right: none !important;
+}
+
+/* 4. 活动状态的按钮 */
+.setting-item .controls-group .scale-options button.active {
+    background-color: var(--primary) !important;
+    color: #fff !important;
+}
+
+/* 5. 鼠标悬浮在非活动按钮上 */
+.setting-item .controls-group .scale-options button:not(.active):hover {
+    background-color: rgba(var(--primary-rgb), 0.1) !important;
+}
+
+
+
+/* --- 7. 开关（Switch）样式 --- */
+.controls-group .switch {
+    /* 开关的高度是由 width 和 height 决定的，但我们可以通过 align-self 确保它在 flex 容器中居中 */
+    /* 我们在 .setting-item 中已经设置了 align-items: center，所以这里通常无需额外设置 */
+    /* 确保它的尺寸与按钮高度协调 */
+    width: 44px;  /* 稍微加宽一点，更协调 */
+    height: 24px; /* 高度可以适当增加 */
+    flex-shrink: 0;
+    
+    position: relative;
+    display: inline-block;
+}
+
+/* --- 5. 通用按钮样式 --- */
+.controls-group button:not(.scale-options button) {
+    padding: 0 20px;
+    height: 36px;
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border-radius: var(--border-radius-md);
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+/* 默认蓝色按钮 (action-btn) */
+.controls-group button.action-btn,
+.controls-group button:not(.danger):not(.scale-options button) {
+    background-color: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+.controls-group button.action-btn:hover,
+.controls-group button:not(.danger):not(.scale-options button):hover {
+    background-color: rgba(var(--primary-rgb), 0.85);
+    /* ★★★ 确保这一行是正确的 ★★★ */
+    border-color: rgba(var(--primary-rgb), 0.85); 
+}
+
+/* 红色危险按钮 */
+.controls-group button.danger {
+    background-color: #e53e3e;
+    color: #fff;
+}
+.controls-group button.danger:hover {
+    background-color: #c53030;
+}
+
+.controls-group .slider:before {
+    height: 18px; /* 滑块变大一点 */
+    width: 18px;
+    left: 3px;
+    bottom: 3px;
+}
+
+.controls-group input:checked + .slider:before {
+    transform: translateX(20px);
+}
+
+/* 默认蓝色按钮 (action-btn) */
+.controls-group button.action-btn,
+.controls-group button:not(.danger) {
+    background-color: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+.controls-group button.action-btn:hover,
+.controls-group button:not(.danger):hover {
+    background-color: rgba(var(--primary-rgb), 0.85);
+    border-color: rgba(var(--primary-rgb), 0.85);
+}
+
+/* 红色危险按钮 */
+.controls-group button.danger {
+    background-color: #e53e3e;
+    color: #fff;
+}
+.controls-group button.danger:hover {
+    background-color: #c53030;
+}
+
+
+/* --- 6. 输入框和下拉菜单样式 --- */
+.controls-group input[type="password"],
+.controls-group input[type="text"],
+.controls-group select {
+    width: 100%; /* 占满 .controls-group 的可用空间 */
+    padding: 8px 12px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.controls-group input[type="password"]:focus,
+.controls-group input[type="text"]:focus,
+.controls-group select:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
+}
+
+/* --- 7. 开关（Switch）样式 --- */
+.controls-group .switch {
+    position: relative;
+    display: inline-block;
+    width: 40px;
+    height: 20px;
+    flex-shrink: 0;
+}
+
+.controls-group .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.controls-group .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #454950;
+    transition: .2s;
+    border-radius: 20px;
+}
+
+.controls-group .slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: .2s;
+    border-radius: 50%;
+}
+
+.controls-group input:checked + .slider {
+    background-color: var(--primary);
+}
+
+.controls-group input:checked + .slider:before {
+    transform: translateX(20px);
+}
+
+/* 亮色主题下的开关特殊样式 */
+body.light-theme .controls-group .slider {
+    background-color: #dcdfe6;
+    border: 1px solid #d4d4d8;
+    box-sizing: border-box;
+}
+body.light-theme .controls-group .slider:before {
+    bottom: 2px;
+    left: 2px;
+}
+body.light-theme .controls-group input:checked + .slider {
+    background-color: var(--primary-light);
+    border-color: var(--primary-light);
+}
+
+/* --- 8. API Key 管理组的特殊样式 --- */
+.setting-group.api-key-management {
+    padding-top: 20px;
+}
+
+.api-key-management h3 {
+    margin: 0 0 8px 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.api-key-management p.description {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin: 0 0 24px 0;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 16px;
+}
+
+.api-key-management .setting-item {
+    padding: 0;
+    border-bottom: none;
+    margin-bottom: 16px;
+}
 /* 设置区域 (显示在主区域) */
 .settings-area {
   flex: 1;
@@ -355,150 +757,10 @@ body.dark-theme .conversation-item:not(.active):hover .more-options-btn:hover {
   border-bottom: 1px solid var(--border-color);
 }
 
-.setting-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-  padding: 12px 16px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-lg);
-  background-color: var(--bg-secondary);
-  min-height: 55px;
-  box-sizing: border-box;
-}
-
-.setting-item > label:first-child {
-  font-size: 0.95rem;
-  color: var(--text-color);
-}
 
 .controls-group {
   display: flex;
   gap: 10px;
-}
-
-.setting-item input[type="password"],
-.setting-item input[type="text"],
-.setting-item select {
-  flex: 1;
-  min-width: 200px;
-  padding: 8px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-md);
-  background-color: var(--input-bg);
-  color: var(--text-color);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-.setting-item input[type="password"]:focus,
-.setting-item input[type="text"]:focus,
-.setting-item select:focus {
-  outline: none;
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
-}
-
-.setting-item button {
-  flex-shrink: 0;
-  padding: 8px 20px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  border-radius: var(--border-radius-md);
-  border: 1px solid transparent;
-  transition: all 0.2s ease;
-}
-
-.setting-item button.danger {
-  background-color: #e53e3e;
-  color: #fff;
-}
-
-.setting-item button.danger:hover {
-  background-color: #c53030;
-}
-
-.setting-item .action-btn,
-.setting-item button:not(.danger) {
-  background-color: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
-}
-
-.setting-item .action-btn:hover,
-.setting-item button:not(.danger):hover {
-  background-color: rgba(var(--primary-rgb), 0.85);
-  border-color: rgba(var(--primary-rgb), 0.85);
-}
-
-.setting-item .switch {
-  position: relative;
-  display: inline-block;
-  width: 40px;
-  height: 20px;
-  flex-shrink: 0;
-}
-
-.setting-item .switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.setting-item .slider {
-  position: absolute;
-  cursor: pointer;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #454950;
-  transition: .2s;
-  border-radius: 20px;
-}
-
-.setting-item .slider:before {
-  position: absolute;
-  content: "";
-  height: 14px;
-  width: 14px;
-  left: 3px;
-  bottom: 3px;
-  background-color: white;
-  transition: .2s;
-  border-radius: 50%;
-}
-
-.setting-item input:checked + .slider {
-  background-color: var(--primary);
-}
-
-body.light-theme .setting-item .slider:before {
-  bottom: 2px;
-  left: 2px;
-}
-
-.setting-item input:checked + .slider:before {
-  transform: translateX(20px);
-}
-
-body.dark-theme .setting-item .slider {
-  background-color: #454950;
-}
-
-body.dark-theme .setting-item input:checked + .slider {
-  background-color: var(--primary-dark);
-}
-
-body.light-theme .setting-item .slider {
-  background-color: #dcdfe6;
-  border: 1px solid #d4d4d8;
-  box-sizing: border-box;
-}
-
-body.light-theme .setting-item input:checked + .slider {
-  background-color: var(--primary-light);
-  border-color: var(--primary-light);
 }
 
 /* ===== 5. 主区 ===== */
@@ -599,8 +861,11 @@ body.light-theme .setting-item input:checked + .slider {
 }
 
 .messages {
-  flex: 1;
-  overflow-y: auto;
+  flex: 1 1 0; /* ★ 核心修复：这是 flex 布局的魔法。它告诉元素：可以伸展(1)，可以收缩(1)，但基础尺寸是0(0)。这会强制它填满所有“剩余”空间。*/
+  overflow-y: auto; /* 当内容超出时，在这个区域内滚动 */
+  min-height: 0; /* ★ 核心修复：配合 flex: 1，防止子元素过多时撑开父容器 */
+  
+  /* ... 其他 .messages 的样式 (padding, display:flex, gap, etc.) 保持不变 ... */
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -968,6 +1233,149 @@ body.dark-theme .header-model-selector select#model option {
   display: flex;
   gap: 8px;
 }
+/* 3. “系统指令”按钮的独特样式 */
+.system-prompt-header-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    
+    padding: 6px 12px; /* 内边距比普通按钮稍小，更精致 */
+    
+    background-color: var(--input-bg); /* 使用与输入框/选择器一致的背景色 */
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    
+    color: var(--text-secondary); /* 使用次要文字颜色 */
+    font-size: 0.9rem;
+    font-weight: 500;
+    
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+/* 4. 鼠标悬浮和激活状态的样式 */
+.system-prompt-header-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.system-prompt-header-btn:active {
+    background-color: rgba(var(--primary-rgb), 0.1);
+}
+
+/* 5. 按钮内部 SVG 图标的样式 */
+.system-prompt-header-btn svg {
+    stroke-width: 2; /* 确保图标线条粗细合适 */
+}
+
+/* 让整个显示框在可点击时有一个手型光标 */
+.system-prompt-display {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+.system-prompt-display:hover {
+    background-color: rgba(var(--primary-rgb), 0.15);
+}
+
+.system-prompt-editor textarea {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px;
+    margin-bottom: 12px;
+    
+    background-color: var(--input-bg);
+    border: 1px solid var(--primary); /* 编辑状态下用主色调边框高亮 */
+    border-radius: var(--border-radius-md);
+    
+    color: var(--text-color);
+    font-family: inherit;
+    font-size: 0.9rem;
+    line-height: 1.6; /* 增加行高，提升可读性 */
+    
+    resize: vertical; /* 只允许垂直调整大小 */
+    min-height: 120px; /* 设置一个合适的最小高度 */
+    
+    outline: none; /* 移除默认的焦点外框 */
+    transition: box-shadow 0.2s ease;
+}
+
+.system-prompt-editor textarea:focus {
+    box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
+}
+
+.system-prompt-editor .editor-actions {
+    display: flex;
+    justify-content: flex-end; /* 按钮靠右 */
+    gap: 10px;
+}
+
+/* 默认状态下可点击 */
+.system-prompt-display {
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+/* 非编辑模式下悬浮才高亮 */
+.system-prompt-display:not(.is-editing):hover {
+    background-color: rgba(var(--primary-rgb), 0.15);
+}
+
+/* 当进入编辑模式时，移除手型光标和悬浮效果 */
+.system-prompt-display.is-editing {
+    cursor: default;
+    background-color: rgba(var(--primary-rgb), 0.1); /* 保持一个淡淡的背景色提示 */
+}
+.system-prompt-display.is-editing:hover {
+    background-color: rgba(var(--primary-rgb), 0.1); /* 悬浮时背景色不变 */
+}
+
+/* --- 操作按钮的具体样式 --- */
+.system-prompt-editor .editor-actions button {
+    padding: 6px 16px; /* 按钮可以小一点，更精致 */
+    font-size: 0.85rem;
+    font-weight: 500;
+    border-radius: var(--border-radius-sm);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* “保存”按钮 (主操作) */
+.system-prompt-editor .editor-actions button.action-btn {
+    background-color: var(--primary);
+    color: #fff;
+}
+.system-prompt-editor .editor-actions button.action-btn:hover {
+    background-color: rgba(var(--primary-rgb), 0.85);
+}
+
+/* “取消”按钮 (次要操作) */
+.system-prompt-editor .editor-actions button.secondary {
+    background-color: transparent;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+.system-prompt-editor .editor-actions button.secondary:hover {
+    background-color: var(--bg-hover);
+    border-color: var(--text-secondary);
+}
+
+/* --- (可选) 美化滚动条样式 --- */
+.system-prompt-editor textarea::-webkit-scrollbar {
+    width: 8px;
+}
+.system-prompt-editor textarea::-webkit-scrollbar-track {
+    background: transparent;
+}
+.system-prompt-editor textarea::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+.system-prompt-editor textarea::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.3);
+}
+
+
 
 .action-btn-text {
   background: none;
@@ -1160,47 +1568,6 @@ body.light-theme .message.user .text a:hover {
   box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
 }
 
-/* UI缩放控件 */
-.scale-frame {
-  display: inline-flex;
-  margin-left: 12px;
-}
-
-.scale-frame .scale-options {
-  display: flex;
-  border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-md);
-  overflow: hidden;
-}
-
-.scale-frame .scale-options button {
-  flex: none;
-  width: auto;
-  padding: 6px 10px;
-  border: none;
-  border-right: 1px solid var(--border-color);
-  background: var(--bg-secondary);
-  color: var(--text-color);
-  text-align: center;
-  font-size: 0.85em;
-  line-height: 1;
-  cursor: pointer;
-  border-radius: 0;
-  transition: background-color 0.2s ease, color 0.2s ease;
-}
-
-.scale-frame .scale-options button:last-child {
-  border-right: none;
-}
-
-.scale-frame .scale-options button.active {
-  background-color: var(--primary);
-  color: #fff;
-}
-
-.scale-frame .scale-options button:not(.active):hover {
-  background-color: rgba(var(--primary-rgb), 0.1);
-}
 
 /* 拖拽排序 */
 .sortable-ghost {
@@ -1416,67 +1783,6 @@ body.light-theme .text pre .copy-btn:hover {
   font-weight: bold;
 }
 
-/* 温度滑块 */
-.setting-item input[type="range"]#temperature-slider {
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  width: 100%;
-  height: 20px;
-  background: transparent;
-  cursor: pointer;
-  outline: none;
-  padding: 0;
-}
-
-.setting-item input[type="range"]#temperature-slider::-webkit-slider-runnable-track {
-  width: 100%;
-  height: 6px;
-  cursor: pointer;
-  background: var(--border-color);
-  border-radius: var(--border-radius-full);
-}
-
-.setting-item input[type="range"]#temperature-slider::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  border: 2px solid var(--primary);
-  height: 18px;
-  width: 18px;
-  border-radius: 50%;
-  background: #fff;
-  cursor: pointer;
-  margin-top: -6px;
-  box-shadow: var(--shadow-sm);
-  transition: transform 0.1s ease;
-}
-
-.setting-item input[type="range"]#temperature-slider:active::-webkit-slider-thumb {
-  transform: scale(1.1);
-}
-
-.setting-item input[type="range"]#temperature-slider::-moz-range-track {
-  width: 100%;
-  height: 6px;
-  cursor: pointer;
-  background: var(--border-color);
-  border-radius: var(--border-radius-full);
-}
-
-.setting-item input[type="range"]#temperature-slider::-moz-range-thumb {
-  border: 2px solid var(--primary);
-  height: 14px;
-  width: 14px;
-  border-radius: 50%;
-  background: #fff;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-}
-
-.setting-item input[type="range"]#temperature-slider::-moz-focus-outer {
-  border: 0;
-}
-
 #temperature-value {
   display: inline-block;
   min-width: 2.8em;
@@ -1488,12 +1794,11 @@ body.light-theme .text pre .copy-btn:hover {
 
 /* 空聊天状态占位提示 */
 .empty-chat-placeholder {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-  flex-grow: 1;
+  display: none; /* 默认不显示 */
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   color: var(--text-secondary);
   font-size: 1rem;
   padding: 20px;
@@ -2392,13 +2697,17 @@ body:not(.dark-theme) .preset-prompts-panel::-webkit-scrollbar-thumb {
   background-color: rgba(100, 100, 120, 0.1);
   color: #888;
   font-size: 0.8em;
-  padding: 8px 12px;
   margin: 10px 5%;
   border-radius: 4px;
   border-left: 3px solid #555;
   font-style: italic;
+  padding: 16px;
+    position: relative; /* 为按钮定位做准备 */
 }
-
+:root .system-prompt-display {
+    /* 使用你定义好的浅色边框变量 */
+    border-left-color: var(--border-light); /* 值为 rgba(0, 0, 0, 0.12) */
+}
 .system-prompt-display strong {
   font-style: normal;
   margin-right: 5px;
@@ -2878,3 +3187,111 @@ body.light-theme #global-actions-menu .dropdown-item {
   display: flex;
   align-items: center;
 }
+
+/* style.css */
+
+/* ======================================= */
+/*  特定设置项对齐修正 (最终精准版)
+/* ======================================= */
+
+/* --- 步骤 1: 识别并格式化“配置管理”这一行 --- */
+
+/* 选择器解释：找到一个 label 内容为“配置管理”的 .setting-item */
+.setting-item:has(> label:first-child:is(:contains("配置管理"))) {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 16px;
+    align-items: center;
+}
+.setting-item:has(> label:first-child:is(:contains("配置管理"))) > label {
+    justify-self: end;
+}
+
+
+/* --- 步骤 2: 识别并格式化“API 密钥管理”区块 --- */
+
+/* 2.1 - 为区块标题 h3 添加上边距，将其与上面内容分开 */
+h3:is(:contains("API 密钥管理")) {
+    margin-top: 24px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border-color);
+}
+
+/* 2.2 - 格式化标题后面的描述文字 */
+h3:is(:contains("API 密钥管理")) + p.description {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    margin-top: -4px; /* 微调与标题的间距 */
+    margin-bottom: 20px;
+}
+
+/* 2.3 - 核心：为 API Key 区块内的所有 .setting-item 应用 Grid 布局 */
+/* 选择器解释：选择所有在“API 密钥管理”标题之后的 .setting-item 兄弟元素 */
+h3:is(:contains("API 密钥管理")) ~ .setting-item {
+    display: grid;
+    grid-template-columns: 150px 1fr;
+    gap: 16px;
+    align-items: center;
+
+    /* 覆盖掉全局样式，让它们看起来像一个组 */
+    border: none;
+    background-color: transparent;
+    padding: 0;
+    margin-bottom: 16px;
+    min-height: auto;
+}
+
+/* 2.4 - 让这个区块内的 label 右对齐 */
+h3:is(:contains("API 密钥管理")) ~ .setting-item > label:not(.switch) {
+    justify-self: end;
+}
+
+/* 2.5 - 处理没有 label 的按钮行，让它从第二列开始 */
+/* (假设您的 HTML 中按钮行有 .save-btn-wrapper) */
+h3:is(:contains("API 密钥管理")) ~ .setting-item > .save-btn-wrapper {
+    grid-column-start: 2;
+}
+
+
+/* 当父容器 (.container) 拥有 .sidebar-collapsed 类时... */
+.container.sidebar-collapsed .sidebar {
+  width: 0;
+  min-width: 0;
+  padding-left: 0;
+  padding-right: 0;
+  overflow: hidden; /* 保持这个规则 */
+  border-right-width: 0; /* 收起时也隐藏边框 */
+}
+.container.sidebar-collapsed .sidebar-toggle-btn:hover {
+    left: 0;
+}
+
+
+.container.sidebar-collapsed .sidebar > * {
+    opacity: 0;
+    pointer-events: none;
+}
+/* 主区域需要填满空间 */
+.container.sidebar-collapsed .main-area {
+    margin-left: 0;
+}
+
+/* 调整器本身的位置和样式也需要变化 */
+.container.sidebar-collapsed .sidebar-resizer {
+    left: 0;
+}
+
+
+/* 1. 拖拽条的样式 */
+#sidebar-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  /* ★ 核心：让它位于侧边栏的右侧 */
+  left: calc(var(--sidebar-width, 260px) - 2px); 
+  width: 5px; /* 拖拽的热区宽度 */
+  cursor: ew-resize; /* 显示拖拽光标 */
+  z-index: 9; /* 比按钮低，比侧边栏高 */
+  transition: left 0.3s ease; /* 跟随侧边栏平滑移动 */
+}
+

@@ -288,21 +288,46 @@ export function togglePin(id) {
     }
 }
 
+// js/conversation.js
+
 /**
- * 设置系统角色提示。
- * @param {string} id - 对话ID
- * @param {string} promptText - 提示内容
+ * 为当前对话设置、更新或移除系统角色提示。
+ * @param {string} promptText - 系统指令的内容。
+ * @returns {object|null} 返回被修改后的对话对象，如果失败则返回 null。
  */
-export function setSystemPrompt(id, promptText) {
-    const conv = getConversationById(id);
-    if (!conv) return;
-    let systemMessage = conv.messages.find(m => m.role === 'system');
-    if (systemMessage) {
-        systemMessage.content = promptText;
-    } else {
-        conv.messages.unshift({ role: 'system', content: promptText });
+export function setSystemPrompt(promptText) {
+    const conv = state.getCurrentConversation();
+    if (!conv) {
+        utils.showToast('没有活动的对话。', 'warning');
+        return null;
     }
+
+    // 查找对话中是否已存在 system 消息的索引
+    const systemMessageIndex = conv.messages.findIndex(m => m.role === 'system');
+
+    // 判断用户是想设置/更新，还是想移除
+    if (promptText && promptText.trim()) {
+        const newContent = promptText.trim();
+        if (systemMessageIndex !== -1) {
+            // 如果已存在，则更新内容
+            conv.messages[systemMessageIndex].content = newContent;
+            utils.showToast('系统指令已更新。', 'success');
+        } else {
+            // 如果不存在，则在消息列表的最前面添加一个新的 system 消息
+            conv.messages.unshift({ role: 'system', content: newContent });
+            utils.showToast('系统指令已设置。', 'success');
+        }
+    } else {
+        // 如果用户输入为空，我们理解为要移除系统指令
+        if (systemMessageIndex !== -1) {
+            conv.messages.splice(systemMessageIndex, 1); // 从数组中移除该项
+            utils.showToast('系统指令已移除。', 'info');
+        }
+        // 如果本来就没有，那就什么都不做
+    }
+
     saveConversations();
+    return conv;
 }
 
 // ========================================================================

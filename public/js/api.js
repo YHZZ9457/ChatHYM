@@ -412,5 +412,24 @@ export async function savePresetsToFile(showNotification = true) {
     }
 }
 
+/**
+ * 从后端获取已配置的 API 提供商列表。
+ * @returns {Promise<string[]>} 一个解析为提供商名称数组的 Promise。
+ */
+export async function getKeysStatus() {
+    try {
+        const response = await fetch('/.netlify/functions/get-keys-status');
+        if (!response.ok) {
+            throw new Error('Failed to fetch API key status.');
+        }
+        const data = await response.json();
+        console.log('[api.js] Fetched data from backend:', data); 
+        return data.configuredProviders || [];
+    } catch (error) {
+        console.error("Error in getKeysStatus:", error);
+        utils.showToast("无法获取 API Key 状态。", "error");
+        return []; // 出错时返回空数组
+    }
+}
 
 // --- END OF FILE js/api.js (Corrected) ---

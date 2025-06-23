@@ -28,6 +28,7 @@ let presetSortable = null;
 export function initializeUI() {
     Object.assign(ui, {
         sidebar: document.querySelector('.sidebar'),
+        sidebarToggleBtn: document.getElementById('sidebar-toggle-btn'),
         sidebarHeader: document.getElementById('sidebar-header'),
         logoDisplay: document.getElementById('logo-display'),
         searchWrapper: document.getElementById('search-wrapper'),
@@ -37,10 +38,14 @@ export function initializeUI() {
         showSettingsBtn: document.getElementById('show-settings-btn'),
         sidebarResizer: document.getElementById('sidebar-resizer'),
         chatArea: document.getElementById('chat-area'),
+        systemPromptBtn: document.getElementById('system-prompt-btn'),
         settingsArea: document.getElementById('settings-area'),
+        apiProviderSelect: document.getElementById('api-provider-select'),
+        apiKeyInput: document.getElementById('api-key-input'),
         modelManagementArea: document.getElementById('model-management-area'),
         presetManagementArea: document.getElementById('preset-management-area'),
         chatTitle: document.getElementById('chat-title'),
+        saveApiKeyBtn: document.getElementById('save-api-key-btn'),
         modelSelect: document.getElementById('model'),
         exportCurrentBtn: document.getElementById('export-current-btn'),
         archiveCurrentBtn: document.getElementById('archive-current-btn'),
@@ -281,6 +286,31 @@ export function renderPresetManagementUI() {
                 renderPresetManagementUI(); // 重新渲染以固化顺序
             }
         });
+    }
+}
+
+
+/**
+ * 切换侧边栏的展开/收起状态。
+ */
+
+export function toggleSidebar() {
+    const container = document.querySelector('.container');
+    if (!container) return;
+
+    // ★ 核心修改：现在它唯一的任务就是切换 class 和保存状态
+    const isNowCollapsed = container.classList.toggle('sidebar-collapsed');
+    localStorage.setItem('sidebarCollapsed', isNowCollapsed);
+}
+
+/**
+ * 根据保存的状态，在页面加载时应用侧边栏样式。
+ * @param {boolean} isCollapsed - 是否应该收起。
+ */
+export function applyInitialSidebarState(isCollapsed) {
+    const container = document.querySelector('.container');
+    if (container && isCollapsed) {
+        container.classList.add('sidebar-collapsed');
     }
 }
 
@@ -608,6 +638,131 @@ export function handleScrollToBottomClick() {
     }
 }
 
+// ui.js (添加新函数)
+
+/**
+ * 切换系统指令编辑区的显示和隐藏。
+ * 如果指令存在，则显示它；如果不存在，则进入编辑模式。
+ * 如果已在编辑模式，则保存或取消。
+ */
+export function toggleSystemPromptEditor() {
+    if (!ui.messagesContainer) return;
+
+    let systemDiv = ui.messagesContainer.querySelector('.system-prompt-display');
+    const conv = state.getCurrentConversation();
+    if (!conv) return;
+
+    const systemMessage = conv.messages.find(m => m.role === 'system');
+    const currentPrompt = systemMessage?.content || '';
+
+    // 如果编辑区已存在，则不做任何事 (或可以考虑让它获取焦点)
+    if (systemDiv && systemDiv.classList.contains('is-editing')) {
+        const textarea = systemDiv.querySelector('textarea');
+        if (textarea) textarea.focus();
+        return;
+    }
+
+    // 如果显示区已存在，则进入编辑模式
+    if (systemDiv) {
+        enterEditMode(systemDiv, currentPrompt);
+        return;
+    }
+
+    // 如果什么都没有，则创建一个新的编辑区
+    const newSystemDiv = createSystemPromptElement(currentPrompt, true); // 直接进入编辑模式
+    ui.messagesContainer.insertBefore(newSystemDiv, ui.messagesContainer.firstChild);
+    const textarea = newSystemDiv.querySelector('textarea');
+    if(textarea) textarea.focus();
+}
+
+/**
+ * 创建系统指令的 DOM 元素 (可以是显示模式或编辑模式)
+ * @param {string} content - 指令内容
+ * @param {boolean} startInEditMode - 是否直接进入编辑模式
+ * @returns {HTMLElement} 创建好的 div 元素
+ */
+function createSystemPromptElement(content, startInEditMode = false) {
+    const systemDiv = document.createElement('div');
+    systemDiv.className = 'system-prompt-display';
+
+    if (startInEditMode) {
+        enterEditMode(systemDiv, content);
+    } else if (content) {
+        systemDiv.innerHTML = `
+            <div class="system-prompt-content-wrapper">
+                <strong>系统指令:</strong>
+                <div class="system-prompt-content">${utils.escapeHtml(content).replace(/\n/g, '<br>')}</div>
+            </div>`;
+    }
+
+    // 始终为整个 div 添加点击事件，以便从显示模式进入编辑模式
+    systemDiv.addEventListener('click', (e) => {
+        if (!systemDiv.classList.contains('is-editing')) {
+            e.stopPropagation();
+            enterEditMode(systemDiv, content);
+        }
+    });
+
+    return systemDiv;
+}
+
+/**
+ * 将一个 system-prompt-display 元素转换为编辑模式
+ * @param {HTMLElement} systemDiv - 目标 div
+ * @param {string} currentContent - 当前的指令内容
+ */
+function enterEditMode(systemDiv, currentContent) {
+    systemDiv.classList.add('is-editing');
+    systemDiv.innerHTML = `
+        <div class="system-prompt-editor">
+            <textarea rows="4" placeholder="在此输入系统指令...">${currentContent}</textarea>
+            <div class="editor-actions">
+                <button type="button" class="action-btn secondary cancel-btn">取消</button>
+                <button type="button" class="action-btn save-btn">保存</button>
+            </div>
+        </div>`;
+
+    const textarea = systemDiv.querySelector('textarea');
+    const saveBtn = systemDiv.querySelector('.save-btn');
+    const cancelBtn = systemDiv.querySelector('.cancel-btn');
+
+    const exitEditMode = (shouldSave) => {
+        if (shouldSave) {
+            const newPrompt = textarea.value.trim();
+            conversation.setSystemPrompt(newPrompt); // 调用 conversation 模块更新数据
+        }
+        // 无论保存还是取消，都重新渲染整个对话UI以反映最新状态
+        const currentConv = state.getCurrentConversation();
+        if (currentConv) {
+            loadAndRenderConversationUI(currentConv);
+        }
+    };
+
+    saveBtn.onclick = (e) => { e.stopPropagation(); exitEditMode(true); };
+    cancelBtn.onclick = (e) => { e.stopPropagation(); exitEditMode(false); };
+    textarea.onclick = (e) => e.stopPropagation(); // 防止点击文本框时触发父元素的点击事件
+    if (textarea) textarea.focus();
+}
+
+/**
+ * 在加载对话时，渲染系统指令（如果存在）
+ */
+export function renderSystemPromptDisplay() {
+    if (!ui.messagesContainer) return;
+    // 先移除旧的
+    const oldDiv = ui.messagesContainer.querySelector('.system-prompt-display');
+    if (oldDiv) oldDiv.remove();
+
+    const conv = state.getCurrentConversation();
+    const systemMessage = conv?.messages.find(m => m.role === 'system');
+
+    if (systemMessage && systemMessage.content) {
+        const systemDiv = createSystemPromptElement(systemMessage.content, false); // 只显示，不编辑
+        ui.messagesContainer.insertBefore(systemDiv, ui.messagesContainer.firstChild);
+    }
+}
+
+
 export function appendMessage(role, messageContent, modelForNote, reasoningText, conversationId, messageIndex, usage) {
     if (!ui.messagesContainer) return null;
     if (ui.emptyChatPlaceholder) ui.emptyChatPlaceholder.style.display = 'none';
@@ -623,14 +778,47 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     markdownContainer.className = 'markdown-content';
     contentDiv.appendChild(markdownContainer);
     messageWrapperDiv.contentSpan = markdownContainer;
-    if (role === 'system') {
-        const systemDiv = document.createElement('div');
-        systemDiv.className = 'system-prompt-display';
-        systemDiv.innerHTML = `<strong>系统指令:</strong><div class="system-prompt-content">${utils.escapeHtml(String(messageContent))}</div>`;
-        ui.messagesContainer.querySelector('.system-prompt-display')?.remove();
-        ui.messagesContainer.insertBefore(systemDiv, ui.messagesContainer.firstChild);
-        return systemDiv;
+   if (role === 'system') {
+    // 1. 统一清理旧的显示框
+    const existingSystemPrompt = ui.messagesContainer.querySelector('.system-prompt-display');
+    if (existingSystemPrompt) {
+        existingSystemPrompt.remove();
     }
+
+    // 2. 获取并检查内容
+    const content = String(messageContent || '').trim();
+
+    // 3. 如果没有有效内容，就什么都不做，直接返回
+    if (!content) {
+        return null;
+    }
+
+    // 4. 如果有内容，则只创建“显示模式”的 div
+    const systemDiv = document.createElement('div');
+    systemDiv.className = 'system-prompt-display';
+    
+    // 我们不再在 appendMessage 内部创建编辑区，只创建显示区
+    const contentWrapper = document.createElement('div');
+    contentWrapper.className = 'system-prompt-content-wrapper';
+    contentWrapper.innerHTML = `
+        <strong>系统指令:</strong>
+        <div class="system-prompt-content">${utils.escapeHtml(content).replace(/\n/g, '<br>')}</div>
+    `;
+    systemDiv.appendChild(contentWrapper);
+    
+    // 5. ★ 核心：为整个 div 添加点击事件，但它只调用统一的编辑函数 ★
+    systemDiv.addEventListener('click', () => {
+        // 检查是否已处于编辑模式，防止重复触发
+        if (!systemDiv.classList.contains('is-editing')) {
+            // 调用我们之前在 ui.js 中定义的、统一的函数来进入编辑模式
+            enterEditMode(systemDiv);
+        }
+    });
+
+    // 6. 插入到页面并返回
+    ui.messagesContainer.insertBefore(systemDiv, ui.messagesContainer.firstChild);
+    return systemDiv;
+}
     if (role === 'user' && messageContent?.files?.length > 0) {
         const attachmentsContainer = document.createElement('div');
         attachmentsContainer.className = 'user-attachments-container';
@@ -736,6 +924,8 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     }
     return messageWrapperDiv;
 }
+
+
 
 export function processStreamChunk(tempMsgElement, replyTextPortion, reasoningTextPortion, usageData) {
     if (!tempMsgElement) return;
@@ -864,27 +1054,38 @@ export function showGlobalActionsMenu(buttonElement, convId, convTitle, isPinned
     setTimeout(() => { document.addEventListener('click', closeMenu); }, 0);
 }
 
+
+// --- ui.js (修改后) ---
 export function loadAndRenderConversationUI(convToLoad) {
     if (!convToLoad) return;
+    
+    // 更新标题、按钮等
     updateChatTitle(convToLoad.title);
     if (ui.archiveCurrentBtn) ui.archiveCurrentBtn.textContent = convToLoad.archived ? '取消归档' : '归档';
     if (ui.modelSelect) ui.modelSelect.value = convToLoad.model;
     showChatArea();
+
     if (!ui.messagesContainer) return;
-    if (ui.emptyChatPlaceholder) {
-        ui.messagesContainer.innerHTML = '';
-        ui.messagesContainer.appendChild(ui.emptyChatPlaceholder);
-    } else {
-        ui.messagesContainer.innerHTML = '';
-    }
+
+    // 1. 总是先清空消息区
+    ui.messagesContainer.innerHTML = '';
+    renderSystemPromptDisplay();
+    // 2. 渲染消息
     let renderedMessageCount = 0;
     if (convToLoad.messages?.length > 0) {
+        
         convToLoad.messages.forEach((msg, index) => {
             const messageElement = appendMessage(msg.role, msg.content, msg.model || convToLoad.model, msg.reasoning_content, convToLoad.id, index, msg.usage);
             if (messageElement) renderedMessageCount++;
         });
     }
-    if (ui.emptyChatPlaceholder) ui.emptyChatPlaceholder.style.display = renderedMessageCount === 0 ? 'flex' : 'none';
+
+    // 3. 根据渲染的消息数量，决定是否显示占位符
+    if (ui.emptyChatPlaceholder) {
+        ui.emptyChatPlaceholder.style.display = renderedMessageCount === 0 ? 'flex' : 'none';
+    }
+
+    // 4. 滚动到底部并更新UI
     ui.messagesContainer.scrollTop = ui.messagesContainer.scrollHeight;
     updateScrollToBottomButtonVisibility();
     renderConversationList();
@@ -1093,4 +1294,62 @@ export function showLogoView() {
             if (!ui.sidebarHeader.classList.contains('search-mode')) ui.searchWrapper.style.display = 'none';
         }, 200);
     }
+}
+
+
+/**
+ * 根据已配置的提供商列表，更新 API Key 设置下拉菜单的显示状态。
+ * (最终修复版 - 强制重新获取DOM元素)
+ */
+export function updateApiKeyStatusUI(configuredProviders) {
+    const apiSelectElement = document.getElementById('api-provider-select');
+    const apiKeyInputElement = document.getElementById('api-key-input'); // 获取输入框元素
+
+    if (!apiSelectElement || !apiKeyInputElement) {
+        let errorMsg = '';
+        if (!apiSelectElement) errorMsg += '找不到 #api-provider-select。';
+        if (!apiKeyInputElement) errorMsg += '找不到 #api-key-input。';
+        console.error('[UI_UPDATE] 致命错误:', errorMsg);
+        return;
+    }
+
+    const configuredSet = new Set(
+        configuredProviders.map(p => p.trim().toLowerCase())
+    );
+
+    // --- 1. 更新下拉菜单的 ✅ 标记 ---
+    const options = apiSelectElement.options;
+    for (const option of options) {
+        const originalText = option.dataset.originalText || option.text.replace(' ✅', '');
+        option.dataset.originalText = originalText;
+
+        const optionValue = option.value.trim().toLowerCase();
+        if (configuredSet.has(optionValue)) {
+            option.textContent = `${originalText} ✅`;
+        } else {
+            option.textContent = originalText;
+        }
+    }
+
+    // --- 2. ★★★ 新增：根据当前选中的项，更新输入框状态 ★★★ ---
+    const updateInputForSelectedProvider = () => {
+        const selectedProviderValue = apiSelectElement.value.trim().toLowerCase();
+        if (configuredSet.has(selectedProviderValue)) {
+            // 如果选中的提供商已配置，显示占位符
+            apiKeyInputElement.value = ''; // 清空真实值
+            apiKeyInputElement.placeholder = '•••••••••••••••••••••••••••••••••••••••• (已设置，可留空以保留)';
+        } else {
+            // 如果未配置，显示正常的提示
+            apiKeyInputElement.placeholder = '粘贴您的 API Key';
+        }
+    };
+
+    // --- 3. 立即执行一次，并为下拉菜单添加 change 事件监听器 ---
+    updateInputForSelectedProvider(); // 页面加载时立即更新一次
+    
+    // 为下拉菜单绑定事件，以便在用户切换选项时动态更新输入框
+    apiSelectElement.removeEventListener('change', updateInputForSelectedProvider); // 先移除旧的监听器，防止重复绑定
+    apiSelectElement.addEventListener('change', updateInputForSelectedProvider);
+    
+    console.log('[UI_UPDATE] UI 更新完毕 (包括下拉菜单和输入框)。');
 }

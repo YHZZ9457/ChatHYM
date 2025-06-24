@@ -57,15 +57,25 @@
                         </select>
                     </div>
                     <button id="system-prompt-btn" class="system-prompt-header-btn" title="设置系统指令">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-book-marked"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"/><path d="m16 2-5 5 5 5"/></svg>
+                        
                         <span>系统指令</span>
                     </button>
-                    <div class="header-actions">
-                        <button id="export-current-btn" title="导出当前对话">导出</button>
-                        <button id="archive-current-btn" title="归档当前会话">归档</button>
-                        <button id="clear-current-btn" class="warning" title="清空当前对话">清空</button>
-                        <button id="delete-current-btn" title="删除当前会话">删除</button>
-                    </div>
+                  <div class="header-actions">
+    <!-- 分裂按钮容器，它现在只包含两个按钮 -->
+    <div class="split-button-container">
+        <button id="export-default-btn" class="split-button-action" title="导出为 Markdown">导出</button>
+        <button id="export-options-btn" class="split-button-dropdown" title="更多导出选项">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="6 9 12 15 18 9"></polyline>
+            </svg>
+        </button>
+    </div> <!-- 分裂按钮容器在这里结束 -->
+
+    <!-- ★★★ 核心修复：将其他按钮移到容器外部，作为 .header-actions 的直接子元素 ★★★ -->
+    <button id="archive-current-btn" title="归档当前会话">归档</button>
+    <button id="clear-current-btn" class="warning" title="清空当前对话">清空</button>
+    <button id="delete-current-btn" title="删除当前会话">删除</button>
+</div>
                 </header>
 
                 <div id="empty-chat-placeholder" class="empty-chat-placeholder" style="display: none;">
@@ -205,16 +215,36 @@
                         <div class="controls-group"><button id="save-api-key-btn" class="action-btn primary-action">保存 API Key</button></div>
                     </div>
                 </div>
-                <div class="static-info-section">
-                    <h4>关于 & 联系</h4>
-                    <p>感谢您使用 ChatHYM ！ 喵~<br>如果您有任何问题或建议，请通过以下方式联系我：</p>
-                    <ul>
-                        <li>QQ：2680159691</li>
-                        <li>GitHub：<a href="https://github.com/YHZZ9457/ChatHYM/" target="_blank" rel="noopener noreferrer">项目仓库</a></li>
-                    </ul>
-                    <h4>版本信息</h4>
-                    <p>当前版本：v1.2 (构建日期：2025-06-19)<br>基于 LocalGPT 框架。</p>
-                </div>
+                <div class="collapsible-info-section">
+
+    <!-- 第一个可折叠项：关于 & 联系 -->
+    <div class="collapsible-item">
+        <button type="button" class="collapsible-trigger">
+            <span>关于 & 联系</span>
+            <svg class="collapsible-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="collapsible-content">
+            <p>感谢您使用 ChatHYM ！ 喵~<br>如果您有任何问题或建议，请通过以下方式联系我：</p>
+            <ul>
+                <li>QQ：2680159691</li>
+                <li>GitHub：<a href="https://github.com/YHZZ9457/ChatHYM/" target="_blank" rel="noopener noreferrer">项目仓库</a></li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- 第二个可折叠项：版本信息 -->
+    <div class="collapsible-item">
+        <button type="button" class="collapsible-trigger">
+            <span>版本信息</span>
+            <svg class="collapsible-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </button>
+        <div class="collapsible-content">
+            <p>当前版本：v1.2 (构建日期：2025-06-19)<br>基于 LocalGPT 框架。</p>
+        </div>
+    </div>
+
+</div>
+
             </section>
 
             <!-- Model Management Area -->

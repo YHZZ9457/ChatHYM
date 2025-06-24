@@ -1,10 +1,34 @@
-# netlify.toml
+# netlify.toml (最终、最保险的版本)
 
+# [build] 部分：定义了生产环境的构建设置
 [build]
+  # 确保这个目录是您项目构建后的输出目录
   publish = "public"
+  # 明确告诉 Netlify 函数的源目录在哪里
+  functions = "netlify/functions"
 
+# [dev] 部分：专门为本地开发服务器 (netlify dev) 提供的配置
 [dev]
-  # 指定启动本地开发服务器时要监听的端口。
-  # Netlify Dev 会首先尝试这个端口。
-  # 如果此端口已被占用，它会自动尝试下一个可用的端口 (9458, 9459, ...)。
   port = 9457
+  functions = "netlify/functions"
+  publish = "public"
+  # 这个设置可以解决一些复杂的代理问题
+  framework = "#static"
+
+# --- 核心修复：添加明确的重定向和代理规则 ---
+
+# 规则 1: 将所有对 /api/ 的请求代理到 Netlify Functions
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+  force = true # ★★★ 核心修复 1：强制执行此规则，使其优先级最高 ★★★
+
+# 规则 2: 处理单页应用 (SPA) 的路由回退
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  # ★★★ 核心修复 2：添加条件，明确排除 /api 路径 ★★★
+  # 这告诉 Netlify：只有当请求路径不是以 /api/ 开头时，才应用这条规则
+  conditions = {Path = ["!/api/*"]} 

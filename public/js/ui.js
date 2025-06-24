@@ -458,6 +458,7 @@ function determineDropdownAction() {
 // --- 公开的 UI 操作函数 ---
 
 export function showModelManagement() {
+    document.body.classList.add('management-view-active');
     if (ui.chatArea) ui.chatArea.style.display = 'none';
     if (ui.settingsArea) ui.settingsArea.style.display = 'none';
     if (ui.presetManagementArea) ui.presetManagementArea.style.display = 'none';
@@ -467,6 +468,7 @@ export function showModelManagement() {
 }
 
 export function showPresetManagement() {
+    document.body.classList.add('management-view-active');
     if (ui.chatArea) ui.chatArea.style.display = 'none';
     if (ui.settingsArea) ui.settingsArea.style.display = 'none';
     if (ui.modelManagementArea) ui.modelManagementArea.style.display = 'none';
@@ -638,7 +640,54 @@ export function handleScrollToBottomClick() {
     }
 }
 
-// ui.js (添加新函数)
+/**
+ * 根据已配置的提供商列表，更新 API Key 设置UI。
+ * @param {string[]} configuredProviders - 已配置密钥的提供商名称数组。
+ */
+export function updateApiKeyStatusUI(configuredProviders) {
+    if (!ui.apiProviderSelect || !ui.apiKeyInput) {
+        console.error("updateApiKeyStatusUI: 关键 UI 元素未找到。");
+        return;
+    }
+
+    const configuredSet = new Set(
+        (configuredProviders || []).map(p => p.trim().toLowerCase())
+    );
+
+    // 更新下拉菜单选项的显示
+    for (const option of ui.apiProviderSelect.options) {
+        const originalText = option.dataset.originalText || option.text.replace(' ✅', '');
+        option.dataset.originalText = originalText;
+        const optionValueLower = option.value.trim().toLowerCase();
+        
+        if (configuredSet.has(optionValueLower)) {
+            option.textContent = `${originalText} ✅`;
+        } else {
+            option.textContent = originalText;
+        }
+    }
+
+    // 定义一个函数，用于根据当前选中的提供商更新输入框
+    const updateInputState = () => {
+        const selectedProviderLower = ui.apiProviderSelect.value.trim().toLowerCase();
+        if (configuredSet.has(selectedProviderLower)) {
+            // 如果已配置，清空输入框并显示占位符
+            ui.apiKeyInput.value = '';
+            ui.apiKeyInput.placeholder = '•••••••••••••••• (已配置，留空以保留)';
+        } else {
+            // 如果未配置，显示正常提示
+            ui.apiKeyInput.placeholder = '粘贴您的 API Key';
+        }
+    };
+    
+    // 立即更新一次
+    updateInputState();
+
+    // 绑定 change 事件，以便在用户切换选项时也更新
+    ui.apiProviderSelect.removeEventListener('change', updateInputState); // 防止重复绑定
+    ui.apiProviderSelect.addEventListener('change', updateInputState);
+}
+
 
 /**
  * 切换系统指令编辑区的显示和隐藏。
@@ -778,47 +827,9 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     markdownContainer.className = 'markdown-content';
     contentDiv.appendChild(markdownContainer);
     messageWrapperDiv.contentSpan = markdownContainer;
-   if (role === 'system') {
-    // 1. 统一清理旧的显示框
-    const existingSystemPrompt = ui.messagesContainer.querySelector('.system-prompt-display');
-    if (existingSystemPrompt) {
-        existingSystemPrompt.remove();
-    }
+   
+    // ★★★ 注意：这里不再有 if (role === 'system') 块了 ★★★
 
-    // 2. 获取并检查内容
-    const content = String(messageContent || '').trim();
-
-    // 3. 如果没有有效内容，就什么都不做，直接返回
-    if (!content) {
-        return null;
-    }
-
-    // 4. 如果有内容，则只创建“显示模式”的 div
-    const systemDiv = document.createElement('div');
-    systemDiv.className = 'system-prompt-display';
-    
-    // 我们不再在 appendMessage 内部创建编辑区，只创建显示区
-    const contentWrapper = document.createElement('div');
-    contentWrapper.className = 'system-prompt-content-wrapper';
-    contentWrapper.innerHTML = `
-        <strong>系统指令:</strong>
-        <div class="system-prompt-content">${utils.escapeHtml(content).replace(/\n/g, '<br>')}</div>
-    `;
-    systemDiv.appendChild(contentWrapper);
-    
-    // 5. ★ 核心：为整个 div 添加点击事件，但它只调用统一的编辑函数 ★
-    systemDiv.addEventListener('click', () => {
-        // 检查是否已处于编辑模式，防止重复触发
-        if (!systemDiv.classList.contains('is-editing')) {
-            // 调用我们之前在 ui.js 中定义的、统一的函数来进入编辑模式
-            enterEditMode(systemDiv);
-        }
-    });
-
-    // 6. 插入到页面并返回
-    ui.messagesContainer.insertBefore(systemDiv, ui.messagesContainer.firstChild);
-    return systemDiv;
-}
     if (role === 'user' && messageContent?.files?.length > 0) {
         const attachmentsContainer = document.createElement('div');
         attachmentsContainer.className = 'user-attachments-container';
@@ -924,6 +935,7 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     }
     return messageWrapperDiv;
 }
+
 
 
 
@@ -1093,6 +1105,7 @@ export function loadAndRenderConversationUI(convToLoad) {
 }
 
 export function showChatArea() {
+
     if (ui.settingsArea) ui.settingsArea.style.display = 'none';
     if (ui.modelManagementArea) ui.modelManagementArea.style.display = 'none';
     if (ui.presetManagementArea) ui.presetManagementArea.style.display = 'none';
@@ -1101,6 +1114,7 @@ export function showChatArea() {
 }
 
 export function showSettings() {
+
     if (ui.chatArea) ui.chatArea.style.display = 'none';
     if (ui.modelManagementArea) ui.modelManagementArea.style.display = 'none';
     if (ui.presetManagementArea) ui.presetManagementArea.style.display = 'none';
@@ -1296,60 +1310,53 @@ export function showLogoView() {
     }
 }
 
-
 /**
- * 根据已配置的提供商列表，更新 API Key 设置下拉菜单的显示状态。
- * (最终修复版 - 强制重新获取DOM元素)
+ * 显示导出选项的下拉菜单。
+ * @param {HTMLElement} targetButton - 触发菜单的按钮元素。
  */
-export function updateApiKeyStatusUI(configuredProviders) {
-    const apiSelectElement = document.getElementById('api-provider-select');
-    const apiKeyInputElement = document.getElementById('api-key-input'); // 获取输入框元素
+export function showExportOptionsMenu(targetButton) {
+    // 复用已有的全局操作菜单
+    const menu = ui.globalActionsMenu;
+    if (!menu) return;
 
-    if (!apiSelectElement || !apiKeyInputElement) {
-        let errorMsg = '';
-        if (!apiSelectElement) errorMsg += '找不到 #api-provider-select。';
-        if (!apiKeyInputElement) errorMsg += '找不到 #api-key-input。';
-        console.error('[UI_UPDATE] 致命错误:', errorMsg);
-        return;
-    }
+    menu.innerHTML = ''; // 清空旧菜单项
 
-    const configuredSet = new Set(
-        configuredProviders.map(p => p.trim().toLowerCase())
-    );
-
-    // --- 1. 更新下拉菜单的 ✅ 标记 ---
-    const options = apiSelectElement.options;
-    for (const option of options) {
-        const originalText = option.dataset.originalText || option.text.replace(' ✅', '');
-        option.dataset.originalText = originalText;
-
-        const optionValue = option.value.trim().toLowerCase();
-        if (configuredSet.has(optionValue)) {
-            option.textContent = `${originalText} ✅`;
-        } else {
-            option.textContent = originalText;
-        }
-    }
-
-    // --- 2. ★★★ 新增：根据当前选中的项，更新输入框状态 ★★★ ---
-    const updateInputForSelectedProvider = () => {
-        const selectedProviderValue = apiSelectElement.value.trim().toLowerCase();
-        if (configuredSet.has(selectedProviderValue)) {
-            // 如果选中的提供商已配置，显示占位符
-            apiKeyInputElement.value = ''; // 清空真实值
-            apiKeyInputElement.placeholder = '•••••••••••••••••••••••••••••••••••••••• (已设置，可留空以保留)';
-        } else {
-            // 如果未配置，显示正常的提示
-            apiKeyInputElement.placeholder = '粘贴您的 API Key';
-        }
+    const createMenuItem = (text, format) => {
+        const button = document.createElement('button');
+        button.className = 'dropdown-item';
+        button.textContent = text;
+        button.onclick = (e) => {
+            e.stopPropagation();
+            if (state.currentConversationId) {
+                conversation.exportSingleConversation(state.currentConversationId, format);
+            } else {
+                utils.showToast('没有活动的对话可导出', 'warning');
+            }
+            menu.classList.remove('show');
+        };
+        menu.appendChild(button);
     };
 
-    // --- 3. 立即执行一次，并为下拉菜单添加 change 事件监听器 ---
-    updateInputForSelectedProvider(); // 页面加载时立即更新一次
-    
-    // 为下拉菜单绑定事件，以便在用户切换选项时动态更新输入框
-    apiSelectElement.removeEventListener('change', updateInputForSelectedProvider); // 先移除旧的监听器，防止重复绑定
-    apiSelectElement.addEventListener('change', updateInputForSelectedProvider);
-    
-    console.log('[UI_UPDATE] UI 更新完毕 (包括下拉菜单和输入框)。');
+    // 创建菜单项
+    createMenuItem('导出为 Markdown (.md)', 'md');
+    createMenuItem('导出为 JSON (.json)', 'json');
+
+    // 定位并显示菜单
+    const rect = targetButton.getBoundingClientRect();
+    menu.style.top = `${rect.bottom + window.scrollY + 6}px`;
+    // 让菜单左对齐
+    menu.style.left = `${rect.left + window.scrollX}px`; 
+    menu.classList.add('show');
+
+    // 点击菜单外部时关闭菜单
+    const closeMenu = (e) => {
+        if (!menu.contains(e.target)) {
+            menu.classList.remove('show');
+            document.removeEventListener('click', closeMenu, true);
+        }
+    };
+    // 使用捕获阶段的事件监听，确保能先于其他点击事件执行
+    setTimeout(() => { document.addEventListener('click', closeMenu, true); }, 0);
 }
+
+

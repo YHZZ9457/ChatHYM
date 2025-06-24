@@ -228,32 +228,33 @@ export function truncateConversation(index) {
     }
 }
 
-/**
- * 删除单条消息。
- * @param {HTMLElement} messageElement - 消息的DOM元素 (用于从UI上临时移除)。
- * @param {string} conversationId - 消息所属对话的ID。
- * @param {number} messageIndex - 消息在数组中的索引。
- */
-export function deleteSingleMessage(messageElement, conversationId, messageIndex) {
-  const conv = getConversationById(conversationId);
-  const messageExistsInData = conv && messageIndex >= 0 && messageIndex < conv.messages.length;
 
-  if (messageExistsInData) {
+/**
+ * 删除指定对话中的单条消息。
+ * @param {string} conversationId - 消息所属对话的 ID。
+ * @param {number} messageIndex - 消息在数组中的索引。
+ * @returns {boolean} - 如果用户确认并成功删除，则返回 true。
+ */
+export function deleteSingleMessage(conversationId, messageIndex) {
+  const conv = getConversationById(conversationId);
+
+  // 确保对话和消息索引都有效
+  if (conv && messageIndex >= 0 && messageIndex < conv.messages.length) {
+    
+    // 从数据中获取要删除的消息，用于在确认框中预览
     const messageToConfirm = conv.messages[messageIndex];
     let confirmTextPreview = String(messageToConfirm.content?.text || messageToConfirm.content || "").substring(0, 50) + "...";
+    
+    // 弹出确认框，防止误操作
     if (confirm(`确实要删除这条消息吗？\n\n"${confirmTextPreview}"`)) {
+      // ★★★ 核心逻辑：使用 splice(index, 1) 精确删除一个元素 ★★★
       conv.messages.splice(messageIndex, 1);
       saveConversations();
-    }
-  } else {
-    console.warn(`[Delete] Message at index ${messageIndex} not found in data model for conv ${conversationId}. Likely a streaming message. Removing from UI only.`);
-    if (confirm('这条消息仍在生成中或数据异常。确实要从界面上移除它吗？（此操作不会保存）')) {
-      messageElement.remove();
-      if (state.isGeneratingResponse && state.currentAbortController) {
-          state.currentAbortController.abort();
-      }
+      return true; // 返回 true 表示删除成功
     }
   }
+
+  return false; // 如果用户取消或索引无效，返回 false
 }
 
 /**

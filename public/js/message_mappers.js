@@ -179,10 +179,15 @@ export function mapMessagesForStandardOrClaude(messagesHistory, provider, curren
                                 image_url: { url: fileData.base64 } // 发送 base64 Data URL
                             });
                         } else if (provider === 'anthropic') {
-                            currentUserContentParts.push({
-                                type: "image",
-                                source: { type: "base64", media_type: fileData.type, data: fileData.base64.split(',')[1] }
-                            });
+                        currentUserContentParts.push({
+                            type: "image",
+                            source: {
+                                type: "base64",
+                                media_type: fileData.type,
+                                // ★★★ 核心修复：使用 split(',') 只取逗号后面的纯 Base64 数据 ★★★
+                                data: fileData.base64.split(',')[1] 
+                            }
+                        });
                         }
                     }
                 });

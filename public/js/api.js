@@ -79,25 +79,32 @@ export async function send(onStreamChunk) {
         const filesToSend = lastUserMessage?.content?.files || [];
 
         if (providerLower === 'gemini') {
-            apiUrl = `/.netlify/functions/gemini-proxy`;
-            
-            // ★ 核心修复：恢复原始逻辑，直接传递 messages 数组 ★
-            // 让后端的 gemini-proxy 函数去处理格式转换
-            bodyPayload.messages = conversation.messages;
-            
-            // 同时确保 contents 字段不存在
-            delete bodyPayload.contents;
+            // Gemini 的逻辑比较特殊，我们让它的映射器来处理
+            // 注意：我们假设 gemini-proxy 后端能处理原始的 messages 格式
+            bodyPayload.messages = conversation.messages; 
+            delete bodyPayload.contents; // 确保 contents 字段不存在
         } else {
-            apiUrl = `/.netlify/functions/${providerLower}-proxy`;
+            // 所有其他模型都使用标准的映射器
             bodyPayload.messages = mapMessagesForStandardOrClaude(conversation.messages, providerLower, filesToSend);
-            delete bodyPayload.contents; // ★ 新增：确保移除 contents 字段
-            
-            if (providerLower === 'anthropic') {
-                const sysMsg = conversation.messages.find(m => m.role === 'system');
-                if (sysMsg?.content) bodyPayload.system = sysMsg.content;
-                if (!bodyPayload.max_tokens) bodyPayload.max_tokens = 4096;
-            }
+            delete bodyPayload.contents;
         }
+
+        // ★★★ 核心修复：在这里统一设置 API URL 和特定于提供商的顶层参数 ★★★
+
+        apiUrl = `/api/${providerLower}-proxy`; 
+        const isClaudeModel = providerLower === 'anthropic';
+            
+            if (isClaudeModel) {
+                const sysMsg = conversation.messages.find(m => m.role === 'system');
+                if (sysMsg?.content) {
+                    bodyPayload.system = sysMsg.content;
+                }
+                
+                // Claude API (即使通过OpenRouter) 都推荐设置一个 max_tokens
+                if (!bodyPayload.max_tokens) {
+                    bodyPayload.max_tokens = 4096;
+                }
+            }
         
         // --- 3. 发送请求 ---
         response = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(bodyPayload), signal });
@@ -270,6 +277,36 @@ export async function send(onStreamChunk) {
 }
 
 /**
+ * 将 API 密钥保存到后端的 .env 文件。
+ * @param {string} provider - API 提供商的名称 (例如 'OpenAI').
+ * @param {string} apiKey - 用户输入的 API 密钥.
+ * @returns {Promise<boolean>} - 保存是否成功。
+ */
+export async function saveApiKey(provider, apiKey) {
+    try {
+        const response = await fetch('/api/save-key', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ provider, apiKey }),
+        });
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.message || `保存失败，状态码: ${response.status}`);
+        }
+
+        const result = await response.json();
+        utils.showToast(result.message, 'success');
+        return true;
+
+    } catch (error) {
+        console.error("保存 API Key 失败:", error);
+        utils.showToast(`保存失败：${error.message}`, 'error');
+        return false;
+    }
+}
+
+/**
  * 从 models.json 文件加载模型配置。
  * @returns {Promise<Array>} - 返回模型数组，失败则返回包含错误信息的回退数组。
  */
@@ -418,8 +455,12 @@ export async function savePresetsToFile(showNotification = true) {
  */
 export async function getKeysStatus() {
     try {
-        const response = await fetch('/.netlify/functions/get-keys-status');
+        // ★★★ 核心修复：使用 /api/ 路径，与 netlify.toml 规则保持一致 ★★★
+        const response = await fetch('/api/get-keys-status'); 
+        
         if (!response.ok) {
+            // 这里可以添加更详细的错误日志
+            console.error(`getKeysStatus fetch failed with status: ${response.status}`);
             throw new Error('Failed to fetch API key status.');
         }
         const data = await response.json();
@@ -428,7 +469,7 @@ export async function getKeysStatus() {
     } catch (error) {
         console.error("Error in getKeysStatus:", error);
         utils.showToast("无法获取 API Key 状态。", "error");
-        return []; // 出错时返回空数组
+        return [];
     }
 }
 

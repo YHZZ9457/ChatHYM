@@ -272,6 +272,8 @@ body.is-resizing .sidebar {
   background-clip: text;
   cursor: pointer;
   user-select: none;
+    margin-top: 0;
+  margin-bottom: 0.2em;
 }
 
 .search-wrapper {
@@ -797,59 +799,6 @@ body.light-theme .controls-group input:checked + .slider {
   max-width: 240px;
 }
 
-#export-current-btn,
-#archive-current-btn,
-#clear-current-btn,
-#delete-current-btn {
-  position: static;
-  padding: 6px 14px;
-  min-width: 60px;
-  text-align: center;
-  border-radius: var(--border-radius-md);
-  font-size: 0.9rem;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  transition: all 0.2s ease;
-  border: 1px solid transparent;
-  font-weight: 500;
-}
-
-#export-current-btn {
-  background-color: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
-}
-
-#archive-current-btn {
-  background: var(--bg-secondary);
-  color: var(--text-color);
-  border-color: var(--border-color);
-}
-
-#clear-current-btn,
-#delete-current-btn {
-  background: #e53e3e;
-  color: #fff;
-}
-
-#export-current-btn:hover {
-  background-color: rgba(var(--primary-rgb), 0.85);
-  border-color: rgba(var(--primary-rgb), 0.85);
-  box-shadow: var(--shadow-md);
-}
-
-#archive-current-btn:hover {
-  background: rgba(var(--primary-rgb), 0.1);
-  border-color: var(--primary);
-  color: var(--primary);
-  box-shadow: var(--shadow-md);
-}
-
-#clear-current-btn:hover,
-#delete-current-btn:hover {
-  background: #c53030;
-  box-shadow: var(--shadow-md);
-}
 
 /* 5-2 聊天内容 */
 .chat-area {
@@ -864,8 +813,6 @@ body.light-theme .controls-group input:checked + .slider {
   flex: 1 1 0; /* ★ 核心修复：这是 flex 布局的魔法。它告诉元素：可以伸展(1)，可以收缩(1)，但基础尺寸是0(0)。这会强制它填满所有“剩余”空间。*/
   overflow-y: auto; /* 当内容超出时，在这个区域内滚动 */
   min-height: 0; /* ★ 核心修复：配合 flex: 1，防止子元素过多时撑开父容器 */
-  
-  /* ... 其他 .messages 的样式 (padding, display:flex, gap, etc.) 保持不变 ... */
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -1228,11 +1175,59 @@ body.dark-theme .header-model-selector select#model option {
   box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
 }
 
+/* style.css (最终修复版) */
+
+/* 1. 按钮组的容器 (.header-actions) */
 .header-actions {
   margin-left: auto;
-  display: flex;
-  gap: 8px;
+  display: flex; /* 保持 flex 布局 */
+  align-items: center; /* 确保所有按钮垂直居中对齐 */
+  gap: 8px; /* 按钮之间的间距 */
 }
+
+
+
+
+/* --- 普通按钮的样式 --- */
+
+/* 4. ★★★ 核心修复：为普通按钮定义独立的、简单的样式 ★★★ */
+#archive-current-btn,
+#clear-current-btn,
+#delete-current-btn {
+  height: 32px; /* ★ 统一高度 */
+  padding: 0 14px; /* 统一内边距 */
+  border-radius: var(--border-radius-md);
+  font-size: 0.9rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+/* 5. 为不同类型的普通按钮上色 */
+#archive-current-btn {
+  background: var(--bg-secondary);
+  color: var(--text-color);
+  border-color: var(--border-color);
+}
+#archive-current-btn:hover {
+  background: rgba(var(--primary-rgb), 0.1);
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+#clear-current-btn,
+#delete-current-btn {
+  background: #e53e3e;
+  color: #fff;
+}
+#clear-current-btn:hover,
+#delete-current-btn:hover {
+  background: #c53030;
+}
+
 /* 3. “系统指令”按钮的独特样式 */
 .system-prompt-header-btn {
     display: inline-flex;
@@ -2726,49 +2721,6 @@ body:not(.dark-theme) .preset-prompts-panel::-webkit-scrollbar-thumb {
   margin-right: 8px;
 }
 
-.static-info-section {
-  margin-top: 32px;
-  padding-top: 24px;
-  border-top: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-  line-height: 1.7;
-}
-
-.static-info-section h4 {
-  font-size: 1.1rem;
-  color: var(--text-color);
-  margin-top: 0;
-  margin-bottom: 10px;
-  font-weight: 600;
-}
-
-.static-info-section p {
-  margin-bottom: 1em;
-}
-
-.static-info-section p:last-of-type {
-  margin-bottom: 0.5em;
-}
-
-.static-info-section ul {
-  list-style: disc;
-  padding-left: 20px;
-  margin-bottom: 1.5em;
-}
-
-.static-info-section li {
-  margin-bottom: 0.5em;
-}
-
-.static-info-section a {
-  color: var(--primary);
-  text-decoration: none;
-}
-
-.static-info-section a:hover {
-  text-decoration: underline;
-}
 
 #scroll-to-bottom-btn {
   position: absolute;
@@ -3295,3 +3247,117 @@ h3:is(:contains("API 密钥管理")) ~ .setting-item > .save-btn-wrapper {
   transition: left 0.3s ease; /* 跟随侧边栏平滑移动 */
 }
 
+body.management-view-active #sidebar-toggle-btn {
+  display: none;
+}
+
+/* 1. 分裂按钮的容器 */
+.split-button-container {
+  display: inline-flex; /* 让内部按钮横向排列 */
+  box-shadow: var(--shadow-sm);
+  border-radius: var(--border-radius-md);
+  overflow: hidden; /* 隐藏内部边框，让它看起来像一个整体 */
+}
+
+/* 2. 两个按钮的通用样式 */
+.split-button-action,
+.split-button-dropdown {
+  display: inline-flex; /* 使用 Flexbox 布局 */
+  align-items: center; /* 垂直居中内部所有元素！ */
+  justify-content: center; /* 水平居中 */
+  
+  padding: 6px 14px;
+  background-color: var(--primary);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+}
+
+/* 3. 主操作按钮的样式 */
+.split-button-action {
+  border-right: 1px solid rgba(255, 255, 255, 0.2); /* 中间的分隔线 */
+}
+
+/* 4. 下拉按钮的样式 */
+.split-button-dropdown {
+  padding: 6px 8px; /* 下拉箭头区域可以窄一点 */
+}
+
+/* 5. 悬浮效果 */
+.split-button-action:hover,
+.split-button-dropdown:hover {
+  background-color: rgba(var(--primary-rgb), 0.85);
+}
+
+.collapsible-info-section {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border-color);
+}
+
+.collapsible-item {
+  border-bottom: 1px solid var(--border-color);
+}
+.collapsible-item:last-child {
+  border-bottom: none;
+}
+
+/* 触发器按钮 (标题部分) */
+.collapsible-trigger {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 8px;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-color);
+  transition: background-color 0.2s ease;
+}
+.collapsible-trigger:hover {
+  background-color: rgba(var(--primary-rgb), 0.05);
+}
+
+/* 箭头图标 */
+.collapsible-arrow {
+  transition: transform 0.3s ease;
+  color: var(--text-secondary);
+}
+/* 当展开时，旋转箭头 */
+.collapsible-trigger.active .collapsible-arrow {
+  transform: rotate(180deg);
+}
+
+/* 内容区域 */
+.collapsible-content {
+  max-height: 0; /* ★ 核心：默认高度为0，使其被隐藏 */
+  overflow: hidden; /* 隐藏超出的内容 */
+  transition: max-height 0.3s ease-out, padding 0.3s ease-out; /* 平滑过渡动画 */
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+  padding: 0 16px; /* 默认没有上下内边距 */
+}
+/* 展开状态下的内容区域 */
+.collapsible-trigger.active + .collapsible-content {
+  /* 当触发器有 .active 类时，内容区获得最大高度和内边距 */
+  max-height: 500px; /* 设置一个足够大的高度 */
+  padding: 0 16px 20px 16px;
+}
+.collapsible-content p {
+  margin-top: 0;
+}
+.collapsible-content ul {
+  padding-left: 20px;
+  margin-bottom: 0;
+}
+.collapsible-content a {
+  color: var(--primary);
+}

@@ -258,9 +258,22 @@ function bindEventListeners() {
             if (clearedConvId) loadConversationFlow(clearedConvId);
         }
     });
-    bindEvent(ui.ui.exportCurrentBtn, 'click', () => {
-        if (state.currentConversationId) conversation.exportSingleConversation(state.currentConversationId, 'md');
-        else utils.showToast('没有活动的对话可导出', 'warning');
+    const exportDefaultBtn = document.getElementById('export-default-btn');
+    const exportOptionsBtn = document.getElementById('export-options-btn');
+
+    // 绑定默认操作（导出 Markdown）
+    bindEvent(exportDefaultBtn, 'click', () => {
+        if (state.currentConversationId) {
+            conversation.exportSingleConversation(state.currentConversationId, 'md');
+        } else {
+            utils.showToast('没有活动的对话可导出', 'warning');
+        }
+    });
+
+    // 绑定下拉菜单触发器
+    bindEvent(exportOptionsBtn, 'click', (e) => {
+        e.stopPropagation(); // 阻止事件冒泡
+        ui.showExportOptionsMenu(e.currentTarget.parentElement); // 将整个容器作为定位参考
     });
 
     // --- 模型与参数 (★ 全部修复) ---
@@ -281,6 +294,8 @@ function bindEventListeners() {
         state.setIsManualThinkModeEnabled(this.checked);
         localStorage.setItem(state.THINK_MODE_STORAGE_KEY, state.isManualThinkModeEnabled.toString());
     });
+
+    
 
     bindEvent(ui.ui.chatSettingsBtnInline, 'click', e => { e.stopPropagation(); ui.toggleInlineSettingsPanel(); });
 
@@ -317,6 +332,30 @@ bindEvent(ui.ui.presetPromptsListPanel, 'click', e => e.stopPropagation());
     bindEvent(ui.ui.clearAllHistoryBtn, 'click', () => {
         if (confirm("确认清除所有历史吗？此操作无法恢复。")) {
             loadConversationFlow(conversation.clearAllHistory().id);
+        }
+    });
+
+    // ★★★ 在这里添加 API Key 保存按钮的事件绑定 ★★★
+    bindEvent(ui.ui.saveApiKeyBtn, 'click', async () => {
+        const provider = ui.ui.apiProviderSelect.value;
+        const apiKey = ui.ui.apiKeyInput.value.trim();
+
+        if (!provider) {
+            utils.showToast('请选择一个 API 提供商。', 'warning');
+            return;
+        }
+        if (!apiKey) {
+            utils.showToast('API Key 不能为空。', 'warning');
+            return;
+        }
+
+        const success = await api.saveApiKey(provider, apiKey);
+        if (success) {
+            // 保存成功后，立即刷新状态
+            const configuredProviders = await api.getKeysStatus();
+            ui.updateApiKeyStatusUI(configuredProviders);
+            // 清空输入框，以显示占位符
+            ui.ui.apiKeyInput.value = ''; 
         }
     });
     bindEvent(ui.ui.importFileInput, 'change', async e => {
@@ -373,6 +412,28 @@ bindEvent(ui.ui.presetPromptsListPanel, 'click', e => e.stopPropagation());
         }
     });
 
+     const settingsArea = ui.ui.settingsArea;
+    if (settingsArea) {
+        bindEvent(settingsArea, 'click', (e) => {
+            const trigger = e.target.closest('.collapsible-trigger');
+            if (!trigger) return;
+
+            // 切换 active 类，CSS 会处理动画
+            trigger.classList.toggle('active');
+            
+            // 下面的内容是可选的，用于实现“手风琴”效果（一次只展开一个）
+            // 如果您想允许多个同时展开，可以删除这个 if 块
+            if (trigger.classList.contains('active')) {
+                const allTriggers = settingsArea.querySelectorAll('.collapsible-trigger');
+                allTriggers.forEach(otherTrigger => {
+                    if (otherTrigger !== trigger) {
+                        otherTrigger.classList.remove('active');
+                    }
+                });
+            }
+        });
+    }
+
     // --- 消息操作按钮 (事件委托) ---
     bindEvent(ui.ui.messagesContainer, 'click', e => {
         const button = e.target.closest('.message-action-btn');
@@ -398,8 +459,11 @@ bindEvent(ui.ui.presetPromptsListPanel, 'click', e => e.stopPropagation());
                 handleSubmitActionClick(true);
                 break;
             case 'delete':
-                if (confirm('确定要删除这条消息及其之后的所有消息吗？')) {
-                    conversation.truncateConversation(index - 1);
+                // 调用新的、只删除单条消息的函数
+                const wasDeleted = conversation.deleteSingleMessage(conv.id, index);
+                
+                // 只有在用户确认并成功删除后，才刷新界面
+                if (wasDeleted) {
                     ui.loadAndRenderConversationUI(conv);
                 }
                 break;
@@ -448,6 +512,13 @@ async function initializeApp() {
         api.loadModelsFromConfig(),
         api.loadPresetsFromConfig()
     ]);
+
+     try {
+        const configuredProviders = await api.getKeysStatus();
+        ui.updateApiKeyStatusUI(configuredProviders);
+    } catch (error) {
+        console.error("获取 API Key 状态失败:", error);
+    }
     
     // 填充UI
     ui.populateModelDropdown(state.modelConfigData.models);

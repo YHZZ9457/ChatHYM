@@ -229,32 +229,38 @@ export function truncateConversation(index) {
 }
 
 
+// js/conversation.js
+
 /**
  * 删除指定对话中的单条消息。
- * @param {string} conversationId - 消息所属对话的 ID。
- * @param {number} messageIndex - 消息在数组中的索引。
- * @returns {boolean} - 如果用户确认并成功删除，则返回 true。
+ * @param {string} conversationId - 对话的 ID。
+ * @param {number} messageIndex - 要删除的消息在数组中的索引。
+ * @returns {boolean} - 如果用户确认并成功删除，返回 true；否则返回 false。
  */
 export function deleteSingleMessage(conversationId, messageIndex) {
   const conv = getConversationById(conversationId);
 
-  // 确保对话和消息索引都有效
-  if (conv && messageIndex >= 0 && messageIndex < conv.messages.length) {
-    
-    // 从数据中获取要删除的消息，用于在确认框中预览
-    const messageToConfirm = conv.messages[messageIndex];
-    let confirmTextPreview = String(messageToConfirm.content?.text || messageToConfirm.content || "").substring(0, 50) + "...";
-    
-    // 弹出确认框，防止误操作
-    if (confirm(`确实要删除这条消息吗？\n\n"${confirmTextPreview}"`)) {
-      // ★★★ 核心逻辑：使用 splice(index, 1) 精确删除一个元素 ★★★
-      conv.messages.splice(messageIndex, 1);
-      saveConversations();
-      return true; // 返回 true 表示删除成功
-    }
+  // 检查对话和索引是否存在，防止意外错误
+  if (!conv || messageIndex < 0 || messageIndex >= conv.messages.length) {
+    console.error("删除失败：对话或消息索引无效。", { conversationId, messageIndex });
+    return false;
   }
 
-  return false; // 如果用户取消或索引无效，返回 false
+  // 弹出确认框
+  const messageToConfirm = conv.messages[messageIndex];
+  let confirmTextPreview = String(messageToConfirm.content?.text || messageToConfirm.content || "").substring(0, 50) + "...";
+  
+  if (confirm(`确实要删除这条消息吗？\n\n"${confirmTextPreview}"`)) {
+    // 从数组中移除该项
+    conv.messages.splice(messageIndex, 1);
+    // 保存更改
+    saveConversations();
+    // 明确返回成功
+    return true;
+  }
+
+  // 如果用户点击“取消”
+  return false;
 }
 
 /**

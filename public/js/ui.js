@@ -828,7 +828,6 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     contentDiv.appendChild(markdownContainer);
     messageWrapperDiv.contentSpan = markdownContainer;
    
-    // ★★★ 注意：这里不再有 if (role === 'system') 块了 ★★★
 
     if (role === 'user' && messageContent?.files?.length > 0) {
         const attachmentsContainer = document.createElement('div');
@@ -1085,8 +1084,13 @@ export function loadAndRenderConversationUI(convToLoad) {
     // 2. 渲染消息
     let renderedMessageCount = 0;
     if (convToLoad.messages?.length > 0) {
-        
         convToLoad.messages.forEach((msg, index) => {
+            // ★★★ 核心修复：明确跳过 system 角色消息 ★★★
+            // 因为它已经由 renderSystemPromptDisplay 单独处理了
+            if (msg.role === 'system') {
+                return; 
+            }
+            
             const messageElement = appendMessage(msg.role, msg.content, msg.model || convToLoad.model, msg.reasoning_content, convToLoad.id, index, msg.usage);
             if (messageElement) renderedMessageCount++;
         });
@@ -1094,7 +1098,15 @@ export function loadAndRenderConversationUI(convToLoad) {
 
     // 3. 根据渲染的消息数量，决定是否显示占位符
     if (ui.emptyChatPlaceholder) {
-        ui.emptyChatPlaceholder.style.display = renderedMessageCount === 0 ? 'flex' : 'none';
+        // ★★★ 核心修复：在这里添加对系统指令的判断 ★★★
+        const hasSystemPrompt = convToLoad.messages.some(msg => msg.role === 'system' && msg.content);
+        
+        // 只有在既没有渲染消息，也没有系统指令时，才显示占位符
+        if (renderedMessageCount === 0 && !hasSystemPrompt) {
+            ui.emptyChatPlaceholder.style.display = 'flex';
+        } else {
+            ui.emptyChatPlaceholder.style.display = 'none';
+        }
     }
 
     // 4. 滚动到底部并更新UI
@@ -1243,21 +1255,20 @@ export function populatePresetPromptsList() {
         }
 
         // ★★★ 核心修复：在这里根据模板类型执行不同操作 ★★★
-        li.addEventListener('click', () => {
+        li.addEventListener('click', (event) => { // ★ 添加 event 参数
             if (preset.type === 'user_input') {
-                // 如果是填充输入框，直接在这里操作 UI 元素
-                // 这是 ui.js 的职责，所以在这里是完全正确的
                 if (ui.promptInput) {
                     ui.promptInput.value = preset.prompt;
-                    autoResizePromptInput(); // 调用 ui.js 内部的函数
+                    autoResizePromptInput();
                     ui.promptInput.focus();
                     utils.showToast(`模板 "${preset.name}" 已填充到输入框`, 'success');
                 }
             } else if (preset.type === 'system_prompt') {
-                // 如果是设置系统角色，调用 conversation 模块处理数据
+                // ★★★ 核心修复：阻止事件进一步传播 ★★★
+                event.stopPropagation(); 
+
                 const result = conversation.applyPresetPrompt(preset);
-                // 如果数据显示需要更新，则重新加载对话UI
-                if (result.needsUiUpdate) {
+                if (result?.needsUiUpdate) {
                     const currentConv = state.getCurrentConversation();
                     if (currentConv) {
                         loadAndRenderConversationUI(currentConv);

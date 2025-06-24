@@ -228,6 +228,13 @@ function bindEventListeners() {
         }
     });
 
+    document.addEventListener('loadConversationRequest', (e) => {
+        if (e.detail && e.detail.conversationId) {
+            console.log("接收到 loadConversationRequest 事件，准备加载:", e.detail.conversationId); // 添加日志确认
+            loadConversationFlow(e.detail.conversationId);
+        }
+    });
+
     // --- 对话管理 (★ 全部修复) ---
     bindEvent(ui.ui.conversationList, 'click', e => {
         const listItem = e.target.closest('.conversation-item');
@@ -244,13 +251,41 @@ function bindEventListeners() {
     });
     bindEvent(ui.ui.deleteCurrentBtn, 'click', () => {
         const conv = state.getCurrentConversation();
-        if (conv && confirm(`确定要删除当前会话「${conv.title}」吗？`)) {
+        if (!conv) return; // 如果没有当前对话，什么都不做
+
+        if (confirm(`确定要删除当前会话「${conv.title}」吗？`)) {
+            // ★ 1. 执行删除操作，这个函数会修改 state 并保存
             const result = conversation.deleteConversation(state.currentConversationId);
-            const idToLoad = result.nextIdToLoad === 'new' ? conversation.createNewConversation().id : result.nextIdToLoad;
-            if (idToLoad) loadConversationFlow(idToLoad);
-            else ui.renderConversationList();
+
+            // ★ 2. 决定下一个要加载的对话 ID
+            //    - 如果 result.nextIdToLoad 是 'new'，就创建一个新对话并获取其ID
+            //    - 否则，直接使用 result.nextIdToLoad
+            let idToLoad;
+            if (result.nextIdToLoad === 'new') {
+                const newConv = conversation.createNewConversation();
+                idToLoad = newConv.id;
+            } else {
+                idToLoad = result.nextIdToLoad;
+            }
+
+            // ★ 3. 调用加载流程 ★
+            //    - 如果有 ID 可以加载，就加载它。
+            //    - 如果 idToLoad 是 null (意味着所有对话都被删光了)，
+            //      我们也需要一个动作来清空界面。
+            if (idToLoad) {
+                loadConversationFlow(idToLoad);
+            } else {
+                // 这种情况发生在删除了最后一个对话，且 createNewConversation 失败时
+                // 我们需要手动清空UI
+                ui.renderConversationList(); // 刷新列表以显示空状态
+                ui.updateChatTitle("对话");
+                if (ui.ui.messagesContainer) ui.ui.messagesContainer.innerHTML = '';
+                if (ui.ui.emptyChatPlaceholder) ui.ui.emptyChatPlaceholder.style.display = 'flex';
+            }
         }
     });
+
+
     bindEvent(ui.ui.clearCurrentBtn, 'click', () => {
         const conv = state.getCurrentConversation();
         if (conv && confirm(`确定要清空「${conv.title}」的所有消息吗？`)) {
@@ -316,6 +351,21 @@ bindEvent(document, 'click', () => {
 });
 bindEvent(ui.ui.inlineChatSettingsPanel, 'click', e => e.stopPropagation());
 bindEvent(ui.ui.presetPromptsListPanel, 'click', e => e.stopPropagation());
+
+bindEvent(ui.ui.maxTokensInputInline, 'change', (e) => {
+        const value = parseInt(e.target.value, 10);
+        if (!isNaN(value) && value > 0) {
+            // 如果输入了有效正整数，则保存
+            state.setCurrentMaxTokens(value);
+            localStorage.setItem(state.MAX_TOKENS_STORAGE_KEY, value);
+        } else {
+            // 如果输入无效或为空，则清除设置
+            state.setCurrentMaxTokens(null);
+            localStorage.removeItem(state.MAX_TOKENS_STORAGE_KEY);
+            e.target.value = ''; // 清空输入框
+        }
+    });
+
 
     // --- 页面导航与设置 (★ 全部修复) ---
     bindEvent(ui.ui.showSettingsBtn, 'click', ui.showSettings);
@@ -458,14 +508,21 @@ bindEvent(ui.ui.presetPromptsListPanel, 'click', e => e.stopPropagation());
                 ui.loadAndRenderConversationUI(conv);
                 handleSubmitActionClick(true);
                 break;
-            case 'delete':
-                // 调用新的、只删除单条消息的函数
-                const wasDeleted = conversation.deleteSingleMessage(conv.id, index);
+             case 'delete':
+                // 获取当前对话的引用
+                const currentConv = state.getCurrentConversation();
+                if (!currentConv) break; // 如果没有当前对话，直接退出
+
+                // 调用删除函数，它会处理 confirm 对话框和数据修改
+                const wasMessageDeleted = conversation.deleteSingleMessage(currentConv.id, index);
                 
-                // 只有在用户确认并成功删除后，才刷新界面
-                if (wasDeleted) {
-                    ui.loadAndRenderConversationUI(conv);
+                // ★ 核心修复：只要函数返回 true，就刷新UI ★
+                if (wasMessageDeleted) {
+                    // 使用最新的对话状态重新渲染界面
+                    // 此时 currentConv 对象已经被 conversation.js 的函数修改了
+                    ui.loadAndRenderConversationUI(currentConv);
                 }
+                // 如果返回 false (用户取消了)，则什么都不做。
                 break;
         }
         document.addEventListener('presetPromptApplied', (event) => {
@@ -489,6 +546,17 @@ bindEvent(ui.ui.presetPromptsListPanel, 'click', e => e.stopPropagation());
  * 应用程序的异步初始化流程。
  */
 async function initializeApp() {
+
+     const savedMaxTokens = localStorage.getItem(state.MAX_TOKENS_STORAGE_KEY);
+    if (savedMaxTokens) {
+        const value = parseInt(savedMaxTokens, 10);
+        if (!isNaN(value) && value > 0) {
+            state.setCurrentMaxTokens(value);
+            if (ui.ui.maxTokensInputInline) {
+                ui.ui.maxTokensInputInline.value = value;
+            }
+        }
+    }
 
     const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
     ui.applyInitialSidebarState(sidebarCollapsed);

@@ -31,8 +31,13 @@
         },
         {
           "text": "OR Gemini 2.5 Pro",
-          "value": "openrouter::google/gemini-2.5-pro-preview",
+          "value": "openrouter::google/gemini-2.5-pro",
           "isHidden": false
+        },
+        {
+          "text": "OR G2.5Pro (old)",
+          "value": "openrouter::google/gemini-2.5-pro-preview",
+          "isHidden": true
         },
         {
           "text": "OR Qwen3-235B-A22B",
@@ -170,6 +175,11 @@
         {
           "text": "SF Qwen3-8B",
           "value": "siliconflow::Qwen/Qwen3-8B",
+          "isHidden": false
+        },
+        {
+          "text": "SF DSR1 0528 8B",
+          "value": "siliconflow::deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
           "isHidden": false
         },
         {

@@ -11,15 +11,8 @@ import * as ui from './ui.js'; // ★ 统一使用 'ui' 作为模块别名
 // 2. 协调性函数 (Controller/Glue Code)
 // ========================================================================
 
-// js/script.js
-
-/**
- * 核心协调函数：处理发送/停止按钮的点击事件。
- * (最终版，支持后台分支生成)
- * @param {boolean} [isRegenerating=false] - 是否为重新生成操作。
- */
 async function handleSubmitActionClick(isRegenerating = false) {
-    // 1. 前置检查 (保持不变)
+    // 1. 前置检查
     if (state.isGeneratingResponse) {
         if (state.currentAbortController) state.currentAbortController.abort();
         return;
@@ -34,13 +27,18 @@ async function handleSubmitActionClick(isRegenerating = false) {
         return;
     }
 
-    // ★ 2. 准备API请求所需的数据 (提前准备) ★
-    //    无论是新消息还是重新生成，我们都需要从当前活动分支获取历史记录
+    // ★★★ 核心修复：将所有需要的变量声明在函数顶部 ★★★
+    let tempMsgElement = null;
+    let loadingDiv = null;
+
+    state.setGeneratingResponse(true);
+    utils.updateSubmitButtonState(true, ui.ui.submitActionBtn);
+
+    // 2. 准备API请求所需的数据
     const branchMessagesForApi = conversation.getCurrentBranchMessages(currentConv);
 
-    // ★ 3. 处理UI和数据模型的更新 (根据模式区分) ★
+    // 3. 如果是新消息，处理用户输入并更新UI
     if (!isRegenerating) {
-        // --- 发送新消息的流程 ---
         const filesToProcess = [...state.uploadedFilesData];
         const originalPromptText = ui.ui.promptInput.value.trim();
         const processedFilesForMessage = [];
@@ -53,129 +51,68 @@ async function handleSubmitActionClick(isRegenerating = false) {
         }
         const userMessageContent = { text: originalPromptText, files: processedFilesForMessage };
         
-        // 添加用户消息，这会更新 activeMessageId
         conversation.addMessageToConversation('user', userMessageContent, { model: currentConv.model });
 
-        // 清空输入UI并立即刷新聊天区，显示用户刚刚发送的消息
         ui.ui.promptInput.value = '';
         ui.autoResizePromptInput();
         state.setUploadedFiles([]);
         ui.renderFilePreview();
         ui.loadAndRenderConversationUI(currentConv);
     }
-    // 如果是重新生成，我们不立即改变UI或 activeMessageId
-
-    // 4. 更新UI为“正在生成”状态
-    state.setGeneratingResponse(true);
-    // 对于重新生成，我们只在对应的旧消息上显示加载状态，而不是全局按钮
-    if (isRegenerating) {
-        // (可选UI增强：在被重新生成的消息上显示一个小小的加载指示器)
-    } else {
-        utils.updateSubmitButtonState(true, ui.ui.submitActionBtn);
-    }
     
-    // --- ★ 5. 后台流式处理逻辑 ★ ---
-    let tempMsgElement = null; // 临时UI元素，只在发送新消息时使用
-    let accumulatedReplyForRegen = ""; // 用于后台累积重新生成的数据
-    let accumulatedReasoningForRegen = "";
-    let finalUsageForRegen = null;
-
+    // 4. 定义统一的流式处理回调
     if (!isRegenerating) {
-        const loadingDiv = ui.appendLoading();
-        // ★ 回调函数现在非常简单，直接透传数据
-        const handleStreamChunk = (result) => {
-            if (loadingDiv?.parentNode) loadingDiv.remove();
-            if (!tempMsgElement) {
-                const role = state.getCurrentConversation().model.startsWith('gemini::') ? 'model' : 'assistant';
-                // ★ 首次创建时，可以包含思考过程的初始部分
-                tempMsgElement = ui.appendMessage(role, { text: result.reply }, null, result.reasoning, currentConv.id, -1, null);
-            } else {
-                // 后续只更新
-                ui.processStreamChunk(tempMsgElement, result.reply, result.reasoning, result.usage);
-            }
-        };
-        await processApiCall(branchMessagesForApi, handleStreamChunk, isRegenerating);
-
-    } else {
-        // ★ 后台处理回调也简化
-        const handleBackgroundStream = (result) => {
-            if (result.reply) accumulatedReplyForRegen += result.reply;
-            if (result.reasoning) accumulatedReasoningForRegen += result.reasoning;
-            if (result.usage) finalUsageForRegen = result.usage;
-        };
-        // ★ processApiCall 也需要相应修改，将累积的数据传入
-        await processApiCall(branchMessagesForApi, handleBackgroundStream, isRegenerating, {
-            accumulatedReply: accumulatedReplyForRegen,
-            accumulatedReasoning: accumulatedReasoningForRegen,
-            finalUsage: finalUsageForRegen
-        });
+        loadingDiv = ui.appendLoading();
     }
-}
+    const handleStreamChunk = (result) => {
+        // ★ 核心修复 3：如果是重新生成，这个回调不做任何UI操作
+        if (isRegenerating) return;
 
-/**
- * 封装API调用和结果处理的辅助函数
- */
-async function processApiCall(branchMessages, onStreamChunk, isRegenerating, backgroundData = {}) {
-    const currentConv = state.getCurrentConversation();
-    try {
-        const finalResult = await api.send(branchMessages, onStreamChunk);
-
-        // 如果是流式输出，临时元素已经被处理，这里移除
-        // (此逻辑现在只对非重新生成有效)
-        if (!isRegenerating && document.querySelector('.loading-indicator-wrapper')) {
-            document.querySelector('.loading-indicator-wrapper').remove();
+        if (loadingDiv?.parentNode) loadingDiv.remove();
+        if (!tempMsgElement) {
+            const role = state.getCurrentConversation().model.startsWith('gemini::') ? 'model' : 'assistant';
+            tempMsgElement = ui.appendMessage(role, { text: result.reply }, null, result.reasoning, currentConv.id, -1, null);
+        } else {
+            ui.processStreamChunk(tempMsgElement, result.reply, result.reasoning, result.usage);
         }
+    };
+    // 5. 执行API调用和后续处理
+    try {
+        const finalResult = await api.send(branchMessagesForApi, handleStreamChunk);
         
-        // --- 根据模式处理最终结果 ---
+        if (tempMsgElement) tempMsgElement.remove();
+
         if (finalResult.success) {
-            let finalReply, finalReasoning, finalUsage;
-            if (isRegenerating) {
-                // 如果是重新生成，使用后台累积的数据
-                finalReply = backgroundData.accumulatedReply || finalResult.reply;
-                finalReasoning = backgroundData.accumulatedReasoning || finalResult.reasoning;
-                finalUsage = backgroundData.finalUsage || finalResult.usage;
-            } else {
-                // 否则使用 api.send 的最终结果
-                finalReply = finalResult.reply;
-                finalReasoning = finalResult.reasoning;
-                finalUsage = finalResult.usage;
-            }
-            
-            // 更新数据模型
-            conversation.addMessageToConversation(finalResult.role, finalReply, {
+            conversation.addMessageToConversation(finalResult.role, finalResult.reply, {
                 model: currentConv.model,
-                reasoning_content: finalReasoning,
-                usage: finalUsage
+                reasoning_content: finalResult.reasoning,
+                usage: finalResult.usage
             });
 
-            
-
-            // 自动命名新对话
             if (!finalResult.aborted && currentConv.title === '新对话') {
                 const newTitle = utils.stripMarkdown(finalResult.reply).substring(0, 20).trim();
                 if (newTitle) currentConv.title = newTitle;
             }
 
-            // ★ 关键：无论是哪种模式，都在这里刷新UI ★
-            // 如果是重新生成，此时 activeMessageId 已被 addMessageToConversation 更新到新分支
             ui.loadAndRenderConversationUI(currentConv);
 
         } else {
-            // API调用失败，显示错误消息
             ui.appendMessage('assistant', { text: finalResult.reply }, currentConv.model, null, currentConv.id, -1, null);
         }
 
     } catch (error) {
         console.error("API call processing error:", error);
+        if (loadingDiv?.parentNode) loadingDiv.remove();
+        if (tempMsgElement) tempMsgElement.remove();
         ui.appendMessage('assistant', { text: `错误: ${error.message}` }, currentConv.model, null, currentConv.id, -1, null);
     } finally {
-        // 最终清理
         state.setGeneratingResponse(false);
         utils.updateSubmitButtonState(false, ui.ui.submitActionBtn);
         conversation.saveConversations();
         ui.renderConversationList(); 
     }
 }
+
 
 
 /**
@@ -584,6 +521,10 @@ bindEvent(ui.ui.maxTokensInputInline, 'change', (e) => {
             case 'regenerate':
                 const assistantMsgToRegen = conv.messages[messageIndex];
                 if (assistantMsgToRegen && assistantMsgToRegen.parentId) {
+                    const messageElement = e.target.closest('.message-wrapper');
+                    if (messageElement) {
+                        ui.replaceMessageWithLoading(messageElement);
+                    }
                     conv.activeMessageId = assistantMsgToRegen.parentId;
                     handleSubmitActionClick(true);
                 }

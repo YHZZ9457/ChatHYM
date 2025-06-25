@@ -1582,6 +1582,25 @@ export function enableInlineTitleEdit() {
         ui.chatTitle.addEventListener('click', handleTitleClick);
     }
 }
+/**
+ * 将指定消息元素替换为加载指示器。
+ * @param {HTMLElement} messageWrapperElement - 目标消息的 .message-wrapper 元素。
+ * @returns {void}
+ */
+export function replaceMessageWithLoading(messageWrapperElement) {
+    if (!messageWrapperElement) return;
+
+    // 清空包装器的所有内容
+    messageWrapperElement.innerHTML = '';
+    
+    // 创建并添加加载器
+    const loader = document.createElement('div');
+    loader.className = 'loading-indicator-bubble inline-loading-indicator';
+    loader.innerHTML = '<span>正在重新生成…</span>';
+    
+    // 将加载器添加到（现在是空的）包装器中
+    messageWrapperElement.appendChild(loader);
+}
 
 export function updateManualThinkModeState() {
     if (!ui.thinkModeToggle || !ui.autoThinkModeToggle) return;

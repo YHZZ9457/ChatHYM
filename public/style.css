@@ -3348,22 +3348,30 @@ body.management-view-active #sidebar-toggle-btn {
     cursor: not-allowed;
 }
 
-/* 1. 消息包装器：保持 inline-block 以收缩宽度 */
-.message-wrapper {
-    position: relative;
-    display: inline-block; 
-    max-width: 90%; 
-}
+/* =================================================================== */
+/* == Final, Cleaned CSS for Message Action Buttons (Bottom, Outer) == */
+/* =================================================================== */
 
-/* 2. 确保 .messages 是 flex 容器，以控制左右对齐 */
+/* 1. 消息容器 (.messages) */
+/* 确保它是 flex 容器，以便能控制子项的左右对齐 */
 .messages {
     display: flex;
     flex-direction: column;
-    gap: 16px; /* 维持消息间的垂直间距 */
-    /* ... 其他 .messages 样式 */
+    gap: 16px; 
 }
 
-/* 3. 根据角色将包装器推到左边或右边 */
+/* 2. 消息包装器 (.message-wrapper) */
+/* 这是定位和“悬浮桥”的关键 */
+.message-wrapper {
+    position: relative;
+    /* 让包装器宽度收缩以适应内容，解决短消息对齐问题 */
+    display: inline-block; 
+    max-width: 90%; 
+    /* 在下方创建透明的悬浮缓冲区，作为“悬浮桥” */
+    padding-bottom: 32px; 
+}
+
+/* 3. 根据角色将包装器推到屏幕的左边或右边 */
 .user-message-wrapper {
   align-self: flex-end;
 }
@@ -3371,40 +3379,45 @@ body.management-view-active #sidebar-toggle-btn {
   align-self: flex-start;
 }
 
-/* 4. 动作按钮容器：定位和动画 */
+/* 4. 动作按钮容器 (.message-actions-container) */
+/* 这是按钮组的容器，它本身不可见 */
 .message-actions-container {
     position: absolute;
-    top: -30px; 
-    width: auto;
+    /* 将容器定位在包装器的最底部（padding 区域内） */
+    bottom: 0; 
     
+    width: auto; /* 宽度由内部按钮决定 */
     display: flex;
     gap: 6px; 
+    
+    /* 默认隐藏，并设置出现动画 */
     opacity: 0;
     pointer-events: none;
+    transform: translateY(-4px); 
     transition: opacity 0.2s ease, transform 0.2s ease;
-    transform: translateY(4px);
     z-index: 5;
 }
 
 /* 5. 悬浮时显示按钮组 */
+/* 悬浮在整个包装器（包括其内边距）上时，显示按钮 */
 .message-wrapper:hover .message-actions-container {
     opacity: 1;
     transform: translateY(0);
     pointer-events: auto;
 }
 
-/* 6. ★★★ 终极核心修复：所有按钮组都从右侧定位！ ★★★ */
+/* 6. 实现“外侧对齐”的水平定位 */
 .assistant-message-wrapper .message-actions-container {
-    /* 助手在左，按钮在右上角（外侧） */
+    /* 助手消息在左，按钮在右下角（外侧） */
     left: 0; 
 }
 
 .user-message-wrapper .message-actions-container {
-    /* 用户在右，按钮在左上角（外侧） */
+    /* 用户消息在右，按钮在左下角（外侧） */
     right: 0;
 }
 
-/* 7. 内部按钮样式 (保持不变) */
+/* 7. 内部按钮 (.message-action-btn) 的样式 */
 .message-action-btn {
     background-color: var(--bg-secondary);
     color: var(--text-secondary);
@@ -3417,112 +3430,29 @@ body.management-view-active #sidebar-toggle-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-    flex-shrink: 0; 
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-/* 6. 按钮悬浮效果：改变背景和颜色 */
-.message-action-btn:hover {
-    background-color: var(--primary);
-    color: #fff;
-}
-
-/* 7. 特定按钮的悬浮颜色 */
-.message-action-btn.delete-message-btn:hover,
-.message-action-btn.delete-branch-btn:hover {
-  background-color: #e53e3e; /* 红色 */
-  color: #fff;
-}
-
-/* 8. SVG 图标大小 */
-.message-action-btn svg {
-  width: 14px;
-  height: 14px;
-
-
-
-}/* 1. 消息包装器：这是定位的关键参考系 */
-.message-wrapper {
-    position: relative; 
-    /* ★ 核心：增加顶部内边距，作为“悬浮缓冲区”或“隐形桥” */
-    /* 这个内边距在视觉上是透明的，但可以响应鼠标悬浮 */
-    padding-top: 24px; 
-}
-
-/* 2. 动作按钮容器：核心修改在这里 */
-.message-actions-container {
-    /* (A) 容器本身不可见 */
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
-    padding: 0;
-
-    /* (B) ★ 核心：使用绝对定位，并设置负的 top 值 */
-    position: absolute;
-    top: -5px; /* 将容器向上移动，使其完全位于 .message 的外部 */
-    
-    /* (C) 默认隐藏和动画效果 */
-    display: flex;
-    gap: 6px; 
-    opacity: 0;
-    pointer-events: none;
-    transform: translateY(4px); 
-    transition: opacity 0.2s ease, transform 0.2s ease;
-    z-index: 5;
-}
-
-/* 3. 悬浮在消息气泡上时，显示按钮组 */
-/* 我们将悬浮目标从 .message-wrapper 改为 .message，体验更精确 */
-.message:hover + .message-actions-container,
-.message-actions-container:hover {
-    opacity: 1;
-    pointer-events: auto;
-}
-
-/* 4. ★ 核心：根据消息角色决定按钮组的位置 */
-.assistant-message-wrapper .message-actions-container {
-    right: 0; /* 助手消息：在包装器内靠右 */
-    flex-direction: row; 
-}
-
-.user-message-wrapper .message-actions-container {
-    left: 0; /* 用户消息：在包装器内靠左 */
-    flex-direction: row-reverse;
-}
-
-/* 5. 内部按钮的全新样式：更小、更精致、无边框 */
-.message-action-btn {
-    background-color: rgba(var(--primary-rgb), 0.1); /* 使用一个淡淡的背景色 */
-    color: var(--text-secondary);
-    border: none; /* ★ 核心：移除边框 */
-    border-radius: var(--border-radius-sm); /* 可以用小一点的圆角 */
-    
-    /* 尺寸和布局 */
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    flex-shrink: 0; /* 确保按钮在空间不足时不会被压缩 */
     
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
-/* 6. 按钮悬浮效果：改变背景和颜色 */
+/* 8. 按钮的悬浮效果 */
 .message-action-btn:hover {
-    background-color: var(--primary);
-    color: #fff;
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary);
+    color: var(--primary);
 }
 
-/* 7. 特定按钮的悬浮颜色 */
+/* 9. 特定按钮的悬浮颜色（例如删除） */
 .message-action-btn.delete-message-btn:hover,
 .message-action-btn.delete-branch-btn:hover {
-  background-color: #e53e3e; /* 红色 */
+  background-color: #e53e3e;
+  border-color: #e53e3e;
   color: #fff;
 }
 
-/* 8. SVG 图标大小 */
+/* 10. 按钮内部 SVG 图标的大小 */
 .message-action-btn svg {
   width: 14px;
   height: 14px;

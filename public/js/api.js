@@ -162,12 +162,16 @@ export async function send(messagesHistory, onStreamChunk) {
                     
                     try {
                         const chunkObj = JSON.parse(jsonDataString);
-                        let rawTextFromChunk = '', reasoningForUnit = null, usageForUnit = null;
+                        
+                        // ★★★ 核心修复：在这里处理增量，而不是在外面 ★★★
+                        let replyDelta = '';
+                        let reasoningDelta = '';
+                        let usageForUnit = null;
 
                         // 根据不同 provider 解析数据块
                         switch(providerLower) {
                             case 'ollama':
-                                if (chunkObj?.message?.content) rawTextFromChunk = chunkObj.message.content; 
+                                if (chunkObj?.message?.content) replyDelta = chunkObj.message.content; 
                                 if (chunkObj.done === true && chunkObj.total_duration) {
                                     usageForUnit = { 
                                         prompt_tokens: chunkObj.prompt_eval_count || 0, 
@@ -180,7 +184,7 @@ export async function send(messagesHistory, onStreamChunk) {
                                     usageData = { input_tokens: chunkObj.message.usage.input_tokens, output_tokens: 0 };
                                 }
                                 if (chunkObj.type === 'content_block_delta' && chunkObj.delta?.type === 'text_delta') {
-                                    rawTextFromChunk = chunkObj.delta.text || '';
+                                    replyDelta = chunkObj.delta.text || '';
                                 }
                                 if (chunkObj.type === 'message_delta' && chunkObj.usage?.output_tokens) {
                                     usageForUnit = { output_tokens: chunkObj.usage.output_tokens };
@@ -188,7 +192,7 @@ export async function send(messagesHistory, onStreamChunk) {
                                 break;
                             case 'gemini': 
                                 if (chunkObj.candidates?.[0]?.content?.parts?.[0]?.text) {
-                                    rawTextFromChunk = chunkObj.candidates[0].content.parts[0].text;
+                                    replyDelta = chunkObj.candidates[0].content.parts[0].text;
                                 }
                                 if (chunkObj.usageMetadata) {
                                     usageForUnit = { 
@@ -200,8 +204,9 @@ export async function send(messagesHistory, onStreamChunk) {
                             default: // OpenAI, Deepseek, etc.
                                 const delta = chunkObj.choices?.[0]?.delta;
                                 if (delta) {
-                                    rawTextFromChunk = delta.content || ''; 
-                                    reasoningForUnit = delta.reasoning || delta.reasoning_content || null; 
+                                    // 假设回复和思考是互斥的
+                                    replyDelta = delta.content || ''; 
+                                    reasoningDelta = delta.reasoning || delta.reasoning_content || '';
                                 }
                                 if (chunkObj.usage) {
                                     usageForUnit = chunkObj.usage;
@@ -209,21 +214,24 @@ export async function send(messagesHistory, onStreamChunk) {
                                 break;
                         }
 
-                        // 分离思考和回复文本
-                        const { replyTextPortion, thinkingTextPortion, newThinkingBlockState } = utils.extractThinkingAndReply(rawTextFromChunk, '<think>', '</think>', inThinkingBlock);
-                        inThinkingBlock = newThinkingBlockState;
+                        // 如果 provider 不直接提供 reasoning 增量，我们从 replyDelta 中提取
+                        if (!reasoningDelta && replyDelta) {
+                            const { replyTextPortion, thinkingTextPortion, newThinkingBlockState } = utils.extractThinkingAndReply(replyDelta, '<think>', '</think>', inThinkingBlock);
+                            inThinkingBlock = newThinkingBlockState;
+                            replyDelta = replyTextPortion;
+                            reasoningDelta = thinkingTextPortion;
+                        }
 
-                        // 累积
-                        if (replyTextPortion) accumulatedAssistantReply += replyTextPortion;
-                        const currentThinking = thinkingTextPortion || (reasoningForUnit || "");
-                        if (currentThinking) accumulatedThinkingForDisplay += currentThinking;
+                        // 累积数据
+                        if (replyDelta) accumulatedAssistantReply += replyDelta;
+                        if (reasoningDelta) accumulatedThinkingForDisplay += reasoningDelta;
                         if (usageForUnit) usageData = { ...usageData, ...usageForUnit };
 
-                        // 调用回调函数，将处理好的数据块传出去给协调器
+                        // ★★★ 核心修复：将增量数据传递给回调 ★★★
                         onStreamChunk({
-                            reply: replyTextPortion,
-                            reasoning: currentThinking,
-                            usage: usageData
+                            reply: replyDelta, // 传递增量
+                            reasoning: reasoningDelta, // 传递增量
+                            usage: usageData // 传递最新累积的 usage
                         });
 
                     } catch (e) {
@@ -231,6 +239,7 @@ export async function send(messagesHistory, onStreamChunk) {
                     }
                 }
             }
+
         } else { // 非流式响应
             const responseData = await response.json();
             if (!response.ok) throw new Error(responseData.error?.message || JSON.stringify(responseData));

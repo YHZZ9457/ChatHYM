@@ -940,6 +940,7 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     if ((role === 'assistant' || role === 'model') && reasoningText?.trim()) {
         const reasoningBlockDiv = document.createElement('div');
         reasoningBlockDiv.className = 'reasoning-block';
+        reasoningBlockDiv.style.display = reasoningText?.trim() ? 'block' : 'none'; 
         reasoningBlockDiv.innerHTML = `<div class="reasoning-label"><span>思考过程:</span><button type="button" class="copy-reasoning-btn">复制</button></div><div class="reasoning-content"></div>`;
         const reasoningContentElement = reasoningBlockDiv.querySelector('.reasoning-content');
         reasoningContentElement.textContent = reasoningText;
@@ -1143,30 +1144,45 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
 
 
 
-export function processStreamChunk(tempMsgElement, replyTextPortion, reasoningTextPortion, usageData) {
+export function processStreamChunk(tempMsgElement, replyDelta, reasoningDelta, usageData) {
     if (!tempMsgElement) return;
+    
+    // --- 处理回复文本 ---
     const markdownContentSpan = tempMsgElement.contentSpan;
-    const reasoningContentEl = tempMsgElement.querySelector('.reasoning-content');
-    const reasoningBlockEl = tempMsgElement.querySelector('.reasoning-block');
-    if (replyTextPortion) {
+    if (replyDelta && markdownContentSpan) {
         let accumulatedRawMarkdown = markdownContentSpan.dataset.rawMarkdown || "";
-        accumulatedRawMarkdown += replyTextPortion;
+        accumulatedRawMarkdown += replyDelta;
         markdownContentSpan.dataset.rawMarkdown = accumulatedRawMarkdown;
         markdownContentSpan.innerHTML = marked.parse(accumulatedRawMarkdown);
         processPreBlocksForCopyButtons(markdownContentSpan);
     }
-    if (reasoningContentEl && reasoningTextPortion) {
-        reasoningContentEl.textContent += reasoningTextPortion;
-        if (reasoningBlockEl) reasoningBlockEl.classList.remove('reasoning-block-empty');
+    
+    // --- ★ 核心修复：处理思考过程文本 ---
+    const reasoningContentEl = tempMsgElement.querySelector('.reasoning-content');
+    if (reasoningDelta && reasoningContentEl) {
+        // 直接将增量字符追加到 textContent
+        reasoningContentEl.textContent += reasoningDelta;
+        
+        // 如果思考块之前是隐藏的，现在让它显示出来
+        const reasoningBlockEl = tempMsgElement.querySelector('.reasoning-block');
+        if (reasoningBlockEl && reasoningBlockEl.style.display === 'none') {
+            reasoningBlockEl.style.display = 'block';
+        }
     }
+
+    // --- 处理 Token 使用情况 ---
     if (tempMsgElement.usageElement && usageData) {
         const p = usageData.prompt_tokens ?? usageData.input_tokens ?? '...';
         const c = usageData.completion_tokens ?? usageData.output_tokens ?? '...';
         tempMsgElement.usageElement.textContent = `提示: ${p} tokens, 回复: ${c} tokens`;
     }
+    
+    // 自动滚动
     if (ui.messagesContainer) {
         const dist = ui.messagesContainer.scrollHeight - ui.messagesContainer.clientHeight - ui.messagesContainer.scrollTop;
-        if (dist < 200) requestAnimationFrame(() => { ui.messagesContainer.scrollTop = ui.messagesContainer.scrollHeight; });
+        if (dist < 200) {
+            requestAnimationFrame(() => { ui.messagesContainer.scrollTop = ui.messagesContainer.scrollHeight; });
+        }
     }
 }
 

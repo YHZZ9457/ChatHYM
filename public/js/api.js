@@ -18,7 +18,7 @@ import { mapMessagesForGemini, mapMessagesForStandardOrClaude } from './message_
  * @param {function} onStreamChunk - 处理流式数据块的回调函数。
  * @returns {Promise<object>} 一个 Promise，解析为一个包含最终结果的对象。
  */
-export async function send(onStreamChunk) {
+export async function send(messagesHistory, onStreamChunk) {
     let apiUrl;
     const headers = { 'Content-Type': 'application/json' };
     let bodyPayload = {};
@@ -75,7 +75,7 @@ export async function send(onStreamChunk) {
         }
 
         // --- 2. 准备 Messages/Contents (恢复 Gemini 原始逻辑版) ---
-        const lastUserMessage = conversation.messages[conversation.messages.length - 1];
+        const lastUserMessage = messagesHistory[messagesHistory.length - 1];
         const filesToSend = lastUserMessage?.content?.files || [];
 
         if (providerLower === 'gemini') {

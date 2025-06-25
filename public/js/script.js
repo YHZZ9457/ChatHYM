@@ -11,122 +11,109 @@ import * as ui from './ui.js'; // ★ 统一使用 'ui' 作为模块别名
 // 2. 协调性函数 (Controller/Glue Code)
 // ========================================================================
 
+// js/script.js
+
 /**
  * 核心协调函数：处理发送/停止按钮的点击事件。
+ * (最终版，支持分支、文件上传和重新生成)
+ * @param {boolean} [isRegenerating=false] - 是否为重新生成操作。
  */
 async function handleSubmitActionClick(isRegenerating = false) {
+    // 1. 前置检查
     if (state.isGeneratingResponse) {
         if (state.currentAbortController) state.currentAbortController.abort();
         return;
     }
-    // ★ 修复：使用正确的双重路径 'ui.ui' 访问DOM元素
+    const currentConv = state.getCurrentConversation();
+    if (!currentConv) {
+        utils.showToast("错误：没有活动的对话。", 'error');
+        return;
+    }
     if (!isRegenerating && !ui.ui.promptInput.value.trim() && state.uploadedFilesData.length === 0) {
         utils.showToast("请输入问题或上传文件。", 'warning');
         return;
     }
-    const conv = state.getCurrentConversation();
-    if (!conv || !conv.model || conv.model.startsWith("error::")) {
-        utils.showToast("错误：请选择一个有效的对话和模型。", 'error');
-        return;
+
+    // 2. 如果是新消息，先处理用户输入，只更新数据模型
+    if (!isRegenerating) {
+        const filesToProcess = [...state.uploadedFilesData];
+        const originalPromptText = ui.ui.promptInput.value.trim();
+        const processedFilesForMessage = [];
+        for (const fileData of filesToProcess) {
+            if (fileData.fileObject) {
+                const base64String = await utils.readFileAsBase64(fileData.fileObject);
+                processedFilesForMessage.push({ name: fileData.name, type: fileData.type, base64: base64String });
+            }
+            if (fileData.previewUrl) URL.revokeObjectURL(fileData.previewUrl);
+        }
+        const userMessageContent = { text: originalPromptText, files: processedFilesForMessage };
+        conversation.addMessageToConversation('user', userMessageContent, { model: currentConv.model });
+
+        // 清空输入UI
+        ui.ui.promptInput.value = '';
+        ui.autoResizePromptInput();
+        state.setUploadedFiles([]);
+        ui.renderFilePreview();
     }
 
+    // 3. ★ 统一的UI更新点（API请求前）★
+    //    无论是新消息还是重新生成，都在这里刷新一次UI
+    ui.loadAndRenderConversationUI(state.getCurrentConversation());
+    
+    // 4. 更新UI为“正在生成”状态
     state.setGeneratingResponse(true);
-    // ★ 修复：使用 'ui.ui' 访问DOM元素
     utils.updateSubmitButtonState(true, ui.ui.submitActionBtn);
-
-    // 在 script.js 的 handleSubmitActionClick 函数中
-
-if (!isRegenerating) {
-    // 1. 从 state 中获取待上传文件的信息（现在包含 fileObject 和 previewUrl）
-    const filesToProcess = [...state.uploadedFilesData];
-    const originalPromptText = ui.ui.promptInput.value.trim();
-
-    // 2. 立即清空UI和临时的state，让界面感觉更流畅
-    ui.ui.promptInput.value = '';
-    ui.autoResizePromptInput();
-    state.setUploadedFiles([]); // 清空全局的待上传文件列表
-    ui.renderFilePreview();     // 清空文件预览区
-
-    // 3. 异步处理文件：将 File 对象转换为 Base64
-    //    这是发送给模型和存入历史记录的最终数据结构
-    const processedFilesForMessage = [];
-    for (const fileData of filesToProcess) {
-        // 如果文件对象存在，就进行转换
-        if (fileData.fileObject) {
-            const base64String = await utils.readFileAsBase64(fileData.fileObject);
-            processedFilesForMessage.push({
-                name: fileData.name,
-                type: fileData.type,
-                base64: base64String
-                // 注意：这里不再包含 fileObject 和 previewUrl
-            });
-        }
-        // 4. 释放临时的内存URL，防止内存泄漏
-        if (fileData.previewUrl) {
-            URL.revokeObjectURL(fileData.previewUrl);
-        }
-    }
-
-    // 5. 构建最终要存入历史和显示的消息内容
-    const userMessageContent = { text: originalPromptText, files: processedFilesForMessage };
-    
-    // 6. 将处理好的消息推入对话历史
-    conv.messages.push({ role: 'user', content: userMessageContent, model: conv.model });
-    
-    // 7. 在UI上渲染这条用户消息
-    //    ui.appendMessage 需要能正确处理这种新的 userMessageContent 结构
-    ui.appendMessage('user', userMessageContent, null, null, conv.id, conv.messages.length - 1);
-    }
-
     const loadingDiv = ui.appendLoading();
     let tempMsgElement = null;
     const handleStreamChunk = (result) => {
         if (loadingDiv?.parentNode) loadingDiv.remove();
         if (!tempMsgElement) {
             const role = state.getCurrentConversation().model.startsWith('gemini::') ? 'model' : 'assistant';
-            tempMsgElement = ui.appendMessage(role, { text: '' }, null, null, conv.id, -1, null);
+            tempMsgElement = ui.appendMessage(role, { text: '' }, null, null, currentConv.id, -1, null);
         }
         ui.processStreamChunk(tempMsgElement, result.reply, result.reasoning, result.usage);
     };
 
     try {
-        const finalResult = await api.send(handleStreamChunk);
+        // 5. 获取当前分支历史并发送API请求
+        const branchMessages = conversation.getCurrentBranchMessages(state.getCurrentConversation());
+        const finalResult = await api.send(branchMessages, handleStreamChunk);
+        
         if (loadingDiv?.parentNode) loadingDiv.remove();
         if (tempMsgElement) tempMsgElement.remove();
+
         if (finalResult.success) {
-            ui.appendMessage(finalResult.role, { text: finalResult.reply }, conv.model, finalResult.reasoning, conv.id, conv.messages.length, finalResult.usage);
-            conv.messages.push({
-                role: finalResult.role,
-                content: finalResult.reply,
-                model: conv.model,
+            // 6. 数据模型更新
+            conversation.addMessageToConversation(finalResult.role, finalResult.reply, {
+                model: currentConv.model,
                 reasoning_content: finalResult.reasoning,
                 usage: finalResult.usage
             });
-            if (!finalResult.aborted && conv.title === '新对话') {
+            if (!finalResult.aborted && state.getCurrentConversation().title === '新对话') {
                 const newTitle = utils.stripMarkdown(finalResult.reply).substring(0, 20).trim();
-                if (newTitle) {
-                    conv.title = newTitle;
-                    ui.updateChatTitle(newTitle);
-                }
+                if (newTitle) state.getCurrentConversation().title = newTitle;
             }
+
+            // 7. ★ 统一的UI更新点（API请求后）★
+            ui.loadAndRenderConversationUI(state.getCurrentConversation());
         } else {
-            ui.appendMessage('assistant', { text: finalResult.reply }, conv.model, null, conv.id, -1, null);
+            ui.appendMessage('assistant', { text: finalResult.reply }, currentConv.model, null, currentConv.id, -1, null);
         }
     } catch (error) {
-        console.error("handleSubmitActionClick caught an unexpected error:", error);
+        console.error("handleSubmitActionClick error:", error);
         if (loadingDiv?.parentNode) loadingDiv.remove();
         if (tempMsgElement) tempMsgElement.remove();
-        ui.appendMessage('assistant', { text: `发生致命错误: ${error.message}` }, conv.model, null, conv.id, -1, null);
+        ui.appendMessage('assistant', { text: `错误: ${error.message}` }, currentConv.model, null, currentConv.id, -1, null);
     } finally {
+        // 8. 最终清理
         state.setGeneratingResponse(false);
-        // ★ 修复：使用 'ui.ui' 访问DOM元素
         utils.updateSubmitButtonState(false, ui.ui.submitActionBtn);
         conversation.saveConversations();
-        ui.renderConversationList();
+        ui.renderConversationList(); // 只刷新侧边栏标题
     }
 }
 
-// 在 script.js 中
+
 
 /**
  * 协调文件选择流程 (最终正确版本)
@@ -463,6 +450,22 @@ bindEvent(ui.ui.maxTokensInputInline, 'change', (e) => {
     });
 
      const settingsArea = ui.ui.settingsArea;
+
+     // ★★★ 新增：监听分支切换请求事件 ★★★
+    document.addEventListener('switchBranchRequest', (e) => {
+        if (e.detail && e.detail.messageId) {
+            const messageId = e.detail.messageId;
+            
+            // 1. 调用 conversation 模块的函数，更新活动分支的指针
+            conversation.setActiveBranch(messageId);
+            
+            // 2. 使用当前对话的最新状态，重新渲染整个UI
+            const currentConv = state.getCurrentConversation();
+            if (currentConv) {
+                ui.loadAndRenderConversationUI(currentConv);
+            }
+        }
+    });
     if (settingsArea) {
         bindEvent(settingsArea, 'click', (e) => {
             const trigger = e.target.closest('.collapsible-trigger');
@@ -488,53 +491,59 @@ bindEvent(ui.ui.maxTokensInputInline, 'change', (e) => {
     bindEvent(ui.ui.messagesContainer, 'click', e => {
         const button = e.target.closest('.message-action-btn');
         if (!button) return;
+        
         const messageWrapper = button.closest('.message-wrapper');
         if (!messageWrapper) return;
-        const action = button.dataset.action;
-        const index = parseInt(messageWrapper.dataset.messageIndex, 10);
+
+        const convId = messageWrapper.dataset.conversationId;
+        const messageIndex = parseInt(messageWrapper.dataset.messageIndex, 10);
         const conv = state.getCurrentConversation();
-        if (!conv || isNaN(index)) return;
+
+        if (!conv || conv.id !== convId || isNaN(messageIndex) || messageIndex < 0 || messageIndex >= conv.messages.length) {
+            return;
+        }
+
+        const messageId = conv.messages[messageIndex].id;
+        const action = button.dataset.action;
+        let wasHandled = false; // 标志位，用于判断是否需要刷新UI
+
         switch (action) {
             case 'edit':
-                const textToEdit = conv.messages[index]?.content?.text || '';
-                conversation.truncateConversation(index - 1);
+                const textToEdit = conv.messages[messageIndex]?.content?.text || '';
+                conversation.truncateConversation(messageIndex - 1);
                 ui.loadAndRenderConversationUI(conv);
-                ui.ui.promptInput.value = textToEdit; // ★ 修复
-                ui.ui.promptInput.focus(); // ★ 修复
+                ui.ui.promptInput.value = textToEdit;
+                ui.ui.promptInput.focus();
                 ui.autoResizePromptInput();
+                // 编辑操作自己刷新UI，所以这里不算
                 break;
-            case 'regenerate':
-                conversation.truncateConversation(index - 1);
-                ui.loadAndRenderConversationUI(conv);
-                handleSubmitActionClick(true);
-                break;
-             case 'delete':
-                // 获取当前对话的引用
-                const currentConv = state.getCurrentConversation();
-                if (!currentConv) break; // 如果没有当前对话，直接退出
 
-                // 调用删除函数，它会处理 confirm 对话框和数据修改
-                const wasMessageDeleted = conversation.deleteSingleMessage(currentConv.id, index);
-                
-                // ★ 核心修复：只要函数返回 true，就刷新UI ★
-                if (wasMessageDeleted) {
-                    // 使用最新的对话状态重新渲染界面
-                    // 此时 currentConv 对象已经被 conversation.js 的函数修改了
-                    ui.loadAndRenderConversationUI(currentConv);
+            case 'regenerate':
+                const assistantMsgToRegen = conv.messages[messageIndex];
+                if (assistantMsgToRegen && assistantMsgToRegen.parentId) {
+                    conv.activeMessageId = assistantMsgToRegen.parentId;
+                    handleSubmitActionClick(true);
                 }
-                // 如果返回 false (用户取消了)，则什么都不做。
+                // 重生成操作自己刷新UI，所以这里不算
+                break;
+
+            // ★ 核心修改在这里 ★
+            case 'delete_single':
+                wasHandled = conversation.deleteMessageAndHandleChildren(convId, messageId, 'single');
+                break;
+
+            case 'delete_branch':
+                wasHandled = conversation.deleteMessageAndHandleChildren(convId, messageId, 'branch');
                 break;
         }
-        document.addEventListener('presetPromptApplied', (event) => {
-        // 从事件的 detail 中获取被点击的 preset 对象
-        const presetToApply = event.detail.preset;
-        
-        if (presetToApply) {
-            console.log("script.js 监听到 presetPromptApplied 事件，正在调用 conversation.applyPresetPrompt...");
-            // 调用 conversation 模块的函数来处理逻辑
-            conversation.applyPresetPrompt(presetToApply);
+
+        // 如果执行了删除操作并成功，则刷新UI
+        if (wasHandled) {
+            const currentConv = state.getCurrentConversation();
+            if (currentConv) {
+                ui.loadAndRenderConversationUI(currentConv);
+            }
         }
-    });
     });
 
     eventListenersBound = true;

@@ -44,6 +44,28 @@ export const DEFAULT_MAX_TOKENS_PLACEHOLDER = 4096;
 //    提供安全、统一的方式来读取和修改状态。
 // ========================================================================
 
+/*
+  新的对话 (Conversation) 对象结构:
+  {
+    id: string,
+    title: string,
+    model: string,
+    // ★ messages 现在是一个包含所有分支消息的扁平数组
+    messages: [
+      {
+        id: string,       // 每条消息的唯一ID
+        parentId: string | null, // 父消息的ID，根消息为 null
+        role: 'user' | 'assistant' | 'system',
+        content: any,
+        // ... 其他元数据
+      }
+    ],
+    // ★ 新增：追踪当前分支的最后一条消息的ID
+    activeMessageId: string | null,
+    // ... 其他对话属性，如 archived, isPinned
+  }
+*/
+
 /**
  * 获取当前活动（被选中）的对话对象。
  * @returns {object|undefined} 当前对话对象，如果未找到则返回 undefined。

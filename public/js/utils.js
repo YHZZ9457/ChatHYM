@@ -1,6 +1,15 @@
 // --- START OF FILE js/utils.js ---
 
 /**
+ * 生成一个简单的、基于时间的、伪唯一的ID。
+ * 对于客户端应用足够用，比引入整个 uuid 库更轻量。
+ * @returns {string}
+ */
+export function generateSimpleId() {
+  return `msg_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
  * HTML-escapes a string.
  * @param {string} str The string to escape.
  * @returns {string} The escaped string.

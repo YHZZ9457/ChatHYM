@@ -21,11 +21,14 @@ let presetSortable = null;
 // 3. UI 初始化
 // ========================================================================
 
+// --- START OF FILE ui.js (Complete and Corrected initializeUI function) ---
+
 /**
  * 在 DOM 加载后，获取所有需要的 DOM 元素引用并填充 ui 对象。
  * @returns {boolean} 如果关键元素获取成功，则返回 true，否则返回 false。
  */
 export function initializeUI() {
+    // ★ 核心修复：恢复所有原始元素的获取
     Object.assign(ui, {
         sidebar: document.querySelector('.sidebar'),
         sidebarToggleBtn: document.getElementById('sidebar-toggle-btn'),
@@ -66,7 +69,7 @@ export function initializeUI() {
         showPresetPromptsBtn: document.getElementById('show-preset-prompts-btn'),
         presetPromptsListPanel: document.getElementById('preset-prompts-list-panel'),
         presetPromptsUl: document.getElementById('preset-prompts-ul'),
-        promptInput: document.getElementById('prompt'),
+        promptInput: document.getElementById('prompt'), // 关键元素
         submitActionBtn: document.getElementById('submit-action-btn'),
         backToChatBtn: document.getElementById('back-to-chat-btn'),
         clearAllHistoryBtn: document.getElementById('clear-all-history-btn'),
@@ -97,6 +100,17 @@ export function initializeUI() {
         chatHeader: document.querySelector('.chat-header'),
     });
 
+    // ★ 并且包含我们新增的 messageActionsMenu 逻辑
+    let menuElement = document.getElementById('message-actions-menu');
+    if (!menuElement) {
+        menuElement = document.createElement('div');
+        menuElement.id = 'message-actions-menu';
+        menuElement.className = 'global-actions-menu';
+        document.body.appendChild(menuElement);
+    }
+    ui.messageActionsMenu = menuElement;
+
+    // ★ 现在这个检查将能通过
     if (!ui.promptInput) {
         console.error("initializeUI FAILED: Could not find element with ID 'prompt'.");
         return false;
@@ -105,12 +119,63 @@ export function initializeUI() {
     return true;
 }
 
+
+
+
+
+/**
+ * ★ 新增函数：显示单个消息的操作菜单
+ * @param {HTMLElement} targetButton - 触发菜单的按钮
+ * @param {string} conversationId - 对话ID
+ * @param {string} messageId - 消息ID
+ */
+export function showMessageActionsMenu(targetButton, conversationId, messageId) {
+    // ★★★ 核心修复：从 ui 对象读取菜单元素 ★★★
+    const menu = ui.messageActionsMenu;
+    if (!menu) {
+        console.error("Message actions menu not found in ui object!");
+        return;
+    }
+
+    menu.innerHTML = ''; // 清空
+
+    const createMenuItem = (text, action, isDanger = false) => {
+        const button = document.createElement('button');
+        button.className = 'dropdown-item';
+        if (isDanger) button.classList.add('danger');
+        button.textContent = text;
+        button.onclick = (e) => {
+            e.stopPropagation();
+            document.dispatchEvent(new CustomEvent('messageActionRequest', {
+                detail: { conversationId, messageId, action }
+            }));
+            menu.classList.remove('show');
+        };
+        menu.appendChild(button);
+    };
+
+    createMenuItem('删除此条消息', 'delete_single', true);
+    createMenuItem('删除此分支', 'delete_branch', true);
+
+    // 定位并显示菜单
+    const rect = targetButton.getBoundingClientRect();
+    menu.style.top = `${rect.bottom + window.scrollY + 2}px`;
+    menu.style.left = `${rect.right + window.scrollX - menu.offsetWidth}px`;
+    menu.classList.add('show');
+
+    // 点击外部关闭菜单
+    const closeMenu = (e) => {
+        if (!menu.contains(e.target)) {
+            menu.classList.remove('show');
+            document.removeEventListener('click', closeMenu, true);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', closeMenu, true), 0);
+}
+
 // ========================================================================
 // 4. UI 渲染与交互函数
 // ========================================================================
-
-// --- 内部辅助函数 ---
-// 在 ui.js 中
 
 export function renderModelManagementUI() {
     if (!ui.modelListEditor || !state.editableModelConfig || !Array.isArray(state.editableModelConfig.models)) {
@@ -405,7 +470,8 @@ function createConversationListItem(conv, isArchived = false) {
         moreBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/></svg>`;
         moreBtn.onclick = (e) => {
             e.stopPropagation();
-            showGlobalActionsMenu(moreBtn, conv.id, conv.title, conv.isPinned);
+            // 将 moreBtn 这个按钮元素作为第一个参数传递进去
+            showGlobalActionsMenu(moreBtn, conv.id, conv.title, conv.isPinned); 
         };
         actionsWrapper.appendChild(moreBtn);
         li.appendChild(actionsWrapper);
@@ -818,39 +884,47 @@ function enterEditMode(systemDiv, currentContent) {
 /**
  * 在加载对话时，渲染系统指令（如果存在）
  */
-export function renderSystemPromptDisplay() {
+export function renderSystemPromptDisplay(content) {
     if (!ui.messagesContainer) return;
-    // 先移除旧的
+    
     const oldDiv = ui.messagesContainer.querySelector('.system-prompt-display');
     if (oldDiv) oldDiv.remove();
 
-    const conv = state.getCurrentConversation();
-    const systemMessage = conv?.messages.find(m => m.role === 'system');
-
-    if (systemMessage && systemMessage.content) {
-        const systemDiv = createSystemPromptElement(systemMessage.content, false); // 只显示，不编辑
+    if (content) {
+        const systemDiv = createSystemPromptElement(content, false);
         ui.messagesContainer.insertBefore(systemDiv, ui.messagesContainer.firstChild);
     }
 }
 
 
+/**
+ * 创建并向聊天区域追加一条新消息的 DOM 元素。
+ * (最终整合版，支持附件、思考过程、分支指示器和元信息)
+ * @param {'user' | 'assistant' | 'model'} role - 消息的角色。
+ * @param {object|string} messageContent - 消息内容，可以是字符串或包含 text 和 files 的对象。
+ * @param {string} modelForNote - 用于显示在元信息中的模型名称。
+ * @param {string} reasoningText - AI 的思考过程文本。
+ * @param {string} conversationId - 消息所属的对话ID。
+ * @param {number} messageIndex - 消息在对话 messages 数组中的索引 (-1 表示临时消息)。
+ * @param {object} usage - Token 使用情况对象。
+ * @returns {HTMLElement|null} 创建的消息包装器元素，或在失败时返回 null。
+ */
 export function appendMessage(role, messageContent, modelForNote, reasoningText, conversationId, messageIndex, usage) {
     if (!ui.messagesContainer) return null;
     if (ui.emptyChatPlaceholder) ui.emptyChatPlaceholder.style.display = 'none';
+
+    // 1. 创建最外层的包装器
     const messageWrapperDiv = document.createElement('div');
     messageWrapperDiv.className = `message-wrapper ${role === 'user' ? 'user-message-wrapper' : 'assistant-message-wrapper'}`;
     messageWrapperDiv.dataset.conversationId = conversationId;
     messageWrapperDiv.dataset.messageIndex = messageIndex;
+
+    // 2. 创建消息气泡本身
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role === 'assistant' || role === 'model' ? 'assistant' : 'user'}`;
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'text';
-    const markdownContainer = document.createElement('span');
-    markdownContainer.className = 'markdown-content';
-    contentDiv.appendChild(markdownContainer);
-    messageWrapperDiv.contentSpan = markdownContainer;
-   
+    let reasoningDivElement = null;
 
+    // 3. 处理用户消息的附件 (如果存在)
     if (role === 'user' && messageContent?.files?.length > 0) {
         const attachmentsContainer = document.createElement('div');
         attachmentsContainer.className = 'user-attachments-container';
@@ -862,36 +936,110 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
         });
         messageDiv.appendChild(attachmentsContainer);
     }
-    let finalMarkdown = "";
-    if (typeof messageContent === 'string') finalMarkdown = messageContent;
-    else if (messageContent?.text !== undefined) finalMarkdown = messageContent.text || "";
-    else if (Array.isArray(messageContent) && messageContent[0]?.type === 'text') finalMarkdown = messageContent[0].text;
-    else if (messageContent) try { finalMarkdown = JSON.stringify(messageContent, null, 2); } catch (e) { finalMarkdown = "[无法渲染的复杂内容]"; }
-    let reasoningDivElement = null;
-    if (role === 'assistant' || role === 'model') {
+
+    // 4. 处理 AI 思考过程 (如果存在)
+    if ((role === 'assistant' || role === 'model') && reasoningText?.trim()) {
         const reasoningBlockDiv = document.createElement('div');
         reasoningBlockDiv.className = 'reasoning-block';
         reasoningBlockDiv.innerHTML = `<div class="reasoning-label"><span>思考过程:</span><button type="button" class="copy-reasoning-btn">复制</button></div><div class="reasoning-content"></div>`;
-        reasoningDivElement = reasoningBlockDiv.querySelector('.reasoning-content');
-        if (reasoningText?.trim()) reasoningDivElement.textContent = reasoningText;
-        else reasoningBlockDiv.classList.add('reasoning-block-empty');
+        const reasoningContentElement = reasoningBlockDiv.querySelector('.reasoning-content');
+        reasoningContentElement.textContent = reasoningText;
         reasoningBlockDiv.querySelector('.copy-reasoning-btn').addEventListener('click', e => {
             e.stopPropagation();
-            navigator.clipboard.writeText(reasoningDivElement.textContent || "").then(() => {
+            navigator.clipboard.writeText(reasoningText).then(() => {
                 e.target.textContent = '已复制!';
                 setTimeout(() => { e.target.textContent = '复制'; }, 2000);
             });
         });
         messageDiv.appendChild(reasoningBlockDiv);
     }
-    if (finalMarkdown.trim()) markdownContainer.innerHTML = marked.parse(finalMarkdown);
-    utils.pruneEmptyNodes(markdownContainer);
-    utils.pruneEmptyNodes(markdownContainer);
-    messageDiv.appendChild(contentDiv);
-    processPreBlocksForCopyButtons(contentDiv);
+    
+    // 5. 处理核心消息内容 (Markdown)
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'text';
+    const markdownContainer = document.createElement('span');
+    markdownContainer.className = 'markdown-content';
+    
+    let finalMarkdown = "";
+    if (typeof messageContent === 'string') {
+        finalMarkdown = messageContent;
+    } else if (messageContent?.text !== undefined) {
+        finalMarkdown = messageContent.text || "";
+    }
+    
+    if (finalMarkdown.trim()) {
+        markdownContainer.innerHTML = marked.parse(finalMarkdown);
+        utils.pruneEmptyNodes(markdownContainer);
+        contentDiv.appendChild(markdownContainer);
+        messageDiv.appendChild(contentDiv);
+        processPreBlocksForCopyButtons(contentDiv);
+    }
+    messageWrapperDiv.contentSpan = markdownContainer; // 暴露给流式更新
+
+    // 6. ★★★ 统一处理所有元信息 (Meta Info) ★★★
     if (role === 'assistant' || role === 'model') {
         const metaInfoDiv = document.createElement('div');
         metaInfoDiv.className = 'message-meta-info';
+        let hasMetaContent = false;
+
+        // 6a. 分支指示器
+        if (messageIndex !== -1) {
+            const currentConv = state.getCurrentConversation();
+            const message = currentConv?.messages[messageIndex];
+            if (message && message.parentId) {
+                const children = conversation.findChildrenOf(currentConv, message.parentId);
+                 if (children.length > 1) {
+            const currentIndex = children.findIndex(child => child.id === message.id);
+            const branchIndicator = document.createElement('div');
+            branchIndicator.className = 'branch-indicator';
+            
+            // 创建按钮
+            const prevBtn = document.createElement('button');
+            prevBtn.className = 'branch-nav-btn prev-branch';
+            prevBtn.title = '上一个回复';
+            prevBtn.innerHTML = '<';
+            prevBtn.disabled = (currentIndex === 0);
+
+            const nextBtn = document.createElement('button');
+            nextBtn.className = 'branch-nav-btn next-branch';
+            nextBtn.title = '下一个回复';
+            nextBtn.innerHTML = '>';
+            nextBtn.disabled = (currentIndex >= children.length - 1);
+
+            const countSpan = document.createElement('span');
+            countSpan.textContent = `${currentIndex + 1} / ${children.length}`;
+
+            // ★★★ 核心：为按钮绑定点击事件 ★★★
+            prevBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // 找到上一个兄弟消息并切换
+                const prevMessage = children[currentIndex - 1];
+                if (prevMessage) {
+                    document.dispatchEvent(new CustomEvent('switchBranchRequest', { detail: { messageId: prevMessage.id } }));
+                }
+            });
+
+            nextBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // 找到下一个兄弟消息并切换
+                const nextMessage = children[currentIndex + 1];
+                if (nextMessage) {
+                    document.dispatchEvent(new CustomEvent('switchBranchRequest', { detail: { messageId: nextMessage.id } }));
+                }
+            });
+
+            // 组装指示器
+            branchIndicator.appendChild(prevBtn);
+            branchIndicator.appendChild(countSpan);
+            branchIndicator.appendChild(nextBtn);
+            
+            metaInfoDiv.appendChild(branchIndicator);
+            hasMetaContent = true;
+        }
+            }
+        }
+
+        // 6b. 模型名称
         if (modelForNote) {
             const note = document.createElement('div');
             note.className = 'model-note';
@@ -903,51 +1051,89 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
             }
             note.textContent = `模型：${displayModelName}`;
             metaInfoDiv.appendChild(note);
+            hasMetaContent = true;
         }
+
+        // 6c. Token 计数
         const tokenNote = document.createElement('span');
         tokenNote.className = 'token-count-note';
-        messageWrapperDiv.usageElement = tokenNote;
+        messageWrapperDiv.usageElement = tokenNote; // 暴露给流式更新
         if (usage) {
             const p = usage.prompt_tokens ?? usage.input_tokens ?? 'N/A';
             const c = usage.completion_tokens ?? usage.output_tokens ?? 'N/A';
             tokenNote.textContent = `提示: ${p} tokens, 回复: ${c} tokens`;
+            metaInfoDiv.appendChild(tokenNote); // ★ 只有在有 usage 时才添加
+            hasMetaContent = true;
         }
-        metaInfoDiv.appendChild(tokenNote);
-        messageDiv.appendChild(metaInfoDiv);
+
+        // 只有在 meta-info 容器里有实际内容时，才把它添加到 DOM
+        if (hasMetaContent) {
+            messageDiv.appendChild(metaInfoDiv);
+        }
     }
+
+    // 7. 创建并添加操作按钮容器
     const actionsContainer = document.createElement('div');
     actionsContainer.className = 'message-actions-container';
+    
+    // 7a. 复制按钮 (所有消息都有)
     const copyMessageBtn = document.createElement('button');
     copyMessageBtn.className = 'message-action-btn copy-message-btn';
     copyMessageBtn.title = '复制消息内容';
     copyMessageBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-copy" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/></svg>`;
     copyMessageBtn.addEventListener('click', () => { navigator.clipboard.writeText(finalMarkdown.trim()).then(() => utils.showToast('消息内容已复制', 'success')); });
     actionsContainer.appendChild(copyMessageBtn);
+
+     // 7b. ★ 核心修改：根据角色渲染不同的按钮 ★
     if (role === 'user') {
+        // --- 用户的按钮 (简洁版：复制、编辑、删除) ---
+        // (复制按钮已在最上面统一添加)
+        
         const editBtn = document.createElement('button');
         editBtn.className = 'message-action-btn edit-message-btn';
         editBtn.title = '以此为基础编辑';
-        editBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pencil-square" viewBox="0 0 16 16"><path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/><path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5h6a.5.5 0 0 0 0-1h-6A1.5 1.5 0 0 0 1 2.5z"/></svg>`;
         editBtn.dataset.action = 'edit';
+        editBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-pencil-square" viewBox="0 0 16 16"><path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/><path fill-rule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5h6a.5.5 0 0 0 0-1h-6A1.5 1.5 0 0 0 1 2.5z"/></svg>`;
         actionsContainer.appendChild(editBtn);
-    }
-    if (role === 'assistant' || role === 'model') {
+        
+        const deleteMsgBtn = document.createElement('button');
+        deleteMsgBtn.className = 'message-action-btn delete-message-btn';
+        deleteMsgBtn.title = '删除此消息及后续';
+        deleteMsgBtn.dataset.action = 'delete_branch'; 
+        deleteMsgBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash3" viewBox="0 0 16 16"><path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1zm-9.955 1H14.5a.5.5 0 0 1 0 1H1.455a.5.5 0 0 1 0-1Z"/></svg>`;
+        actionsContainer.appendChild(deleteMsgBtn);
+
+    } else if (role === 'assistant' || role === 'model') {
+        // --- 助手的按钮 (2x2 网格：重新生成、删除单条、删除分支) ---
+        // (复制按钮已在上面添加)
         const regenerateBtn = document.createElement('button');
         regenerateBtn.className = 'message-action-btn regenerate-btn';
         regenerateBtn.title = '从这里重新生成';
-        regenerateBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-repeat" viewBox="0 0 16 16"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/><path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.5A5.002 5.002 0 0 0 8 3M3.5 13A5.002 5.002 0 0 0 8 15c1.552 0 2.94-.707 3.857-1.818a.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.5A5.002 5.002 0 0 0 8 15"/></svg>`;
         regenerateBtn.dataset.action = 'regenerate';
+        regenerateBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrow-repeat" viewBox="0 0 16 16"><path d="M11.534 7h3.932a.25.25 0 0 1 .192.41l-1.966 2.36a.25.25 0 0 1-.384 0l-1.966-2.36a.25.25 0 0 1 .192-.41zm-11 2h3.932a.25.25 0 0 0 .192-.41L2.692 6.23a.25.25 0 0 0-.384 0L.342 8.59A.25.25 0 0 0 .534 9z"/><path fill-rule="evenodd" d="M8 3c-1.552 0-2.94.707-3.857 1.818a.5.5 0 1 1-.771-.636A6.002 6.002 0 0 1 13.917 7H12.5A5.002 5.002 0 0 0 8 3M3.5 13A5.002 5.002 0 0 0 8 15c1.552 0 2.94-.707 3.857-1.818a.5.5 0 1 1 .771.636A6.002 6.002 0 0 1 2.083 9H3.5A5.002 5.002 0 0 0 8 15"/></svg>`;
         actionsContainer.appendChild(regenerateBtn);
+
+        const deleteSingleBtn = document.createElement('button');
+        deleteSingleBtn.className = 'message-action-btn delete-message-btn';
+        deleteSingleBtn.title = '删除此消息';
+        deleteSingleBtn.dataset.action = 'delete_single';
+        deleteSingleBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash3" viewBox="0 0 16 16"><path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1zm-9.955 1H14.5a.5.5 0 0 1 0 1H1.455a.5.5 0 0 1 0-1Z"/></svg>`;
+        actionsContainer.appendChild(deleteSingleBtn);
+
+        const deleteBranchBtn = document.createElement('button');
+        deleteBranchBtn.className = 'message-action-btn delete-branch-btn';
+        deleteBranchBtn.title = '删除此分支';
+        deleteBranchBtn.dataset.action = 'delete_branch';
+        deleteBranchBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-scissors" viewBox="0 0 16 16"><path d="M3.5 3.5c-.614-.884-.074-1.962.858-2.5L8 7.226 11.642 1c.932.538 1.472 1.616.858 2.5L8.81 8.61l1.556 2.661a2.5 2.5 0 1 1-.794.637L8 9.73l-1.572 2.177a2.5 2.5 0 1 1-.794-.637L7.19 8.61zM2 4.5A1.5 1.5 0 0 1 3.5 3h1A1.5 1.5 0 0 1 6 4.5v1A1.5 1.5 0 0 1 4.5 7h-1A1.5 1.5 0 0 1 2 5.5zm12 0A1.5 1.5 0 0 1 15.5 3h1A1.5 1.5 0 0 1 18 4.5v1A1.5 1.5 0 0 1 16.5 7h-1A1.5 1.5 0 0 1 14 5.5z"/></svg>`;
+        actionsContainer.appendChild(deleteBranchBtn);
     }
-    const deleteMsgBtn = document.createElement('button');
-    deleteMsgBtn.className = 'message-action-btn delete-message-btn';
-    deleteMsgBtn.title = '删除此消息';
-    deleteMsgBtn.dataset.action = 'delete';
-    deleteMsgBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash3" viewBox="0 0 16 16"><path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1zm-9.955 1H14.5a.5.5 0 0 1 0 1H1.455a.5.5 0 0 1 0-1Z"/></svg>`;
-    actionsContainer.appendChild(deleteMsgBtn);
+
+    // 8. 最终组装并添加到页面
     messageWrapperDiv.appendChild(messageDiv);
     messageWrapperDiv.appendChild(actionsContainer);
     ui.messagesContainer.appendChild(messageWrapperDiv);
+    
+    // 9. 后续处理
     ui.messagesContainer.scrollTop = ui.messagesContainer.scrollHeight;
     if (window.MathJax?.typesetPromise) {
         const elementsToTypeset = [contentDiv];
@@ -1075,6 +1261,7 @@ export function renderConversationList(searchTerm = '') {
     }
 }
 
+
 export function showGlobalActionsMenu(buttonElement, convId, convTitle, isPinned) {
     if (!ui.globalActionsMenu) return;
     ui.globalActionsMenu.innerHTML = '';
@@ -1093,22 +1280,31 @@ export function showGlobalActionsMenu(buttonElement, convId, convTitle, isPinned
     const pinSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.902-1.414.707-.195-.195.512-1.22.707-1.414l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146"/></svg>`;
     const renameSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11z"/></svg>`;
     const deleteSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11 1.5v1h3.5a.5.5 0 0 1 0 1h-.538l-.853 10.66A2 2 0 0 1 11.115 16h-6.23a2 2 0 0 1-1.994-1.84L2.038 3.5H1.5a.5.5 0 0 1 0-1H5v-1A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5m-5 0v1h4v-1a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5"/></svg>`;
+
+    // ★ 核心修复 1：为“置顶”操作添加 UI 刷新
     createMenuItem(pinSVG, isPinned ? '取消置顶' : '置顶对话', () => {
         conversation.togglePin(convId);
-        renderConversationList();
+        renderConversationList(); // <-- 立即刷新列表！
     });
+
+    // ★ 核心修复 2：为“重命名”操作添加 UI 刷新
     createMenuItem(renameSVG, '重命名', () => {
         const newTitle = prompt('输入新的对话标题：', convTitle);
         if (newTitle && newTitle.trim()) {
             const trimmedTitle = newTitle.trim();
             conversation.renameConversationTitle(convId, trimmedTitle);
-            renderConversationList();
-            if (convId === state.currentConversationId) updateChatTitle(trimmedTitle);
+            renderConversationList(); // <-- 立即刷新列表！
+            if (convId === state.currentConversationId) {
+                updateChatTitle(trimmedTitle);
+            }
         }
     });
+
     const divider = document.createElement('div');
     divider.className = 'dropdown-divider';
     ui.globalActionsMenu.appendChild(divider);
+
+    // “删除”操作已经会通过事件触发 loadConversationFlow，它内部会刷新UI，所以无需改动
     createMenuItem(deleteSVG, '删除对话', () => {
         if (confirm(`确定要删除对话「${convTitle}」吗？此操作无法恢复。`)) {
             const result = conversation.deleteConversation(convId);
@@ -1116,7 +1312,7 @@ export function showGlobalActionsMenu(buttonElement, convId, convTitle, isPinned
                 const id = (result.nextIdToLoad === 'new') ? conversation.createNewConversation().id : result.nextIdToLoad;
                 document.dispatchEvent(new CustomEvent('loadConversationRequest', { detail: { conversationId: id } }));
             } else {
-                renderConversationList();
+                renderConversationList(); // 如果删除的不是当前对话，也需要刷新列表
             }
         }
     }, true);
@@ -1134,11 +1330,12 @@ export function showGlobalActionsMenu(buttonElement, convId, convTitle, isPinned
 }
 
 
-// --- ui.js (修改后) ---
+// js/ui.js
+
 export function loadAndRenderConversationUI(convToLoad) {
     if (!convToLoad) return;
     
-    // 更新标题、按钮等
+    // --- 1. 更新头部 UI (不变) ---
     updateChatTitle(convToLoad.title);
     if (ui.archiveCurrentBtn) ui.archiveCurrentBtn.textContent = convToLoad.archived ? '取消归档' : '归档';
     if (ui.modelSelect) ui.modelSelect.value = convToLoad.model;
@@ -1146,43 +1343,56 @@ export function loadAndRenderConversationUI(convToLoad) {
 
     if (!ui.messagesContainer) return;
 
-    // 1. 总是先清空消息区
+    // --- 2. 清空并准备渲染 ---
     ui.messagesContainer.innerHTML = '';
-    renderSystemPromptDisplay();
-    // 2. 渲染消息
+    
+    // ★★★ 核心修复：不再直接使用 convToLoad.messages ★★★
+    // 而是调用函数获取当前活动分支的线性历史记录
+    const messagesToRender = conversation.getCurrentBranchMessages(convToLoad);
+
+    // 3. 渲染系统指令 (如果分支历史中包含它)
+    const systemMessage = messagesToRender.find(m => m.role === 'system');
+    if (systemMessage) {
+        renderSystemPromptDisplay(systemMessage.content);
+    }
+
+    // 4. 渲染用户和助手消息
     let renderedMessageCount = 0;
-    if (convToLoad.messages?.length > 0) {
-        convToLoad.messages.forEach((msg, index) => {
-            // ★★★ 核心修复：明确跳过 system 角色消息 ★★★
-            // 因为它已经由 renderSystemPromptDisplay 单独处理了
-            if (msg.role === 'system') {
-                return; 
-            }
+    if (messagesToRender.length > 0) {
+        messagesToRender.forEach((msg, index) => {
+            // 跳过 system 角色，因为它已被单独处理
+            if (msg.role === 'system') return; 
             
-            const messageElement = appendMessage(msg.role, msg.content, msg.model || convToLoad.model, msg.reasoning_content, convToLoad.id, index, msg.usage);
+            // ★ 关键：我们需要原始消息在“大数组”中的索引来正确处理分支
+            const originalIndex = convToLoad.messages.findIndex(m => m.id === msg.id);
+
+            const messageElement = appendMessage(
+                msg.role, 
+                msg.content, 
+                msg.model || convToLoad.model, 
+                msg.reasoning_content, 
+                convToLoad.id, 
+                originalIndex, // ★ 使用原始索引
+                msg.usage
+            );
             if (messageElement) renderedMessageCount++;
         });
     }
 
-    // 3. 根据渲染的消息数量，决定是否显示占位符
+    // 5. 根据渲染结果更新占位符
     if (ui.emptyChatPlaceholder) {
-        // ★★★ 核心修复：在这里添加对系统指令的判断 ★★★
-        const hasSystemPrompt = convToLoad.messages.some(msg => msg.role === 'system' && msg.content);
-        
-        // 只有在既没有渲染消息，也没有系统指令时，才显示占位符
-        if (renderedMessageCount === 0 && !hasSystemPrompt) {
-            ui.emptyChatPlaceholder.style.display = 'flex';
-        } else {
-            ui.emptyChatPlaceholder.style.display = 'none';
-        }
+        const hasVisibleContent = renderedMessageCount > 0 || (systemMessage && systemMessage.content);
+        ui.emptyChatPlaceholder.style.display = hasVisibleContent ? 'none' : 'flex';
     }
 
-    // 4. 滚动到底部并更新UI
+    // 6. 更新其他 UI 状态
     ui.messagesContainer.scrollTop = ui.messagesContainer.scrollHeight;
     updateScrollToBottomButtonVisibility();
     renderConversationList();
     enableInlineTitleEdit();
 }
+
+
 
 export function showChatArea() {
 

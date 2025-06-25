@@ -22,7 +22,7 @@
         {
           "text": "OR GPT4o-mini",
           "value": "openrouter::openai/gpt-4o-mini",
-          "isHidden": false
+          "isHidden": true
         },
         {
           "text": "OR Claude 4.0 Sonnet",
@@ -67,6 +67,11 @@
         {
           "text": "OR Qwen3-32B",
           "value": "openrouter::qwen/qwen3-32b",
+          "isHidden": false
+        },
+        {
+          "text": "OR GPT4.1-nano",
+          "value": "openrouter::openai/gpt-4.1-nano",
           "isHidden": false
         },
         {

@@ -601,6 +601,7 @@ async function initializeApp() {
     // 最后的UI更新
     ui.renderConversationList();
     ui.enableInlineTitleEdit();
+    ui.enableConversationDrag(); 
     ui.autoResizePromptInput();
 }
 

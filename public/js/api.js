@@ -107,7 +107,23 @@ export async function send(onStreamChunk) {
             }
         
         // --- 3. 发送请求 ---
-        response = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(bodyPayload), signal });
+         response = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(bodyPayload), signal });
+
+        // ★★★ 核心修复：在这里处理所有非 OK 的响应 ★★★
+        if (!response.ok) {
+            // 无论响应是什么格式，都先尝试作为文本读取
+            const rawErrorText = await response.text();
+            // 尝试将文本解析为JSON，如果失败，就使用原始文本
+            let errorMessage = rawErrorText;
+            try {
+                const errorJson = JSON.parse(rawErrorText);
+                errorMessage = errorJson.error?.message || JSON.stringify(errorJson);
+            } catch (e) {
+                // 解析失败，说明返回的不是JSON，直接使用原始文本
+            }
+            // 抛出一个包含清晰信息的错误，让下面的 catch 块捕获
+            throw new Error(`API Error (${response.status}): ${errorMessage}`);
+        }
         
         const responseContentType = response.headers.get('content-type') || '';
         const isActuallyStreaming = shouldUseStreaming && response.body && (responseContentType.includes('text/event-stream') || responseContentType.includes('application/x-ndjson'));
@@ -268,8 +284,8 @@ export async function send(onStreamChunk) {
                 aborted: true
             };
         }
-        // 其他网络或服务器错误
-        console.error(`[API Send] 请求失败:`, error);
+         console.error(`[API Send] 请求失败:`, error);
+        // 直接显示从上面 throw 出来的、已经格式化好的错误信息
         return { success: false, reply: `错误: ${error.message}`, aborted: false };
     } finally {
         state.setCurrentAbortController(null);

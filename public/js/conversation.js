@@ -8,6 +8,36 @@ import * as utils from './utils.js';
 // ========================================================================
 
 /**
+ * 将 state 中的对话列表保存到 Local Storage。
+ */
+export function saveConversations() {
+  try {
+    const conversationsForStorage = state.conversations.map(conv => {
+        const convCopy = { ...conv };
+        // 确保 messages 数组存在
+        if (convCopy.messages) {
+            convCopy.messages = conv.messages.map(msg => {
+                if (msg.role === 'user' && msg.content && typeof msg.content === 'object' && msg.content.files) {
+                    const msgCopy = { ...msg };
+                    const safeContent = { ...msgCopy.content };
+                    // 只保存文件的元信息，不保存base64数据
+                    safeContent.files = safeContent.files.map(file => ({ name: file.name, type: file.type }));
+                    msgCopy.content = safeContent;
+                    return msgCopy;
+                }
+                return msg;
+            });
+        }
+        return convCopy;
+    });
+    localStorage.setItem('conversations', JSON.stringify(conversationsForStorage));
+  } catch (error) {
+    console.error("[saveConversations] CRITICAL ERROR while preparing or saving conversations:", error);
+    utils.showToast("保存对话失败！请检查控制台获取详细信息。", "error");
+  }
+}
+
+/**
  * 从 Local Storage 加载对话列表到 state。
  */
 export function loadConversations() {
@@ -16,6 +46,8 @@ export function loadConversations() {
     const parsedData = data ? JSON.parse(data) : [];
     if (Array.isArray(parsedData)) {
       state.setConversations(parsedData);
+      // ★ 核心修复：加载后不再自动重排序！我们相信 localStorage 中保存的顺序就是用户想要的最终顺序。
+      // 排序只应该在特定操作（如置顶、归档）后触发。
     } else {
       state.setConversations([]);
       console.warn("[loadConversations] Data from localStorage was not an array. Resetting.");
@@ -27,36 +59,22 @@ export function loadConversations() {
   }
 }
 
-/**
- * 将 state 中的对话列表保存到 Local Storage。
- */
-export function saveConversations() {
-  try {
-    const conversationsForStorage = state.conversations.map(conv => {
-        const convCopy = { ...conv };
-        convCopy.messages = conv.messages.map(msg => {
-            if (msg.role === 'user' && msg.content && typeof msg.content === 'object' && msg.content.files) {
-                const msgCopy = { ...msg };
-                const safeContent = { ...msgCopy.content };
-                // 只保存文件的元信息，不保存base64数据
-                safeContent.files = safeContent.files.map(file => ({ name: file.name, type: file.type }));
-                msgCopy.content = safeContent;
-                return msgCopy;
-            }
-            return msg;
-        });
-        return convCopy;
-    });
-    localStorage.setItem('conversations', JSON.stringify(conversationsForStorage));
-  } catch (error) {
-    console.error("[saveConversations] CRITICAL ERROR while preparing or saving conversations:", error);
-    utils.showToast("保存对话失败！请检查控制台获取详细信息。", "error");
-  }
-}
+// ========================================================================
+// 2. 对话数据排序与操作 (只返回数据或状态，不调用UI函数)
+// ========================================================================
 
-// ========================================================================
-// 2. 对话数据操作 (只返回数据或状态，不调用UI函数)
-// ========================================================================
+/**
+ * 这是一个私有的、统一的排序函数。
+ * 它将置顶的放在最前，然后是普通的（未置顶且未归档），最后是归档的。
+ * 在各自的组内，它不改变现有顺序，依赖 SortableJS 或其他操作来维持。
+ */
+function reorderConversations() {
+    const pinned = state.conversations.filter(c => !c.archived && c.isPinned);
+    const normal = state.conversations.filter(c => !c.archived && !c.isPinned);
+    const archived = state.conversations.filter(c => c.archived);
+    
+    state.setConversations([...pinned, ...normal, ...archived]);
+}
 
 /**
  * 创建一个新的对话对象，添加到 state，并返回这个新对象。
@@ -64,7 +82,6 @@ export function saveConversations() {
  */
 export function createNewConversation() {
   const id = Date.now().toString();
-  // 从 state 获取当前模型，而不是直接操作DOM
   const currentConv = state.getCurrentConversation();
   const model = currentConv ? currentConv.model : (document.getElementById('model')?.value || 'default-model');
 
@@ -75,8 +92,13 @@ export function createNewConversation() {
     messages: [],
     archived: false,
     isNew: true,
+    isPinned: false, // 确保新对话有 isPinned 属性
   };
-  state.conversations.unshift(newConv);
+
+  // 新对话总是插入到所有置顶项之后，普通项之前
+  const pinnedCount = state.conversations.filter(c => !c.archived && c.isPinned).length;
+  state.conversations.splice(pinnedCount, 0, newConv);
+  
   saveConversations();
   return newConv;
 }
@@ -99,9 +121,9 @@ export function getInitialConversationId() {
         return 'new';
     }
     const firstNonArchived = state.conversations.find(c => !c.archived);
-    return firstNonArchived ? firstNonArchived.id : state.conversations[0].id;
+    // 如果所有对话都归档了，或者没有非归档对话，则返回 'new'
+    return firstNonArchived ? firstNonArchived.id : 'new';
 }
-
 
 /**
  * 删除指定 ID 的对话，并返回下一个应该被加载的对话ID。
@@ -149,7 +171,7 @@ export function clearCurrentConversation() {
     return null;
   }
   const systemPrompt = conv.messages.find(m => m.role === 'system');
-  conv.messages = systemPrompt ? [systemPrompt] : [];
+  conv.messages = systemPrompt ? [systemPrompt] : []; // 保留系统指令
   saveConversations();
   utils.showToast(`对话「${conv.title}」已清空。`, 'success');
   return conv.id;
@@ -185,16 +207,20 @@ export function setupForEditLastUserMessage() {
     return textToEdit;
 }
 
+/**
+ * 应用预设模板到当前对话。
+ * @param {object} preset - 预设模板对象。
+ * @returns {{needsUiUpdate: boolean}} - 指示是否需要UI刷新。
+ */
 export function applyPresetPrompt(preset) {
   if (!preset) return;
 
   const conv = state.getCurrentConversation();
   if (!conv) {
     utils.showToast("没有活动的对话，无法应用模板。", 'warning');
-    return;
+    return { needsUiUpdate: false };
   }
 
-  // 只处理 'system_prompt' 类型，因为这会修改对话数据
   if (preset.type === 'system_prompt') {
     let systemMessage = conv.messages.find(m => m.role === 'system');
     if (systemMessage) {
@@ -204,17 +230,12 @@ export function applyPresetPrompt(preset) {
     }
     saveConversations();
     utils.showToast(`系统角色已设置为: "${preset.name}"`, 'success');
-    
-    // 返回一个信号，告诉调用者UI需要更新
     return { needsUiUpdate: true }; 
+  } else {
+    // 对于 'user_input' 类型，UI层会直接操作输入框，这里只返回不需要UI更新的信号
+    return { needsUiUpdate: false };
   }
-
-  // 对于其他类型 (如 'user_input')，此函数不再做任何事
-  // 因为这是 UI 的职责，将由 ui.js 自己处理
-  return { needsUiUpdate: false };
 }
-
-
 
 /**
  * 从指定索引处截断对话历史。
@@ -227,9 +248,6 @@ export function truncateConversation(index) {
         saveConversations();
     }
 }
-
-
-// js/conversation.js
 
 /**
  * 删除指定对话中的单条消息。
@@ -273,14 +291,16 @@ export function toggleArchive(id) {
   if (!conv) return { status: 'error', nextIdToLoad: null };
   
   conv.archived = !conv.archived;
-  conv.isNew = false;
+  conv.isNew = false; // 归档或取消归档后，不再是“新”对话
+  reorderConversations(); // 归档/取消归档后，总是重新排序
   saveConversations();
 
   if (conv.archived && state.currentConversationId === id) {
+    // 如果当前对话被归档了，需要切换到下一个非归档对话或新对话
     return { status: 'archived', nextIdToLoad: getInitialConversationId() };
   }
-  
-  return { status: conv.archived ? 'archived' : 'unarchived', nextIdToLoad: conv.archived ? null : conv.id };
+  // 如果是取消归档，或者归档的不是当前对话，则不需要切换对话
+  return { status: conv.archived ? 'archived' : 'unarchived', nextIdToLoad: null };
 }
 
 /**
@@ -290,12 +310,11 @@ export function toggleArchive(id) {
 export function togglePin(id) {
     const conv = getConversationById(id);
     if (conv) {
-        conv.isPinned = !conv.isPinned; 
+        conv.isPinned = !conv.isPinned;
+        reorderConversations(); // 置顶/取消置顶后，总是重新排序
         saveConversations();
     }
 }
-
-// js/conversation.js
 
 /**
  * 为当前对话设置、更新或移除系统角色提示。
@@ -309,28 +328,22 @@ export function setSystemPrompt(promptText) {
         return null;
     }
 
-    // 查找对话中是否已存在 system 消息的索引
     const systemMessageIndex = conv.messages.findIndex(m => m.role === 'system');
 
-    // 判断用户是想设置/更新，还是想移除
     if (promptText && promptText.trim()) {
         const newContent = promptText.trim();
         if (systemMessageIndex !== -1) {
-            // 如果已存在，则更新内容
             conv.messages[systemMessageIndex].content = newContent;
             utils.showToast('系统指令已更新。', 'success');
         } else {
-            // 如果不存在，则在消息列表的最前面添加一个新的 system 消息
             conv.messages.unshift({ role: 'system', content: newContent });
             utils.showToast('系统指令已设置。', 'success');
         }
     } else {
-        // 如果用户输入为空，我们理解为要移除系统指令
         if (systemMessageIndex !== -1) {
-            conv.messages.splice(systemMessageIndex, 1); // 从数组中移除该项
+            conv.messages.splice(systemMessageIndex, 1);
             utils.showToast('系统指令已移除。', 'info');
         }
-        // 如果本来就没有，那就什么都不做
     }
 
     saveConversations();
@@ -338,7 +351,7 @@ export function setSystemPrompt(promptText) {
 }
 
 // ========================================================================
-// 4. 导入/导出功能
+// 3. 导入/导出功能
 // ========================================================================
 
 /**
@@ -418,13 +431,17 @@ export function importConversations(importedConvs) {
     let importedCount = 0;
     importedConvs.forEach(importedConv => {
         if (importedConv?.id && importedConv?.title && importedConv?.messages) {
+            // 避免重复导入，只导入不存在的对话
             if (!getConversationById(importedConv.id)) {
                 state.conversations.push(importedConv);
                 importedCount++;
             }
         }
     });
-    if (importedCount > 0) saveConversations();
+    if (importedCount > 0) {
+        reorderConversations(); // 导入后重新排序，确保新导入的对话位置正确
+        saveConversations();
+    }
     return importedCount;
 }
 

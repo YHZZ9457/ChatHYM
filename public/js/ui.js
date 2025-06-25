@@ -343,23 +343,45 @@ export function processPreBlocksForCopyButtons(containerElement) {
     });
 }
 
-function enableConversationDrag() {
-    if (!ui.conversationList || typeof Sortable === 'undefined') return;
-    if (ui.conversationList.sortableInstance) ui.conversationList.sortableInstance.destroy();
-    ui.conversationList.sortableInstance = Sortable.create(ui.conversationList, {
+
+export function enableConversationDrag(listElement) { // ★ 接收一个元素作为参数
+    if (!listElement || typeof Sortable === 'undefined') return;
+    
+    // 如果这个元素上已经有实例，先销毁
+    if (listElement.sortableInstance) {
+        listElement.sortableInstance.destroy();
+    }
+
+    // ★★★ 终极简化版 onEnd 逻辑 ★★★
+    listElement.sortableInstance = Sortable.create(listElement, {
         animation: 150,
         ghostClass: 'sortable-ghost',
         chosenClass: 'sortable-chosen',
-        filter: '.archive-toggle, .archived-list, .archived-item',
-        preventOnFilter: true,
+        
         onEnd: evt => {
-            if (evt.oldIndex === undefined || evt.newIndex === undefined) return;
-            const nonArchived = state.conversations.filter(c => !c.archived);
-            const [movedItem] = nonArchived.splice(evt.oldIndex, 1);
-            nonArchived.splice(evt.newIndex, 0, movedItem);
-            state.setConversations([...nonArchived, ...state.conversations.filter(c => c.archived)]);
+            const { oldIndex, newIndex } = evt;
+            if (oldIndex === undefined || newIndex === undefined || oldIndex === newIndex) {
+                return;
+            }
+
+            // 1. 获取所有数据
+            const pinned = state.conversations.filter(c => !c.archived && c.isPinned);
+            const normal = state.conversations.filter(c => !c.archived && !c.isPinned);
+            const archived = state.conversations.filter(c => c.archived);
+
+            // 2. ★ 直接在 normal 数组上操作，索引是完全对应的！★
+            const [movedItem] = normal.splice(oldIndex, 1);
+            normal.splice(newIndex, 0, movedItem);
+
+            // 3. 重新合并
+            const newConversations = [...pinned, ...normal, ...archived];
+
+            // 4. 更新状态并保存
+            state.setConversations(newConversations);
             conversation.saveConversations();
-            renderConversationList();
+            
+            // 5. ★ 不再调用 renderConversationList()，避免重绘！★
+            // SortableJS 已经帮我们更新了 DOM，我们只需要更新数据即可。
         }
     });
 }
@@ -975,36 +997,82 @@ export function appendLoading() {
     return loadingWrapper;
 }
 
+/**
+ * 渲染侧边栏的对话列表。
+ * (最终重构版，支持置顶和拖拽排序)
+ * @param {string} [searchTerm=''] - 用于过滤对话的搜索词。
+ */
 export function renderConversationList(searchTerm = '') {
     if (!ui.conversationList) return;
-    let isArchivePreviouslyExpanded = ui.conversationList.querySelector('.archive-toggle.expanded') !== null;
+
+    // 1. 保存归档列表的展开状态
+    const isArchivePreviouslyExpanded = ui.conversationList.querySelector('.archive-toggle.expanded') !== null;
+    
+    // 2. 清空整个列表容器
     ui.conversationList.innerHTML = '';
+
+    // 3. 获取并过滤数据
     let conversationsToProcess = [...state.conversations];
     if (searchTerm.trim()) {
         const lowerCaseSearchTerm = searchTerm.toLowerCase().trim();
-        conversationsToProcess = conversationsToProcess.filter(c => c.title.toLowerCase().includes(lowerCaseSearchTerm));
+        conversationsToProcess = conversationsToProcess.filter(c => 
+            c.title.toLowerCase().includes(lowerCaseSearchTerm)
+        );
     }
-    const unarchivedConversations = conversationsToProcess.filter(c => !c.archived).sort((a, b) => (b.isPinned || 0) - (a.isPinned || 0));
-    unarchivedConversations.forEach(c => ui.conversationList.appendChild(createConversationListItem(c)));
-    const archivedConversations = conversationsToProcess.filter(c => c.archived);
-    if (archivedConversations.length > 0) {
+
+    // 4. 将数据清晰地分为三组：置顶、普通、已归档
+    const pinned = conversationsToProcess.filter(c => !c.archived && c.isPinned);
+    const normal = conversationsToProcess.filter(c => !c.archived && !c.isPinned);
+    const archived = conversationsToProcess.filter(c => c.archived);
+
+    // 5. 渲染不可拖拽的“置顶”部分
+    pinned.forEach(conv => {
+        const listItem = createConversationListItem(conv);
+        // 明确给置顶项添加 'pinned' 类，以便 CSS 和 SortableJS 的 filter 生效
+        listItem.classList.add('pinned'); 
+        ui.conversationList.appendChild(listItem);
+    });
+
+    // 6. ★ 核心：为可拖拽的“普通”对话创建一个专门的容器 ★
+    const draggableList = document.createElement('ul');
+    draggableList.id = 'draggable-conversation-list'; // 给它一个唯一的ID
+    draggableList.className = 'conv-nav';             // 复用现有的 ul 样式
+    normal.forEach(conv => {
+        const listItem = createConversationListItem(conv);
+        draggableList.appendChild(listItem);
+    });
+    // 将这个只包含可拖拽项的列表容器添加到主列表中
+    ui.conversationList.appendChild(draggableList);
+
+    // 7. ★ 核心：只对这个专门的容器激活拖拽功能 ★
+    enableConversationDrag(draggableList);
+
+    // 8. 渲染不可拖拽的“已归档”部分
+    if (archived.length > 0) {
         const toggle = document.createElement('li');
         toggle.className = 'archive-toggle';
-        toggle.textContent = `已归档 (${archivedConversations.length})`;
-        if (isArchivePreviouslyExpanded) toggle.classList.add('expanded');
+        toggle.textContent = `已归档 (${archived.length})`;
+        if (isArchivePreviouslyExpanded) {
+            toggle.classList.add('expanded');
+        }
         toggle.addEventListener('click', () => {
             toggle.classList.toggle('expanded');
             const subListElement = toggle.nextElementSibling;
-            if (subListElement) subListElement.style.display = toggle.classList.contains('expanded') ? 'block' : 'none';
+            if (subListElement) {
+                subListElement.style.display = toggle.classList.contains('expanded') ? 'block' : 'none';
+            }
         });
         ui.conversationList.appendChild(toggle);
+
         const subList = document.createElement('ul');
         subList.className = 'archived-list';
         subList.style.display = isArchivePreviouslyExpanded ? 'block' : 'none';
-        archivedConversations.forEach(c => subList.appendChild(createConversationListItem(c, true)));
+        archived.forEach(conv => {
+            const listItem = createConversationListItem(conv, true);
+            subList.appendChild(listItem);
+        });
         ui.conversationList.appendChild(subList);
     }
-    enableConversationDrag();
 }
 
 export function showGlobalActionsMenu(buttonElement, convId, convTitle, isPinned) {

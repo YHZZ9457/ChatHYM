@@ -488,6 +488,7 @@ bindEvent(ui.ui.maxTokensInputInline, 'change', (e) => {
     }
 
     // --- 消息操作按钮 (事件委托) ---
+     // --- 消息操作按钮 (事件委托) ---
     bindEvent(ui.ui.messagesContainer, 'click', e => {
         const button = e.target.closest('.message-action-btn');
         if (!button) return;
@@ -505,7 +506,7 @@ bindEvent(ui.ui.maxTokensInputInline, 'change', (e) => {
 
         const messageId = conv.messages[messageIndex].id;
         const action = button.dataset.action;
-        let wasHandled = false; // 标志位，用于判断是否需要刷新UI
+
 
         switch (action) {
             case 'edit':
@@ -527,13 +528,25 @@ bindEvent(ui.ui.maxTokensInputInline, 'change', (e) => {
                 // 重生成操作自己刷新UI，所以这里不算
                 break;
 
-            // ★ 核心修改在这里 ★
+             // ★★★ 终极核心修复：处理删除操作的全新流程 ★★★
             case 'delete_single':
-                wasHandled = conversation.deleteMessageAndHandleChildren(convId, messageId, 'single');
-                break;
-
             case 'delete_branch':
-                wasHandled = conversation.deleteMessageAndHandleChildren(convId, messageId, 'branch');
+                const mode = action === 'delete_single' ? 'single' : 'branch';
+                
+                // 1. 调用重构后的删除函数，它会返回结果
+                const result = conversation.deleteMessageAndHandleChildren(convId, messageId, mode);
+                
+                // 2. 如果删除成功，则使用返回的 nextActiveId 来更新UI
+                if (result.success) {
+                    // a. 确保内部状态的 activeMessageId 是最新的
+                    if (result.nextActiveId) {
+                        state.getCurrentConversation().activeMessageId = result.nextActiveId;
+                    }
+                    
+                    // b. 使用最新的对话状态重新渲染整个UI
+                    //    loadAndRenderConversationUI 会自动处理分支显示
+                    ui.loadAndRenderConversationUI(state.getCurrentConversation());
+                }
                 break;
         }
 

@@ -302,7 +302,6 @@ export function renderModelManagementUI() {
     }
 }
 
-// 在 ui.js 中
 
 export function renderPresetManagementUI() {
     if (!ui.presetListEditor) return;
@@ -1104,8 +1103,6 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
         actionsContainer.appendChild(deleteMsgBtn);
 
     } else if (role === 'assistant' || role === 'model') {
-        // --- 助手的按钮 (2x2 网格：重新生成、删除单条、删除分支) ---
-        // (复制按钮已在上面添加)
         const regenerateBtn = document.createElement('button');
         regenerateBtn.className = 'message-action-btn regenerate-btn';
         regenerateBtn.title = '从这里重新生成';

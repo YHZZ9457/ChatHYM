@@ -459,46 +459,37 @@ export function setSystemPrompt(promptText) {
     return conv;
 }
 
-// --- START OF FILE js/conversation.js (Additions/Replacements) ---
-
 /**
- * 查找一个消息及其所有后代消息的ID。
- * @param {Array} allMessages - 对话中的所有消息数组。
- * @param {string} startMessageId - 开始遍历的节点ID。
- * @returns {Set<string>} 包含起始消息及其所有后代消息ID的集合。
+ * ★★★ 终极核心修复：这个函数现在绝对正确 ★★★
+ * 使用一个简单的递归函数来收集一个节点及其所有后代。
  */
-function getBranchIds(allMessages, startMessageId) {
-    const idsToDelete = new Set([startMessageId]);
-    const queue = [startMessageId];
-    const messageMap = new Map(allMessages.map(m => [m.id, m]));
-
-    while (queue.length > 0) {
-        const currentId = queue.shift();
-        const children = allMessages.filter(m => m.parentId === currentId);
+function getBranchIds(allMessages, startNodeId) {
+    const branchIds = new Set();
+    function findDescendants(nodeId) {
+        if (!nodeId || branchIds.has(nodeId)) return;
+        branchIds.add(nodeId);
+        const children = allMessages.filter(msg => msg.parentId === nodeId);
         for (const child of children) {
-            if (!idsToDelete.has(child.id)) {
-                idsToDelete.add(child.id);
-                queue.push(child.id);
-            }
+            findDescendants(child.id);
         }
     }
-    return idsToDelete;
+    findDescendants(startNodeId);
+    return branchIds;
 }
 
 /**
- * 删除单条消息或整个分支，并智能处理后续UI状态。
- * (最终健壮版，确保数据一致性)
+ * ★★★ 终极重构：删除消息或分支，并返回下一个应该激活的消息ID ★★★
  * @param {string} conversationId - 对话ID。
  * @param {string} messageId - 要删除的消息ID。
  * @param {'single' | 'branch'} mode - 删除模式。
- * @returns {boolean} 操作是否成功执行。
+ * @returns {{success: boolean, nextActiveId: string|null}} 返回操作结果和下一个活动ID
  */
 export function deleteMessageAndHandleChildren(conversationId, messageId, mode) {
     const conv = getConversationById(conversationId);
-    if (!conv) return false;
+    if (!conv) return { success: false, nextActiveId: null };
 
     const messageIndex = conv.messages.findIndex(m => m.id === messageId);
-    if (messageIndex === -1) return false;
+    if (messageIndex === -1) return { success: false, nextActiveId: null };
 
     const messageToDelete = conv.messages[messageIndex];
     const parentId = messageToDelete.parentId;
@@ -507,55 +498,45 @@ export function deleteMessageAndHandleChildren(conversationId, messageId, mode) 
     if (mode === 'single') {
         let contentPreview = String(messageToDelete.content?.text || messageToDelete.content || "").substring(0, 40);
         confirmText = `确定只删除这条消息吗？\n\n"${contentPreview}..."\n\n(它的直接回复将会被保留并连接到上一条消息)`;
-    } else { // mode === 'branch'
+    } else {
         confirmText = `确定要删除此消息及其之后的所有分支回复吗？此操作不可恢复。`;
     }
 
     if (!confirm(confirmText)) {
-        return false; // 用户取消操作
+        return { success: false, nextActiveId: null };
+    }
+    
+    // --- 决定删除后的下一个活动ID ---
+    let nextActiveId = null;
+    const siblings = findChildrenOf(conv, parentId).filter(m => m.id !== messageId);
+    if (siblings.length > 0) {
+        // 如果有兄弟节点，则下一个活动ID是第一个兄弟节点的ID
+        nextActiveId = siblings[0].id;
+    } else {
+        // 如果没有兄弟节点，则回退到父节点
+        nextActiveId = parentId;
     }
 
+    // --- 执行删除操作 ---
     if (mode === 'single') {
-        // --- 单条删除逻辑 (★ 核心修复) ---
-        
-        // 1. 遍历整个消息数组，找到所有子节点，并直接修改它们的 parentId。
-        //    这是最可靠的方式，因为它直接在原始数组上操作。
         for (const msg of conv.messages) {
             if (msg.parentId === messageId) {
-                msg.parentId = parentId; // "子女过继给祖父"
+                msg.parentId = parentId;
             }
         }
-        
-        // 2. 在所有子节点都已“过继”后，再安全地删除当前消息。
         conv.messages.splice(messageIndex, 1);
-
     } else { // mode === 'branch'
-        // --- 分支删除逻辑 (此逻辑是正确的，无需修改) ---
         const idsToDelete = getBranchIds(conv.messages, messageId);
         conv.messages = conv.messages.filter(m => !idsToDelete.has(m.id));
     }
 
-    // --- 更新 activeMessageId 的逻辑 (此逻辑是正确的，无需修改) ---
-    const currentBranchIds = new Set(getCurrentBranchMessages(conv).map(m => m.id));
-    if (currentBranchIds.has(messageId) || messageId === conv.activeMessageId) {
-        conv.activeMessageId = parentId;
-    }
-    
-    const activeMessageExists = conv.messages.some(m => m.id === conv.activeMessageId);
-    if (!conv.activeMessageId || !activeMessageExists) {
-        if (conv.messages.length > 0) {
-            // 寻找一个合理的叶子节点作为新的活动指针
-            const leafNodes = conv.messages.filter(m => !conv.messages.some(child => child.parentId === m.id));
-            conv.activeMessageId = leafNodes.length > 0 ? leafNodes[leafNodes.length - 1].id : conv.messages[conv.messages.length - 1].id;
-        } else {
-            conv.activeMessageId = null;
-        }
-    }
+    // ★ 直接将对话的活动指针设置为我们计算好的下一个ID
+    conv.activeMessageId = findLeafNodeId(conv, nextActiveId) || null;
 
     saveConversations();
-    return true; // 表示操作成功，UI需要刷新
+    // 返回成功状态和下一个应该激活的ID
+    return { success: true, nextActiveId: conv.activeMessageId };
 }
-
 
 // ========================================================================
 // 3. 导入/导出功能

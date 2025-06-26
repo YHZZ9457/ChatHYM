@@ -70,7 +70,7 @@
           "isHidden": false
         },
         {
-          "text": "OR GPT4.1-nano",
+          "text": "OR GPT 4.1-nano",
           "value": "openrouter::openai/gpt-4.1-nano",
           "isHidden": false
         },

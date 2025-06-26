@@ -741,22 +741,91 @@ body.light-theme .controls-group input:checked + .slider {
     border-bottom: none;
     margin-bottom: 16px;
 }
-/* 设置区域 (显示在主区域) */
+/* 设置区域 (settings-area) */
 .settings-area {
   flex: 1;
-  overflow-y: auto;
+  overflow-y: auto; /* 允许滚动 */
   display: flex;
   flex-direction: column;
-  padding: 24px 32px;
+  padding: 24px 32px; /* 顶部和左右内边距 */
   min-height: 0;
 }
 
+/* ★★★ 核心修复：新增设置区域的头部容器样式 ★★★ */
+.settings-header-container {
+    display: flex; /* 使用 Flexbox */
+    justify-content: space-between; /* 子元素两端对齐 */
+    align-items: center; /* 垂直居中对齐 */
+    margin-bottom: 24px; /* 标题与下方内容之间的间距 */
+    padding-bottom: 16px; /* 标题下方的内边距 */
+    border-bottom: 1px solid var(--border-color); /* 底部边框作为分隔线 */
+    flex-shrink: 0; /* 防止被压缩 */
+}
+
+/* 设置区域的标题 h2 */
 .settings-area h2 {
-  font-size: 1.6rem;
-  margin: 0 0 24px 0;
-  font-weight: 600;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border-color);
+    margin: 0; /* 移除默认外边距，由父容器 .settings-header-container 控制布局 */
+    font-size: 1.6rem;
+    font-weight: 600;
+    /* 移除所有 position, top, right, z-index 相关属性 */
+    /* 移除 padding-bottom 和 border-bottom，由父容器 .settings-header-container 控制 */
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+/* 返回聊天按钮 */
+#back-to-chat-btn {
+    /* 保持按钮的基本样式，但移除所有定位属性 */
+    background: none;
+    border: none;
+    padding: 8px 12px;
+    color: var(--primary);
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: var(--border-radius-md);
+    transition: background-color 0.2s ease, color 0.2s ease;
+
+    /* ★ REMOVED: position: absolute; top; right; z-index; */
+}
+
+#back-to-chat-btn:hover {
+  background-color: rgba(var(--primary-rgb), 0.1);
+}
+
+#back-to-chat-btn::before {
+  content: '←';
+  font-weight: bold;
+}
+
+/* 对于模型管理和预设模板管理的头部，它们已经有 .model-management-header 和 .preset-management-header 类，
+   并且这些类已经设置了 display: flex; justify-content: space-between; align-items: center;
+   所以只需要确保它们的 h2 标题和返回按钮的样式与新结构兼容即可。
+*/
+
+/* 调整 model-management-header 和 preset-management-header 内部的 h2 */
+/* 还原这些 h2 标题，并确保它们在 flex 容器内正确布局 */
+.model-management-header h2,
+.preset-management-header h2 {
+    margin: 0; /* 移除默认外边距 */
+    font-size: 1.6rem;
+    font-weight: 600;
+    /* 移除可能存在的定位属性 */
+    /* 移除 padding-bottom 和 border-bottom，由父容器 header 控制 */
+    padding-bottom: 0;
+    border-bottom: none;
+}
+
+/* 确保 model-management-controls 和 preset-management-controls 中的按钮布局正确 */
+.model-management-controls,
+.preset-management-controls {
+    display: flex; /* 确保是 flex 容器 */
+    align-items: center; /* 垂直居中 */
+    gap: 10px; /* 按钮之间间距 */
+    /* 其他样式保持不变 */
 }
 
 
@@ -1694,34 +1763,6 @@ body.light-theme .text pre .copy-btn:hover {
   color: var(--text-color);
 }
 
-/* 返回聊天按钮 */
-#back-to-chat-btn {
-  background: none;
-  border: none;
-  padding: 8px 12px;
-  color: var(--primary);
-  font-size: 1rem;
-  font-weight: 500;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  position: absolute;
-  top: 24px;
-  right: 32px;
-  z-index: 10;
-  gap: 6px;
-  border-radius: var(--border-radius-md);
-  transition: background-color 0.2s ease, color 0.2s ease;
-}
-
-#back-to-chat-btn:hover {
-  background-color: rgba(var(--primary-rgb), 0.1);
-}
-
-#back-to-chat-btn::before {
-  content: '←';
-  font-weight: bold;
-}
 
 #temperature-value {
   display: inline-block;

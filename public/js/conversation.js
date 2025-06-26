@@ -124,7 +124,7 @@ export function findChildrenOf(conv, parentId) {
 
 /**
  * 根据 activeMessageId，回溯查找并返回当前分支的线性消息历史。
- * (最终修正版，兼容旧数据)
+ * (最终修正版，兼容旧数据，并确保系统指令始终包含在内)
  * @param {object} conv - 对话对象。
  * @returns {Array} - 一个线性的消息数组，按时间顺序排列。
  */
@@ -134,11 +134,12 @@ export function getCurrentBranchMessages(conv) {
         return [];
     }
 
-    // 2. ★ 核心修复：处理新旧数据兼容性 ★
+    const messageMap = new Map(conv.messages.map(m => [m.id, m]));
+    let branch = []; // 使用 let 允许后续修改
+
+    // 2. 根据 activeMessageId 回溯分支历史
+    // 2a. 新逻辑：如果存在 activeMessageId，则按分支历史渲染
     if (conv.activeMessageId) {
-        // 2a. 新逻辑：如果存在活动分支指针，则按分支历史渲染
-        const messageMap = new Map(conv.messages.map(m => [m.id, m]));
-        const branch = [];
         let currentId = conv.activeMessageId;
 
         while (currentId) {
@@ -148,27 +149,50 @@ export function getCurrentBranchMessages(conv) {
                 currentId = message.parentId;
             } else {
                 // 如果在回溯中找不到父消息，说明分支断裂，停止回溯
-                console.warn(`Branch broken: Cannot find message with parentId: ${currentId}`);
+                console.warn(`Branch broken: Cannot find message with parentId: ${currentId}. Stopping branch traversal.`);
                 break;
             }
         }
-        return branch;
-
     } else {
         // 2b. 兼容旧数据：如果不存在 activeMessageId，说明是旧的、线性的对话
-        //     直接返回所有消息，以确保它们能够显示出来。
-        //     这是一个向后兼容的关键步骤。
+        //     或者是一个全新的对话（activeMessageId 初始为 null）
+        //     直接返回所有消息，并尝试自动设置 activeMessageId。
         
-        // (可选但强烈推荐的“自动升级”逻辑)
-        // 为了让旧对话在后续操作中能无缝接入分支功能，
-        // 我们可以为它自动设置 activeMessageId。
-        const lastMessage = conv.messages[conv.messages.length - 1];
+        // ★ 自动升级逻辑：将所有消息视为一个线性分支，并设置 activeMessageId
+        branch = [...conv.messages]; // 复制所有消息
+        const lastMessage = branch[branch.length - 1];
         if (lastMessage) {
             conv.activeMessageId = lastMessage.id;
         }
-        
-        return conv.messages;
     }
+
+    // ★★★ 核心修复：确保系统消息始终是返回数组的第一条 ★★★
+    // 无论上述分支回溯逻辑如何，我们都需要确保系统消息（如果存在）被包含。
+    // 系统消息的 parentId 通常为 null，可能不会被自动回溯包含，或者只在它是根消息时。
+    const systemMessage = conv.messages.find(m => m.role === 'system');
+    if (systemMessage) {
+        // 检查当前 branch 数组中是否已经包含了这个系统消息
+        const isSystemMessageAlreadyInBranch = branch.some(m => m.id === systemMessage.id);
+        
+        if (!isSystemMessageAlreadyInBranch) {
+            // 如果不在，则将其添加到 branch 数组的开头
+            branch.unshift(systemMessage);
+        }
+        // 如果已在，但不在第一个位置，可以考虑将其移到第一个位置（如果严格要求顺序）
+        // 但对于 API 上下文，只要在数组中且是第一个 'system' 角色，通常就足够了。
+        // 为了确保，我们可以简单地将它移到最前面：
+        else {
+             // 找到当前系统消息的索引
+             const currentSystemIndex = branch.findIndex(m => m.id === systemMessage.id);
+             if (currentSystemIndex > 0) {
+                 // 如果它不是第一个元素，把它移动到第一个位置
+                 branch.splice(currentSystemIndex, 1); // 移除
+                 branch.unshift(systemMessage); // 插入到开头
+             }
+        }
+    }
+    
+    return branch;
 }
 
 /**
@@ -442,14 +466,27 @@ export function setSystemPrompt(promptText) {
     if (promptText && promptText.trim()) {
         const newContent = promptText.trim();
         if (systemMessageIndex !== -1) {
+            // 如果系统指令存在，则更新其内容
             conv.messages[systemMessageIndex].content = newContent;
             utils.showToast('系统指令已更新。', 'success');
         } else {
-            conv.messages.unshift({ role: 'system', content: newContent });
+            // 如果系统指令不存在，则添加一个新的系统指令消息
+            // ★★★ 核心修复：为系统消息生成一个 ID，并确保 parentId 为 null ★★★
+            const newSystemMessage = { 
+                id: utils.generateSimpleId(), // 必须有 ID
+                parentId: null,              // 系统消息是对话的根，没有父消息
+                role: 'system', 
+                content: newContent 
+            };
+            // 将系统消息添加到消息数组的开头
+            conv.messages.unshift(newSystemMessage);
             utils.showToast('系统指令已设置。', 'success');
         }
     } else {
+        // 如果 promptText 为空，且系统指令存在，则移除它
         if (systemMessageIndex !== -1) {
+            // ★ 可选优化：在删除前，如果 activeMessageId 是这个系统消息，需要重置
+            // 但因为系统消息通常不会成为 activeMessageId，这里可以忽略
             conv.messages.splice(systemMessageIndex, 1);
             utils.showToast('系统指令已移除。', 'info');
         }

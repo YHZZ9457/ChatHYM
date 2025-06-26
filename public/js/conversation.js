@@ -477,14 +477,17 @@ function getBranchIds(allMessages, startNodeId) {
     return branchIds;
 }
 
+// --- START OF FILE conversation.js (The final, correct deleteMessageAndHandleChildren function) ---
+
 /**
- * ★★★ 终极重构：删除消息或分支，并返回下一个应该激活的消息ID ★★★
+ * 删除单条消息或整个分支，并智能处理后续UI状态。
  * @param {string} conversationId - 对话ID。
  * @param {string} messageId - 要删除的消息ID。
  * @param {'single' | 'branch'} mode - 删除模式。
+ * @param {boolean} [silent=false] - 是否静默执行，不弹出确认框。
  * @returns {{success: boolean, nextActiveId: string|null}} 返回操作结果和下一个活动ID
  */
-export function deleteMessageAndHandleChildren(conversationId, messageId, mode) {
+export function deleteMessageAndHandleChildren(conversationId, messageId, mode, silent = false) { // ★★★ 核心修复：添加第四个参数 silent = false
     const conv = getConversationById(conversationId);
     if (!conv) return { success: false, nextActiveId: null };
 
@@ -493,28 +496,30 @@ export function deleteMessageAndHandleChildren(conversationId, messageId, mode) 
 
     const messageToDelete = conv.messages[messageIndex];
     const parentId = messageToDelete.parentId;
-    let confirmText = '';
 
-    if (mode === 'single') {
-        let contentPreview = String(messageToDelete.content?.text || messageToDelete.content || "").substring(0, 40);
-        confirmText = `确定只删除这条消息吗？\n\n"${contentPreview}..."\n\n(它的直接回复将会被保留并连接到上一条消息)`;
-    } else {
-        confirmText = `确定要删除此消息及其之后的所有分支回复吗？此操作不可恢复。`;
-    }
-
-    if (!confirm(confirmText)) {
-        return { success: false, nextActiveId: null };
+    // ★ 核心修复：只有在非静默模式下才弹出确认框
+    if (!silent) {
+        let confirmText = '';
+        if (mode === 'single') {
+            let contentPreview = String(messageToDelete.content?.text || messageToDelete.content || "").substring(0, 40);
+            confirmText = `确定只删除这条消息吗？\n\n"${contentPreview}..."\n\n(它的直接回复将会被保留并连接到上一条消息)`;
+        } else {
+            confirmText = `确定要删除此消息及其之后的所有分支回复吗？此操作不可恢复。`;
+        }
+        if (!confirm(confirmText)) {
+            return { success: false, nextActiveId: null };
+        }
     }
     
     // --- 决定删除后的下一个活动ID ---
     let nextActiveId = null;
-    const siblings = findChildrenOf(conv, parentId).filter(m => m.id !== messageId);
-    if (siblings.length > 0) {
-        // 如果有兄弟节点，则下一个活动ID是第一个兄弟节点的ID
-        nextActiveId = siblings[0].id;
-    } else {
-        // 如果没有兄弟节点，则回退到父节点
-        nextActiveId = parentId;
+    if (parentId) {
+        const siblings = findChildrenOf(conv, parentId).filter(m => m.id !== messageId);
+        if (siblings.length > 0) {
+            nextActiveId = siblings[0].id;
+        } else {
+            nextActiveId = parentId;
+        }
     }
 
     // --- 执行删除操作 ---
@@ -531,7 +536,15 @@ export function deleteMessageAndHandleChildren(conversationId, messageId, mode) 
     }
 
     // ★ 直接将对话的活动指针设置为我们计算好的下一个ID
-    conv.activeMessageId = findLeafNodeId(conv, nextActiveId) || null;
+    //    如果 nextActiveId 为 null，则 activeMessageId 也为 null
+    if (nextActiveId && conv.messages.some(m => m.id === nextActiveId)) {
+         conv.activeMessageId = findLeafNodeId(conv, nextActiveId);
+    } else if (conv.messages.length > 0) {
+         const lastMessage = conv.messages[conv.messages.length - 1];
+         conv.activeMessageId = lastMessage.id;
+    } else {
+        conv.activeMessageId = null;
+    }
 
     saveConversations();
     // 返回成功状态和下一个应该激活的ID

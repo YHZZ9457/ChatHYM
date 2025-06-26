@@ -28,6 +28,18 @@ let presetSortable = null;
  * @returns {boolean} 如果关键元素获取成功，则返回 true，否则返回 false。
  */
 export function initializeUI() {
+
+    console.log("initializeUI: Starting UI initialization."); // 新增日志
+    
+    // ★ 关键：严格检查每个重要的 UI 元素是否被获取
+    ui.messagesContainer = document.getElementById('messages');
+    console.log("initializeUI: ui.messagesContainer =", ui.messagesContainer); // 检查这里是否是 null 或 undefined
+
+    ui.promptInput = document.getElementById('prompt');
+    console.log("initializeUI: ui.promptInput =", ui.promptInput); // 检查这里
+
+    ui.submitActionBtn = document.getElementById('submit-action-btn');
+    console.log("initializeUI: ui.submitActionBtn =", ui.submitActionBtn); // 检查这里
     // ★ 核心修复：恢复所有原始元素的获取
     Object.assign(ui, {
         sidebar: document.querySelector('.sidebar'),
@@ -110,15 +122,18 @@ export function initializeUI() {
     }
     ui.messageActionsMenu = menuElement;
 
-    // ★ 现在这个检查将能通过
-    if (!ui.promptInput) {
-        console.error("initializeUI FAILED: Could not find element with ID 'prompt'.");
+     if (!ui.messagesContainer || !ui.promptInput || !ui.submitActionBtn /* 添加所有你认为关键的元素 */) {
+        console.error("initializeUI FAILED: One or more critical UI elements could not be found.");
+        // 详细列出哪些元素未找到
+        if (!ui.messagesContainer) console.error("Missing: #messages");
+        if (!ui.promptInput) console.error("Missing: #prompt");
+        if (!ui.submitActionBtn) console.error("Missing: #submit-action-btn");
         return false;
     }
-    console.log("initializeUI SUCCESS: All UI elements captured.");
+
+    console.log("initializeUI SUCCESS: All critical UI elements captured.");
     return true;
 }
-
 
 
 
@@ -405,6 +420,52 @@ export function processPreBlocksForCopyButtons(containerElement) {
         });
         pre.appendChild(btn);
     });
+}
+
+/**
+ * 创建一个用于流式输出的临时消息包装器。
+ * 它的结构是最小化的，仅包含核心内容区域和思考过程区域。
+ * 稍后会被完整的 loadAndRenderConversationUI 替换。
+ * @param {'user' | 'assistant' | 'model'} role - 消息角色。
+ * @returns {HTMLElement} 临时消息包装器元素。
+ */
+export function createTemporaryMessageElement(role) {
+    const messageWrapperDiv = document.createElement('div');
+    messageWrapperDiv.className = `message-wrapper ${role === 'user' ? 'user-message-wrapper' : 'assistant-message-wrapper'} temporary-stream-message`;
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${role === 'assistant' || role === 'model' ? 'assistant' : 'user'}`;
+
+    const reasoningBlockDiv = document.createElement('div');
+    reasoningBlockDiv.className = 'reasoning-block';
+    reasoningBlockDiv.style.display = 'none'; // Initially hidden
+    reasoningBlockDiv.innerHTML = `<div class="reasoning-label"><span>思考过程:</span><button type="button" class="copy-reasoning-btn">复制</button></div><div class="reasoning-content"></div>`;
+    messageDiv.appendChild(reasoningBlockDiv);
+
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'text';
+    const markdownContainer = document.createElement('span');
+    markdownContainer.className = 'markdown-content';
+    contentDiv.appendChild(markdownContainer);
+    messageDiv.appendChild(contentDiv);
+
+    // Add a basic loading indicator for streaming
+    const actionsContainer = document.createElement('div');
+    actionsContainer.className = 'message-actions-container';
+    const loader = document.createElement('div');
+    loader.className = 'loading-indicator-bubble inline-loading-indicator';
+    loader.innerHTML = '<span>正在生成…</span>';
+    actionsContainer.appendChild(loader);
+    
+    messageWrapperDiv.appendChild(messageDiv);
+    messageWrapperDiv.appendChild(actionsContainer);
+
+    // Attach references for stream updates
+    messageWrapperDiv.contentSpan = markdownContainer;
+    messageWrapperDiv.reasoningContentEl = reasoningBlockDiv.querySelector('.reasoning-content');
+    messageWrapperDiv.reasoningBlockEl = reasoningBlockDiv;
+
+    return messageWrapperDiv;
 }
 
 
@@ -921,7 +982,6 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     // 2. 创建消息气泡本身
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role === 'assistant' || role === 'model' ? 'assistant' : 'user'}`;
-    let reasoningDivElement = null;
 
     // 3. 处理用户消息的附件 (如果存在)
     if (role === 'user' && messageContent?.files?.length > 0) {
@@ -936,14 +996,21 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
         messageDiv.appendChild(attachmentsContainer);
     }
 
-    // 4. 处理 AI 思考过程 (如果存在)
-    if ((role === 'assistant' || role === 'model') && reasoningText?.trim()) {
+    // ★★★ 核心修复：始终创建思考过程的 DOM 元素，通过 display 属性控制其可见性 ★★★
+    let reasoningDivElement = null; // 声明在外部以便后续引用
+
+    if (role === 'assistant' || role === 'model') {
         const reasoningBlockDiv = document.createElement('div');
         reasoningBlockDiv.className = 'reasoning-block';
-        reasoningBlockDiv.style.display = reasoningText?.trim() ? 'block' : 'none'; 
+        // 初始隐藏，除非 reasoningText 存在
+        reasoningBlockDiv.style.display = (reasoningText?.trim() || '').length > 0 ? 'block' : 'none'; 
         reasoningBlockDiv.innerHTML = `<div class="reasoning-label"><span>思考过程:</span><button type="button" class="copy-reasoning-btn">复制</button></div><div class="reasoning-content"></div>`;
-        const reasoningContentElement = reasoningBlockDiv.querySelector('.reasoning-content');
-        reasoningContentElement.textContent = reasoningText;
+        
+        reasoningDivElement = reasoningBlockDiv.querySelector('.reasoning-content'); // 赋值给外部变量
+        if (reasoningDivElement) { // 确保元素存在
+            reasoningDivElement.textContent = reasoningText?.trim() || ''; // 初始填充内容
+        }
+
         reasoningBlockDiv.querySelector('.copy-reasoning-btn').addEventListener('click', e => {
             e.stopPropagation();
             navigator.clipboard.writeText(reasoningText).then(() => {
@@ -960,6 +1027,8 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     const markdownContainer = document.createElement('span');
     markdownContainer.className = 'markdown-content';
     
+    markdownContainer.dataset.fullRawContent = ''; 
+
     let finalMarkdown = "";
     if (typeof messageContent === 'string') {
         finalMarkdown = messageContent;
@@ -968,78 +1037,32 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     }
     
     if (finalMarkdown.trim()) {
+        markdownContainer.dataset.fullRawContent = finalMarkdown;
         markdownContainer.innerHTML = marked.parse(finalMarkdown);
-        utils.pruneEmptyNodes(markdownContainer);
+        utils.pruneEmptyNodes(markdownContainer); // 对 markdownContainer 进行清理
         contentDiv.appendChild(markdownContainer);
         messageDiv.appendChild(contentDiv);
-        processPreBlocksForCopyButtons(contentDiv);
+        
+        // ★ 核心修复：确保 processPreBlocksForCopyButtons 作用于 markdownContainer
+        // 因为 pre 标签是 marked.parse 在 markdownContainer 内部生成的
+        processPreBlocksForCopyButtons(markdownContainer); 
     }
     messageWrapperDiv.contentSpan = markdownContainer; // 暴露给流式更新
 
-    // 6. ★★★ 统一处理所有元信息 (Meta Info) ★★★
+ // 6. ★★★ 统一处理所有元信息 (Meta Info) - 重构版 ★★★
     if (role === 'assistant' || role === 'model') {
         const metaInfoDiv = document.createElement('div');
         metaInfoDiv.className = 'message-meta-info';
         let hasMetaContent = false;
 
-        // 6a. 分支指示器
-        if (messageIndex !== -1) {
-            const currentConv = state.getCurrentConversation();
-            const message = currentConv?.messages[messageIndex];
-            if (message && message.parentId) {
-                const children = conversation.findChildrenOf(currentConv, message.parentId);
-                 if (children.length > 1) {
-            const currentIndex = children.findIndex(child => child.id === message.id);
-            const branchIndicator = document.createElement('div');
-            branchIndicator.className = 'branch-indicator';
-            
-            // 创建按钮
-            const prevBtn = document.createElement('button');
-            prevBtn.className = 'branch-nav-btn prev-branch';
-            prevBtn.title = '上一个回复';
-            prevBtn.innerHTML = '<';
-            prevBtn.disabled = (currentIndex === 0);
+        // --- 6a. 创建左侧信息组 (模型 & Token) ---
+        const leftMetaGroup = document.createElement('div');
+        // 为这个组添加一些样式，使其内部元素能良好排列
+        leftMetaGroup.style.display = 'flex';
+        leftMetaGroup.style.alignItems = 'center';
+        leftMetaGroup.style.gap = '16px'; // 组内元素间距
 
-            const nextBtn = document.createElement('button');
-            nextBtn.className = 'branch-nav-btn next-branch';
-            nextBtn.title = '下一个回复';
-            nextBtn.innerHTML = '>';
-            nextBtn.disabled = (currentIndex >= children.length - 1);
-
-            const countSpan = document.createElement('span');
-            countSpan.textContent = `${currentIndex + 1} / ${children.length}`;
-
-            // ★★★ 核心：为按钮绑定点击事件 ★★★
-            prevBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                // 找到上一个兄弟消息并切换
-                const prevMessage = children[currentIndex - 1];
-                if (prevMessage) {
-                    document.dispatchEvent(new CustomEvent('switchBranchRequest', { detail: { messageId: prevMessage.id } }));
-                }
-            });
-
-            nextBtn.addEventListener('click', (e) => {
-                e.stopPropagation();
-                // 找到下一个兄弟消息并切换
-                const nextMessage = children[currentIndex + 1];
-                if (nextMessage) {
-                    document.dispatchEvent(new CustomEvent('switchBranchRequest', { detail: { messageId: nextMessage.id } }));
-                }
-            });
-
-            // 组装指示器
-            branchIndicator.appendChild(prevBtn);
-            branchIndicator.appendChild(countSpan);
-            branchIndicator.appendChild(nextBtn);
-            
-            metaInfoDiv.appendChild(branchIndicator);
-            hasMetaContent = true;
-        }
-            }
-        }
-
-        // 6b. 模型名称
+        // 添加模型名称到左侧组
         if (modelForNote) {
             const note = document.createElement('div');
             note.className = 'model-note';
@@ -1050,11 +1073,11 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
                 else { const p = String(modelForNote).split('::'); if (p.length === 2) displayModelName = p[1]; }
             }
             note.textContent = `模型：${displayModelName}`;
-            metaInfoDiv.appendChild(note);
+            leftMetaGroup.appendChild(note);
             hasMetaContent = true;
         }
 
-        // 6c. Token 计数
+        // 添加Token计数到左侧组
         const tokenNote = document.createElement('span');
         tokenNote.className = 'token-count-note';
         messageWrapperDiv.usageElement = tokenNote; // 暴露给流式更新
@@ -1062,10 +1085,69 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
             const p = usage.prompt_tokens ?? usage.input_tokens ?? 'N/A';
             const c = usage.completion_tokens ?? usage.output_tokens ?? 'N/A';
             tokenNote.textContent = `提示: ${p} tokens, 回复: ${c} tokens`;
-            metaInfoDiv.appendChild(tokenNote); // ★ 只有在有 usage 时才添加
+            leftMetaGroup.appendChild(tokenNote);
             hasMetaContent = true;
         }
 
+        // 如果左侧组有内容，则将其添加到主元信息容器
+        if (leftMetaGroup.hasChildNodes()) {
+            metaInfoDiv.appendChild(leftMetaGroup);
+        }
+
+        // --- 6b. 创建并添加右侧的分支指示器 ---
+        if (messageIndex !== -1) { // 确保不是临时消息
+            const currentConv = state.getCurrentConversation();
+            const message = currentConv?.messages[messageIndex];
+            if (message && message.parentId) {
+                const children = conversation.findChildrenOf(currentConv, message.parentId);
+                if (children.length > 1) {
+                    const currentIndex = children.findIndex(child => child.id === message.id);
+                    const branchIndicator = document.createElement('div');
+                    branchIndicator.className = 'branch-indicator';
+                    
+                    const prevBtn = document.createElement('button');
+                    prevBtn.className = 'branch-nav-btn prev-branch';
+                    prevBtn.title = '上一个回复';
+                    prevBtn.innerHTML = '<'; // 使用HTML实体
+                    prevBtn.disabled = (currentIndex === 0);
+
+                    const nextBtn = document.createElement('button');
+                    nextBtn.className = 'branch-nav-btn next-branch';
+                    nextBtn.title = '下一个回复';
+                    nextBtn.innerHTML = '>'; // 使用HTML实体
+                    nextBtn.disabled = (currentIndex >= children.length - 1);
+
+                    const countSpan = document.createElement('span');
+                    countSpan.textContent = `${currentIndex + 1} / ${children.length}`;
+
+                    prevBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const prevMessage = children[currentIndex - 1];
+                        if (prevMessage) {
+                            document.dispatchEvent(new CustomEvent('switchBranchRequest', { detail: { messageId: prevMessage.id } }));
+                        }
+                    });
+
+                    nextBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const nextMessage = children[currentIndex + 1];
+                        if (nextMessage) {
+                            document.dispatchEvent(new CustomEvent('switchBranchRequest', { detail: { messageId: nextMessage.id } }));
+                        }
+                    });
+
+                    branchIndicator.appendChild(prevBtn);
+                    branchIndicator.appendChild(countSpan);
+                    branchIndicator.appendChild(nextBtn);
+                    
+                    // 将分支指示器添加到主元信息容器的末尾
+                    metaInfoDiv.appendChild(branchIndicator);
+                    hasMetaContent = true;
+                }
+            }
+        }
+
+        // --- 6c. 最终渲染 ---
         // 只有在 meta-info 容器里有实际内容时，才把它添加到 DOM
         if (hasMetaContent) {
             messageDiv.appendChild(metaInfoDiv);
@@ -1143,48 +1225,6 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
 
 
 
-
-export function processStreamChunk(tempMsgElement, replyDelta, reasoningDelta, usageData) {
-    if (!tempMsgElement) return;
-    
-    // --- 处理回复文本 ---
-    const markdownContentSpan = tempMsgElement.contentSpan;
-    if (replyDelta && markdownContentSpan) {
-        let accumulatedRawMarkdown = markdownContentSpan.dataset.rawMarkdown || "";
-        accumulatedRawMarkdown += replyDelta;
-        markdownContentSpan.dataset.rawMarkdown = accumulatedRawMarkdown;
-        markdownContentSpan.innerHTML = marked.parse(accumulatedRawMarkdown);
-        processPreBlocksForCopyButtons(markdownContentSpan);
-    }
-    
-    // --- ★ 核心修复：处理思考过程文本 ---
-    const reasoningContentEl = tempMsgElement.querySelector('.reasoning-content');
-    if (reasoningDelta && reasoningContentEl) {
-        // 直接将增量字符追加到 textContent
-        reasoningContentEl.textContent += reasoningDelta;
-        
-        // 如果思考块之前是隐藏的，现在让它显示出来
-        const reasoningBlockEl = tempMsgElement.querySelector('.reasoning-block');
-        if (reasoningBlockEl && reasoningBlockEl.style.display === 'none') {
-            reasoningBlockEl.style.display = 'block';
-        }
-    }
-
-    // --- 处理 Token 使用情况 ---
-    if (tempMsgElement.usageElement && usageData) {
-        const p = usageData.prompt_tokens ?? usageData.input_tokens ?? '...';
-        const c = usageData.completion_tokens ?? usageData.output_tokens ?? '...';
-        tempMsgElement.usageElement.textContent = `提示: ${p} tokens, 回复: ${c} tokens`;
-    }
-    
-    // 自动滚动
-    if (ui.messagesContainer) {
-        const dist = ui.messagesContainer.scrollHeight - ui.messagesContainer.clientHeight - ui.messagesContainer.scrollTop;
-        if (dist < 200) {
-            requestAnimationFrame(() => { ui.messagesContainer.scrollTop = ui.messagesContainer.scrollHeight; });
-        }
-    }
-}
 
 export function appendLoading() {
     if (!ui.messagesContainer) return null;
@@ -1582,25 +1622,7 @@ export function enableInlineTitleEdit() {
         ui.chatTitle.addEventListener('click', handleTitleClick);
     }
 }
-/**
- * 将指定消息元素替换为加载指示器。
- * @param {HTMLElement} messageWrapperElement - 目标消息的 .message-wrapper 元素。
- * @returns {void}
- */
-export function replaceMessageWithLoading(messageWrapperElement) {
-    if (!messageWrapperElement) return;
 
-    // 清空包装器的所有内容
-    messageWrapperElement.innerHTML = '';
-    
-    // 创建并添加加载器
-    const loader = document.createElement('div');
-    loader.className = 'loading-indicator-bubble inline-loading-indicator';
-    loader.innerHTML = '<span>正在重新生成…</span>';
-    
-    // 将加载器添加到（现在是空的）包装器中
-    messageWrapperElement.appendChild(loader);
-}
 
 export function updateManualThinkModeState() {
     if (!ui.thinkModeToggle || !ui.autoThinkModeToggle) return;

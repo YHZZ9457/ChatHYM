@@ -56,52 +56,59 @@ export function readFileAsBase64(file) {
 }
 
 /**
- * Extracts thinking and reply portions from a text chunk.
- * @param {string} textChunk - 当前收到的文本块。
+ * Extracts the current thinking and reply portions from a *full accumulated text*.
+ * This function processes the entire string to determine the current state and content.
+ *
+ * @param {string} fullText - 截至目前为止，累积的完整文本。
  * @param {string} startTag - 思考过程的开始标签 (例如 "<think>")。
  * @param {string} endTag - 思考过程的结束标签 (例如 "</think>")。
- * @param {boolean} currentlyInThinkingBlock - 一个状态变量，指示上一个块是否以未闭合的 startTag 结束。
- * @returns {{replyTextPortion: string, thinkingTextPortion: string, newThinkingBlockState: boolean}}
+ * @returns {{replyText: string, thinkingText: string, inThinkingBlock: boolean}}
+ *   - replyText: 截至目前为止，纯粹的回复文本（不含思考标签和内容）。
+ *   - thinkingText: 截至目前为止，纯粹的思考文本（不含思考标签和内容）。
+ *   - inThinkingBlock: 在处理完 fullText 后，是否处于未闭合的思考块内部。
  */
-export function extractThinkingAndReply(textChunk, startTag, endTag, currentlyInThinkingBlock) {
-    let replyTextPortion = "";
-    let thinkingTextPortion = "";
-    let newThinkingBlockState = currentlyInThinkingBlock;
-    let remainingText = textChunk;
+export function extractThinkingAndReply(fullText, startTag, endTag) {
+    let replyText = "";
+    let thinkingText = "";
+    let inThinkingBlock = false;
+    let currentPos = 0;
 
-    while (remainingText.length > 0) {
-        if (newThinkingBlockState) { // 当前在思考块内部
-            const endTagIndex = remainingText.indexOf(endTag);
-            if (endTagIndex !== -1) { // 找到了结束标签
-                thinkingTextPortion += remainingText.substring(0, endTagIndex);
-                remainingText = remainingText.substring(endTagIndex + endTag.length);
-                newThinkingBlockState = false; // 退出思考块
-            } else { // 未找到结束标签，整个剩余部分都是思考内容
-                thinkingTextPortion += remainingText;
-                remainingText = "";
-                // newThinkingBlockState 保持 true
+    while (currentPos < fullText.length) {
+        if (inThinkingBlock) {
+            const endTagIndex = fullText.indexOf(endTag, currentPos);
+            if (endTagIndex !== -1) {
+                thinkingText += fullText.substring(currentPos, endTagIndex);
+                currentPos = endTagIndex + endTag.length;
+                inThinkingBlock = false;
+            } else {
+                thinkingText += fullText.substring(currentPos);
+                currentPos = fullText.length;
             }
-        } else { // 当前不在思考块内部
-            const startTagIndex = remainingText.indexOf(startTag);
-            if (startTagIndex !== -1) { // 找到了开始标签
-                replyTextPortion += remainingText.substring(0, startTagIndex);
-                remainingText = remainingText.substring(startTagIndex + startTag.length);
-                newThinkingBlockState = true; // 进入思考块
-
-                // 检查是否是空思考块或标签紧挨着
-                if (remainingText.startsWith(endTag)) {
-                    // thinkingTextPortion 不变 (为空)
-                    remainingText = remainingText.substring(endTag.length);
-                    newThinkingBlockState = false; // 立刻退出
+        } else {
+            const startTagIndex = fullText.indexOf(startTag, currentPos);
+            if (startTagIndex !== -1) {
+                replyText += fullText.substring(currentPos, startTagIndex);
+                currentPos = startTagIndex + startTag.length;
+                inThinkingBlock = true;
+                // 立即检查是否是空思考块
+                if (fullText.indexOf(endTag, currentPos) === currentPos) {
+                    currentPos += endTag.length;
+                    inThinkingBlock = false;
                 }
-            } else { // 未找到开始标签，整个剩余部分都是回复内容
-                replyTextPortion += remainingText;
-                remainingText = "";
-                // newThinkingBlockState 保持 false
+            } else {
+                replyText += fullText.substring(currentPos);
+                currentPos = fullText.length;
             }
         }
     }
-    return { replyTextPortion, thinkingTextPortion, newThinkingBlockState };
+    
+    // 确保返回的文本不包含标签本身
+    replyText = replyText.replace(new RegExp(startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')
+                         .replace(new RegExp(endTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '');
+    thinkingText = thinkingText.replace(new RegExp(startTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '')
+                               .replace(new RegExp(endTag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), '');
+
+    return { replyText, thinkingText, inThinkingBlock };
 }
 
 /**

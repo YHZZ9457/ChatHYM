@@ -1,3 +1,5 @@
+
+
 // --- START OF FILE js/api.js (Corrected) ---
 
 // ========================================================================
@@ -15,6 +17,7 @@ import { mapMessagesForGemini, mapMessagesForStandardOrClaude } from './message_
 
 /**
  * 发送消息到后端 API。
+ * @param {Array} messagesHistory - 经过过滤的、要发送给API的线性消息历史（不包含兄弟分支）。
  * @param {function} onStreamChunk - 处理流式数据块的回调函数。
  * @returns {Promise<object>} 一个 Promise，解析为一个包含最终结果的对象。
  */
@@ -59,6 +62,7 @@ export async function send(messagesHistory, onStreamChunk) {
 
         // Max Tokens
         if (state.currentMaxTokens) {
+            // OpenAI 的旧模型或特定模型可能使用 max_completion_tokens
             if (providerLower === 'openai' && (modelNameLower.includes('o4-mini') || modelNameLower.includes('o3'))) {
                 bodyPayload.max_completion_tokens = state.currentMaxTokens;
             } else {
@@ -74,19 +78,22 @@ export async function send(messagesHistory, onStreamChunk) {
             else if (providerLower === 'volcengine' && modelNameLower.includes('doubao')) bodyPayload.thinking = { "type": state.isManualThinkModeEnabled ? 'thinking' : 'non-thinking' };
         }
 
-        // --- 2. 准备 Messages/Contents (恢复 Gemini 原始逻辑版) ---
-        const lastUserMessage = messagesHistory[messagesHistory.length - 1];
-        const filesToSend = lastUserMessage?.content?.files || [];
+        // --- 2. 准备 Messages/Contents (核心修复在此！) ---
+        // messagesHistory 参数已经是从 conversation.getCurrentBranchMessages 过滤后的线性历史
+        // 因此，这里直接使用 messagesHistory 即可，不再需要从 conversation.messages 中查找。
+        const lastUserMessage = messagesHistory[messagesHistory.length - 1]; // 获取最后一条用户消息
+        const filesToSend = lastUserMessage?.content?.files || []; // 提取其中包含的文件数据
 
         if (providerLower === 'gemini') {
-            // Gemini 的逻辑比较特殊，我们让它的映射器来处理
-            // 注意：我们假设 gemini-proxy 后端能处理原始的 messages 格式
-            bodyPayload.messages = conversation.messages; 
-            delete bodyPayload.contents; // 确保 contents 字段不存在
+            // Gemini API 期望 'contents' 字段，而不是 'messages'
+            // mapMessagesForGemini 函数将 messagesHistory 映射为 Gemini 兼容的 contents 格式
+            bodyPayload.contents = mapMessagesForGemini(messagesHistory, filesToSend); 
+            delete bodyPayload.messages; // 确保 messages 字段不存在，避免与 contents 冲突
         } else {
-            // 所有其他模型都使用标准的映射器
-            bodyPayload.messages = mapMessagesForStandardOrClaude(conversation.messages, providerLower, filesToSend);
-            delete bodyPayload.contents;
+            // 所有其他模型（OpenAI, Anthropic, Deepseek, Ollama 等）都使用 'messages' 字段
+            // mapMessagesForStandardOrClaude 函数将 messagesHistory 映射为标准格式
+            bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower, filesToSend);
+            delete bodyPayload.contents; // 确保 contents 字段不存在
         }
 
         // ★★★ 核心修复：在这里统一设置 API URL 和特定于提供商的顶层参数 ★★★
@@ -94,20 +101,22 @@ export async function send(messagesHistory, onStreamChunk) {
         apiUrl = `/api/${providerLower}-proxy`; 
         const isClaudeModel = providerLower === 'anthropic';
             
-            if (isClaudeModel) {
-                const sysMsg = conversation.messages.find(m => m.role === 'system');
-                if (sysMsg?.content) {
-                    bodyPayload.system = sysMsg.content;
-                }
-                
-                // Claude API (即使通过OpenRouter) 都推荐设置一个 max_tokens
-                if (!bodyPayload.max_tokens) {
-                    bodyPayload.max_tokens = 4096;
-                }
+        if (isClaudeModel) {
+            // Claude 的 system prompt 在顶层处理，而不是在 messages 数组中
+            // 从传入的线性历史 messagesHistory 中查找 system 消息
+            const sysMsg = messagesHistory.find(m => m.role === 'system');
+            if (sysMsg?.content) {
+                bodyPayload.system = sysMsg.content;
             }
+            
+            // Claude API (即使通过OpenRouter) 都推荐设置一个 max_tokens
+            if (!bodyPayload.max_tokens) {
+                bodyPayload.max_tokens = 4096; // 默认值，如果未设置
+            }
+        }
         
         // --- 3. 发送请求 ---
-         response = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(bodyPayload), signal });
+        response = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(bodyPayload), signal });
 
         // ★★★ 核心修复：在这里处理所有非 OK 的响应 ★★★
         if (!response.ok) {
@@ -126,30 +135,34 @@ export async function send(messagesHistory, onStreamChunk) {
         }
         
         const responseContentType = response.headers.get('content-type') || '';
+        // 判断是否为实际的流式响应（基于 Content-Type）
         const isActuallyStreaming = shouldUseStreaming && response.body && (responseContentType.includes('text/event-stream') || responseContentType.includes('application/x-ndjson'));
 
         // --- 4. 处理响应 ---
         if (isActuallyStreaming) {
+            // 再次检查响应是否成功，以防在流式处理前出现问题
             if (!response.ok) throw new Error(`API流式请求失败 (${response.status}): ${await response.text()}`);
             
             const stream = response.body.pipeThrough(new TextDecoderStream());
             let buffer = '';
-            let inThinkingBlock = false;
-
+            
             for await (const chunk of stream) {
                 buffer += chunk;
+                // 根据提供商使用不同的分隔符来解析事件流数据
                 const separator = (providerLower === 'ollama') ? '\n' : '\n\n';
                 
                 let boundaryIndex;
                 while ((boundaryIndex = buffer.indexOf(separator)) !== -1) {
                     const rawUnit = buffer.substring(0, boundaryIndex);
                     buffer = buffer.substring(boundaryIndex + separator.length);
-                    if (!rawUnit.trim()) continue;
+                    if (!rawUnit.trim()) continue; // 跳过空行或空白数据
 
                     let jsonDataString = null;
                     if (providerLower === 'ollama') {
+                        // Ollama 的每个单元格本身就是 JSON
                         jsonDataString = rawUnit.trim();
                     } else {
+                        // 其他提供商（如 OpenAI）使用 'data: ' 前缀
                         const lines = rawUnit.split('\n');
                         for (const line of lines) {
                             if (line.startsWith('data:')) {
@@ -158,17 +171,16 @@ export async function send(messagesHistory, onStreamChunk) {
                             }
                         }
                     }
-                    if (!jsonDataString || jsonDataString === '[DONE]') continue;
+                    if (!jsonDataString || jsonDataString === '[DONE]') continue; // 跳过无效数据或结束标记
                     
                     try {
                         const chunkObj = JSON.parse(jsonDataString);
                         
-                        // ★★★ 核心修复：在这里处理增量，而不是在外面 ★★★
                         let replyDelta = '';
-                        let reasoningDelta = '';
+                        let reasoningDelta = ''; // 只有当模型原生提供时才会有值
                         let usageForUnit = null;
 
-                        // 根据不同 provider 解析数据块
+                        // 根据不同 provider 解析数据块，提取增量内容和使用数据
                         switch(providerLower) {
                             case 'ollama':
                                 if (chunkObj?.message?.content) replyDelta = chunkObj.message.content; 
@@ -181,12 +193,14 @@ export async function send(messagesHistory, onStreamChunk) {
                                 break;
                             case 'anthropic':
                                 if (chunkObj.type === 'message_start' && chunkObj.message?.usage?.input_tokens) {
+                                    // message_start 可能包含初始的 input_tokens
                                     usageData = { input_tokens: chunkObj.message.usage.input_tokens, output_tokens: 0 };
                                 }
                                 if (chunkObj.type === 'content_block_delta' && chunkObj.delta?.type === 'text_delta') {
                                     replyDelta = chunkObj.delta.text || '';
                                 }
                                 if (chunkObj.type === 'message_delta' && chunkObj.usage?.output_tokens) {
+                                    // message_delta 包含最终的 output_tokens
                                     usageForUnit = { output_tokens: chunkObj.usage.output_tokens };
                                 }
                                 break;
@@ -201,12 +215,12 @@ export async function send(messagesHistory, onStreamChunk) {
                                     };
                                 }
                                 break;
-                            default: // OpenAI, Deepseek, etc.
+                            default: // OpenAI, Deepseek, Siliconflow, OpenRouter, Volcengine (通用 OpenAI 兼容格式)
                                 const delta = chunkObj.choices?.[0]?.delta;
                                 if (delta) {
-                                    // 假设回复和思考是互斥的
                                     replyDelta = delta.content || ''; 
-                                    reasoningDelta = delta.reasoning || delta.reasoning_content || '';
+                                    // 尝试获取原生思考过程，如果模型提供
+                                    reasoningDelta = delta.reasoning || delta.reasoning_content || ''; 
                                 }
                                 if (chunkObj.usage) {
                                     usageForUnit = chunkObj.usage;
@@ -214,78 +228,82 @@ export async function send(messagesHistory, onStreamChunk) {
                                 break;
                         }
 
-                        // 如果 provider 不直接提供 reasoning 增量，我们从 replyDelta 中提取
-                        if (!reasoningDelta && replyDelta) {
-                            const { replyTextPortion, thinkingTextPortion, newThinkingBlockState } = utils.extractThinkingAndReply(replyDelta, '<think>', '</think>', inThinkingBlock);
-                            inThinkingBlock = newThinkingBlockState;
-                            replyDelta = replyTextPortion;
-                            reasoningDelta = thinkingTextPortion;
-                        }
-
-                        // 累积数据
+                        // 累积增量数据。onStreamChunk 传递的是增量，但 finalResult 需要完整累积。
                         if (replyDelta) accumulatedAssistantReply += replyDelta;
                         if (reasoningDelta) accumulatedThinkingForDisplay += reasoningDelta;
-                        if (usageForUnit) usageData = { ...usageData, ...usageForUnit };
+                        if (usageForUnit) usageData = { ...usageData, ...usageForUnit }; // 合并或更新 usage 数据
 
-                        // ★★★ 核心修复：将增量数据传递给回调 ★★★
+                        // 调用回调函数，将增量数据传递给 UI 层进行实时更新
                         onStreamChunk({
-                            reply: replyDelta, // 传递增量
-                            reasoning: reasoningDelta, // 传递增量
-                            usage: usageData // 传递最新累积的 usage
+                            reply: replyDelta, 
+                            reasoning: reasoningDelta, 
+                            usage: usageData 
                         });
 
                     } catch (e) {
-                        console.warn('解析流式JSON失败:', e, `原始数据块: "${jsonDataString}"`);
+                        console.warn('处理流式数据块时发生错误:', e, `原始数据块: "${jsonDataString}"`);
+                        // 如果 JSON 解析失败，跳过此数据块，不调用 onStreamChunk
+                        continue; 
                     }
                 }
             }
 
-        } else { // 非流式响应
+        } else { // 非流式响应 (适用于 stream: false 或后端不支持流式)
             const responseData = await response.json();
+            // 如果非流式响应本身就不是 OK 状态，则抛出错误
             if (!response.ok) throw new Error(responseData.error?.message || JSON.stringify(responseData));
             
             let finalReply = '', finalReasoning = null;
+            // 根据提供商解析非流式响应的最终内容和元数据
             switch(providerLower) {
                 case 'gemini': 
                     finalReply = responseData.candidates?.[0]?.content?.parts?.[0]?.text || '';
                     if (responseData.usageMetadata) {
-                        usageData = { prompt_tokens: responseData.usageMetadata.promptTokenCount, completion_tokens: responseData.usageMetadata.candidatesTokenCount };
+                        usageData = { 
+                            prompt_tokens: responseData.usageMetadata.promptTokenCount, 
+                            completion_tokens: responseData.usageMetadata.candidatesTokenCount 
+                        };
                     }
                     break;
-                default:
+                default: // OpenAI, Deepseek, etc.
                     finalReply = responseData.choices?.[0]?.message?.content || '';
+                    // 尝试获取原生思考过程
                     finalReasoning = responseData.choices?.[0]?.message?.reasoning || responseData.choices?.[0]?.message?.reasoning_content || null;
                     usageData = responseData.usage || null;
                     break;
             }
 
+            // 如果存在原生思考过程，则直接使用
             if (finalReasoning) {
                 accumulatedThinkingForDisplay = finalReasoning;
                 accumulatedAssistantReply = finalReply;
-            } else if (finalReply.includes('<think>')) {
-                const extraction = utils.extractThinkingAndReply(finalReply, '<think>', '</think>', false);
-                accumulatedAssistantReply = extraction.replyTextPortion.trim();
-                accumulatedThinkingForDisplay = extraction.thinkingTextPortion.trim();
+            } 
+            // 否则，尝试从主回复中提取嵌入式思考过程（例如 <think>...</think>）
+            else if (finalReply.includes('<think>') && finalReply.includes('</think>')) {
+                const extraction = utils.extractThinkingAndReply(finalReply, '<think>', '</think>'); 
+                accumulatedAssistantReply = extraction.replyText.trim();
+                accumulatedThinkingForDisplay = extraction.thinkingText.trim();
             } else {
+                // 没有任何思考过程，回复就是全部内容
                 accumulatedAssistantReply = finalReply;
             }
         }
 
-        // 最终成功返回
+        // 最终成功返回结果对象
         return {
             success: true,
             reply: accumulatedAssistantReply.trim(),
             reasoning: accumulatedThinkingForDisplay.trim() || null,
             usage: usageData,
-            role: providerLower === 'gemini' ? 'model' : 'assistant',
+            role: providerLower === 'gemini' ? 'model' : 'assistant', // Gemini 的角色是 'model'
             aborted: false
         };
 
     } catch (error) {
+        // 处理用户中止请求 (AbortError)
         if (error.name === 'AbortError') {
-            // 用户中止
             return {
-                success: true, // 中止也算一种“成功”的结束流程
+                success: true, // 中止也算一种“成功”的结束流程（流程正常结束，只是用户中断）
                 reply: (accumulatedAssistantReply.trim() || "") + "\n（用户已中止）",
                 reasoning: accumulatedThinkingForDisplay.trim() || null,
                 usage: usageData,
@@ -293,13 +311,16 @@ export async function send(messagesHistory, onStreamChunk) {
                 aborted: true
             };
         }
-         console.error(`[API Send] 请求失败:`, error);
-        // 直接显示从上面 throw 出来的、已经格式化好的错误信息
+        // 处理其他类型错误
+        console.error(`[API Send] 请求失败:`, error);
+        // 返回包含清晰错误信息的结果
         return { success: false, reply: `错误: ${error.message}`, aborted: false };
     } finally {
+        // 无论成功、失败或中止，都清除当前的 AbortController
         state.setCurrentAbortController(null);
     }
 }
+
 
 /**
  * 将 API 密钥保存到后端的 .env 文件。

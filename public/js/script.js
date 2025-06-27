@@ -585,8 +585,6 @@ bindEvent(ui.ui.maxTokensInputInline, 'change', (e) => { // ★ 访问 ui.ui.max
         switch (action) {
             case 'edit':
                 const textToEdit = conv.messages[messageIndex]?.content?.text || '';
-                conversation.truncateConversation(messageIndex - 1);
-                ui.loadAndRenderConversationUI(conv); // ★ 访问 ui.loadAndRenderConversationUI
                 ui.ui.promptInput.value = textToEdit; // ★ 访问 ui.ui.promptInput
                 ui.ui.promptInput.focus(); // ★ 访问 ui.ui.promptInput
                 ui.autoResizePromptInput(); // ★ 访问 ui.autoResizePromptInput

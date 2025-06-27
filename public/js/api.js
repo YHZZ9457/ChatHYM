@@ -84,11 +84,13 @@ export async function send(messagesHistory, onStreamChunk) {
         const lastUserMessage = messagesHistory[messagesHistory.length - 1]; // 获取最后一条用户消息
         const filesToSend = lastUserMessage?.content?.files || []; // 提取其中包含的文件数据
 
-        if (providerLower === 'gemini') {
-            // Gemini API 期望 'contents' 字段，而不是 'messages'
-            // mapMessagesForGemini 函数将 messagesHistory 映射为 Gemini 兼容的 contents 格式
-            bodyPayload.contents = mapMessagesForGemini(messagesHistory, filesToSend); 
-            delete bodyPayload.messages; // 确保 messages 字段不存在，避免与 contents 冲突
+         if (providerLower === 'gemini') {
+            // ★★★ 核心修复：前端始终发送 'messages' 字段给 gemini-proxy ★★★
+            // mapMessagesForGemini (前端的这个) 会将数据映射为 Gemini 兼容的格式，
+            // 但前端不知道后端代理的具体期望，所以这里统一发送 'messages'。
+            // 后端代理会再次处理这个 'messages'。
+            bodyPayload.messages = mapMessagesForGemini(messagesHistory, filesToSend); 
+            delete bodyPayload.contents; // 确保 contents 字段不存在
         } else {
             // 所有其他模型（OpenAI, Anthropic, Deepseek, Ollama 等）都使用 'messages' 字段
             // mapMessagesForStandardOrClaude 函数将 messagesHistory 映射为标准格式

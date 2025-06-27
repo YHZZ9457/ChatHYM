@@ -178,9 +178,6 @@ export function getCurrentBranchMessages(conv) {
             // 如果不在，则将其添加到 branch 数组的开头
             branch.unshift(systemMessage);
         }
-        // 如果已在，但不在第一个位置，可以考虑将其移到第一个位置（如果严格要求顺序）
-        // 但对于 API 上下文，只要在数组中且是第一个 'system' 角色，通常就足够了。
-        // 为了确保，我们可以简单地将它移到最前面：
         else {
              // 找到当前系统消息的索引
              const currentSystemIndex = branch.findIndex(m => m.id === systemMessage.id);
@@ -436,6 +433,8 @@ function findLeafNodeId(conv, startMessageId) {
 }
 
 
+
+
 /**
  * 将当前对话的活动分支切换到包含指定消息ID的分支，并自动定位到该分支的最新末梢。
  * @param {string} messageId - 要切换到的分支上的任意一个消息ID。
@@ -539,7 +538,7 @@ export function deleteMessageAndHandleChildren(conversationId, messageId, mode, 
         let confirmText = '';
         if (mode === 'single') {
             let contentPreview = String(messageToDelete.content?.text || messageToDelete.content || "").substring(0, 40);
-            confirmText = `确定只删除这条消息吗？\n\n"${contentPreview}..."\n\n(它的直接回复将会被保留并连接到上一条消息)`;
+            confirmText = `确定要删除这条消息吗？\n\n"${contentPreview}..."\n\n(它的直接回复将会被保留并连接到上一条消息)`;
         } else {
             confirmText = `确定要删除此消息及其之后的所有分支回复吗？此操作不可恢复。`;
         }

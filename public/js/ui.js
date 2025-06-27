@@ -517,10 +517,20 @@ function createConversationListItem(conv, isArchived = false) {
     if (isArchived) li.classList.add('archived');
     li.dataset.id = conv.id;
     if (conv.isPinned) li.classList.add('pinned');
+    
     const titleSpan = document.createElement('span');
     titleSpan.className = 'title';
     titleSpan.textContent = conv.title;
     li.appendChild(titleSpan);
+
+    // ★★★ 核心修复：为 titleSpan 添加双击事件监听器，触发内联编辑 ★★★
+    titleSpan.addEventListener('dblclick', (e) => {
+        e.stopPropagation(); // 防止双击事件冒泡到父级，例如加载对话
+        if (!li.classList.contains('editing-title')) { // 防止重复进入编辑模式
+            enterConversationTitleEditMode(li, titleSpan, conv.id);
+        }
+    });
+    
     if (!isArchived) {
         const actionsWrapper = document.createElement('div');
         actionsWrapper.className = 'conversation-item-actions';
@@ -530,22 +540,87 @@ function createConversationListItem(conv, isArchived = false) {
         moreBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M9.5 13a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m0-5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0"/></svg>`;
         moreBtn.onclick = (e) => {
             e.stopPropagation();
-            // 将 moreBtn 这个按钮元素作为第一个参数传递进去
-            showGlobalActionsMenu(moreBtn, conv.id, conv.title, conv.isPinned); 
+            showGlobalActionsMenu(moreBtn, conv.id, conv.title, conv.isPinned, titleSpan); // ★ 传递 titleSpan 参数
         };
         actionsWrapper.appendChild(moreBtn);
         li.appendChild(actionsWrapper);
     }
     if (conv.isNew) li.classList.add('new-conv');
     if (conv.id === state.currentConversationId) li.classList.add('active');
-    li.addEventListener('dblclick', () => {
-        const titleH1 = document.getElementById('chat-title');
-        if (titleH1 && state.currentConversationId === conv.id) {
-            handleTitleClick.call(titleH1);
-        }
-    });
+    
+    // 移除旧的 dblclick 监听，因为它现在被 titleSpan 上的监听器替代了
+    // li.addEventListener('dblclick', () => {
+    //     const titleH1 = document.getElementById('chat-title');
+    //     if (titleH1 && state.currentConversationId === conv.id) {
+    //         handleTitleClick.call(titleH1);
+    //     }
+    // });
     return li;
 }
+
+// ★★★ 新增函数：进入对话列表项的标题编辑模式 ★★★
+function enterConversationTitleEditMode(listItem, titleSpan, conversationId) {
+    listItem.classList.add('editing-title'); // 添加一个类来表示正在编辑
+    const oldTitle = titleSpan.textContent;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'conversation-title-input'; // 添加类名方便样式控制
+    input.value = oldTitle;
+    
+    titleSpan.replaceWith(input); // 替换掉原来的 span
+    input.focus();
+    input.setSelectionRange(oldTitle.length, oldTitle.length); // 将光标移到末尾
+
+    const commitEdit = () => {
+        const newTitle = input.value.trim();
+        const conv = conversation.getConversationById(conversationId);
+        if (conv) {
+            if (newTitle && newTitle !== oldTitle) {
+                conversation.renameConversationTitle(conversationId, newTitle);
+                // 如果当前对话被重命名，也更新聊天区域的标题
+                if (conversationId === state.currentConversationId) {
+                    updateChatTitle(newTitle);
+                }
+            } else if (!newTitle) { // 如果新标题为空，则恢复旧标题
+                utils.showToast('标题不能为空，已恢复原标题。', 'warning');
+            }
+        }
+        // 退出编辑模式
+        exitConversationTitleEditMode(listItem, input, newTitle || oldTitle);
+    };
+
+    input.addEventListener('blur', commitEdit); // 失去焦点时保存
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            commitEdit();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            // 退出编辑模式，恢复旧标题
+            exitConversationTitleEditMode(listItem, input, oldTitle);
+        }
+    });
+}
+
+// ★★★ 新增函数：退出对话列表项的标题编辑模式 ★★★
+function exitConversationTitleEditMode(listItem, inputElement, finalTitle) {
+    listItem.classList.remove('editing-title');
+    const newTitleSpan = document.createElement('span');
+    newTitleSpan.className = 'title';
+    newTitleSpan.textContent = finalTitle;
+    
+    // 重新绑定双击事件
+    newTitleSpan.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        if (!listItem.classList.contains('editing-title')) {
+            enterConversationTitleEditMode(listItem, newTitleSpan, listItem.dataset.id);
+        }
+    });
+
+    inputElement.replaceWith(newTitleSpan); // 替换回 span
+    renderConversationList(); // 重新渲染侧边栏列表，确保最新标题和排序
+}
+
 
 function handleTitleClick() {
     const chatHeader = this.parentElement;
@@ -914,6 +989,8 @@ function enterEditMode(systemDiv, currentContent) {
         <div class="system-prompt-editor">
             <textarea rows="4" placeholder="在此输入系统指令...">${currentContent}</textarea>
             <div class="editor-actions">
+                <!-- ★★★ 核心修复：清空按钮放在取消按钮左侧，并添加 'danger' 类 ★★★ -->
+                <button type="button" class="action-btn danger clear-system-prompt-btn">清空</button> 
                 <button type="button" class="action-btn secondary cancel-btn">取消</button>
                 <button type="button" class="action-btn save-btn">保存</button>
             </div>
@@ -922,13 +999,13 @@ function enterEditMode(systemDiv, currentContent) {
     const textarea = systemDiv.querySelector('textarea');
     const saveBtn = systemDiv.querySelector('.save-btn');
     const cancelBtn = systemDiv.querySelector('.cancel-btn');
+    const clearBtn = systemDiv.querySelector('.clear-system-prompt-btn'); 
 
     const exitEditMode = (shouldSave) => {
         if (shouldSave) {
             const newPrompt = textarea.value.trim();
-            conversation.setSystemPrompt(newPrompt); // 调用 conversation 模块更新数据
+            conversation.setSystemPrompt(newPrompt); 
         }
-        // 无论保存还是取消，都重新渲染整个对话UI以反映最新状态
         const currentConv = state.getCurrentConversation();
         if (currentConv) {
             loadAndRenderConversationUI(currentConv);
@@ -937,9 +1014,19 @@ function enterEditMode(systemDiv, currentContent) {
 
     saveBtn.onclick = (e) => { e.stopPropagation(); exitEditMode(true); };
     cancelBtn.onclick = (e) => { e.stopPropagation(); exitEditMode(false); };
-    textarea.onclick = (e) => e.stopPropagation(); // 防止点击文本框时触发父元素的点击事件
+    
+    clearBtn.onclick = (e) => { 
+        e.stopPropagation(); 
+        if (confirm('确定要清空系统指令吗？')) {
+            textarea.value = ''; 
+            exitEditMode(true);  
+        }
+    };
+
+    textarea.onclick = (e) => e.stopPropagation(); 
     if (textarea) textarea.focus();
 }
+
 
 /**
  * 在加载对话时，渲染系统指令（如果存在）
@@ -1168,9 +1255,6 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
 
      // 7b. ★ 核心修改：根据角色渲染不同的按钮 ★
     if (role === 'user') {
-        // --- 用户的按钮 (简洁版：复制、编辑、删除) ---
-        // (复制按钮已在最上面统一添加)
-        
         const editBtn = document.createElement('button');
         editBtn.className = 'message-action-btn edit-message-btn';
         editBtn.title = '以此为基础编辑';
@@ -1180,8 +1264,8 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
         
         const deleteMsgBtn = document.createElement('button');
         deleteMsgBtn.className = 'message-action-btn delete-message-btn';
-        deleteMsgBtn.title = '删除此消息及后续';
-        deleteMsgBtn.dataset.action = 'delete_branch'; 
+        deleteMsgBtn.title = '删除此消息'; // ★ 修改提示文本
+        deleteMsgBtn.dataset.action = 'delete_single'; // ★ 核心修改：将其设置为 'delete_single'
         deleteMsgBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash3" viewBox="0 0 16 16"><path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1zm-9.955 1H14.5a.5.5 0 0 1 0 1H1.455a.5.5 0 0 1 0-1Z"/></svg>`;
         actionsContainer.appendChild(deleteMsgBtn);
 
@@ -1315,7 +1399,7 @@ export function renderConversationList(searchTerm = '') {
 }
 
 
-export function showGlobalActionsMenu(buttonElement, convId, convTitle, isPinned) {
+export function showGlobalActionsMenu(buttonElement, convId, convTitle, isPinned, titleSpanElement) {
     if (!ui.globalActionsMenu) return;
     ui.globalActionsMenu.innerHTML = '';
     const createMenuItem = (svgIcon, text, action, isDanger = false) => {
@@ -1330,34 +1414,41 @@ export function showGlobalActionsMenu(buttonElement, convId, convTitle, isPinned
         };
         ui.globalActionsMenu.appendChild(button);
     };
+
     const pinSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M9.828.722a.5.5 0 0 1 .354.146l4.95 4.95a.5.5 0 0 1 0 .707c-.48.48-1.072.588-1.503.588-.177 0-.335-.018-.46-.039l-3.134 3.134a5.927 5.927 0 0 1 .16 1.013c.046.702-.032 1.687-.72 2.375a.5.5 0 0 1-.707 0l-2.829-2.828-3.182 3.182c-.195.195-1.219.902-1.414.707-.195-.195.512-1.22.707-1.414l3.182-3.182-2.828-2.829a.5.5 0 0 1 0-.707c.688-.688 1.673-.767 2.375-.72a5.922 5.922 0 0 1 1.013.16l3.134-3.133a2.772 2.772 0 0 1-.04-.461c0-.43.108-1.022.589-1.503a.5.5 0 0 1 .353-.146"/></svg>`;
     const renameSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M12.854.146a.5.5 0 0 0-.707 0L10.5 1.793 14.207 5.5l1.647-1.646a.5.5 0 0 0 0-.708zm.646 6.061L9.793 2.5 3.293 9H3.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.5h.5a.5.5 0 0 1 .5.5v.207l6.5-6.5zm-7.468 7.468A.5.5 0 0 1 6 13.5V13h-.5a.5.5 0 0 1-.5-.5V12h-.5a.5.5 0 0 1-.5-.5V11h-.5a.5.5 0 0 1-.5-.5V10h-.5a.499.499 0 0 1-.175-.032l-.179.178a.5.5 0 0 0-.11.168l-2 5a.5.5 0 0 0 .65.65l5-2a.5.5 0 0 0 .168-.11z"/></svg>`;
     const deleteSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11 1.5v1h3.5a.5.5 0 0 1 0 1h-.538l-.853 10.66A2 2 0 0 1 11.115 16h-6.23a2 2 0 0 1-1.994-1.84L2.038 3.5H1.5a.5.5 0 0 1 0-1H5v-1A1.5 1.5 0 0 1 6.5 0h3A1.5 1.5 0 0 1 11 1.5m-5 0v1h4v-1a.5.5 0 0 0-.5-.5h-3a.5.5 0 0 0-.5.5"/></svg>`;
+    const archiveSVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/><path d="M11 4c0 1.657-1.792 3-4 3c-2.207 0-4-1.343-4-3S4.793 1 7 1s4 1.343 4 3zM1.5 4a.5.5 0 0 0-.5.5v7a.5.5 0 0 0 1 0V4.5a.5.5 0 0 0-.5-.5z"/></svg>`;
 
-    // ★ 核心修复 1：为“置顶”操作添加 UI 刷新
+
     createMenuItem(pinSVG, isPinned ? '取消置顶' : '置顶对话', () => {
         conversation.togglePin(convId);
-        renderConversationList(); // <-- 立即刷新列表！
+        renderConversationList();
     });
 
-    // ★ 核心修复 2：为“重命名”操作添加 UI 刷新
-    createMenuItem(renameSVG, '重命名', () => {
-        const newTitle = prompt('输入新的对话标题：', convTitle);
-        if (newTitle && newTitle.trim()) {
-            const trimmedTitle = newTitle.trim();
-            conversation.renameConversationTitle(convId, trimmedTitle);
-            renderConversationList(); // <-- 立即刷新列表！
-            if (convId === state.currentConversationId) {
-                updateChatTitle(trimmedTitle);
-            }
+     createMenuItem(renameSVG, '重命名', () => {
+        // 确保 titleSpanElement 存在并且当前不是编辑模式
+        if (titleSpanElement && !titleSpanElement.closest('.conversation-item').classList.contains('editing-title')) {
+            enterConversationTitleEditMode(titleSpanElement.closest('.conversation-item'), titleSpanElement, convId);
+        } else {
+            // 如果由于某种原因无法进入内联编辑，可以保留一个提示
+            utils.showToast('无法重命名，请稍后再试。', 'error');
         }
     });
+    // ★★★ 核心修复：将 state.getConversationById 替换为 conversation.getConversationById ★★★
+    const currentConv = conversation.getConversationById(convId); // <-- 修改这里
+    if (currentConv) {
+        createMenuItem(archiveSVG, currentConv.archived ? '取消归档' : '归档对话', () => {
+            const result = conversation.toggleArchive(convId);
+            if (result.nextIdToLoad) {
+                const id = (result.nextIdToLoad === 'new') ? conversation.createNewConversation().id : result.nextIdToLoad;
+                document.dispatchEvent(new CustomEvent('loadConversationRequest', { detail: { conversationId: id } }));
+            } else {
+                renderConversationList();
+            }
+        });
+    }
 
-    const divider = document.createElement('div');
-    divider.className = 'dropdown-divider';
-    ui.globalActionsMenu.appendChild(divider);
-
-    // “删除”操作已经会通过事件触发 loadConversationFlow，它内部会刷新UI，所以无需改动
     createMenuItem(deleteSVG, '删除对话', () => {
         if (confirm(`确定要删除对话「${convTitle}」吗？此操作无法恢复。`)) {
             const result = conversation.deleteConversation(convId);
@@ -1365,10 +1456,11 @@ export function showGlobalActionsMenu(buttonElement, convId, convTitle, isPinned
                 const id = (result.nextIdToLoad === 'new') ? conversation.createNewConversation().id : result.nextIdToLoad;
                 document.dispatchEvent(new CustomEvent('loadConversationRequest', { detail: { conversationId: id } }));
             } else {
-                renderConversationList(); // 如果删除的不是当前对话，也需要刷新列表
+                renderConversationList();
             }
         }
-    }, true);
+    }, true); // isDanger = true for delete
+
     const rect = buttonElement.getBoundingClientRect();
     ui.globalActionsMenu.style.top = `${rect.bottom + window.scrollY + 6}px`;
     ui.globalActionsMenu.style.left = `${rect.right + window.scrollX - ui.globalActionsMenu.offsetWidth}px`;
@@ -1383,7 +1475,6 @@ export function showGlobalActionsMenu(buttonElement, convId, convTitle, isPinned
 }
 
 
-// js/ui.js
 
 export function loadAndRenderConversationUI(convToLoad) {
     if (!convToLoad) return;

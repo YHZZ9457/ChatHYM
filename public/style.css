@@ -1324,6 +1324,16 @@ body.dark-theme .header-model-selector select#model option {
     transition: background-color 0.2s ease;
 }
 
+.system-prompt-editor .editor-actions button.danger {
+    background-color: #e53e3e; /* 红色背景 */
+    color: #fff; /* 白色文字 */
+    border-color: #e53e3e; /* 红色边框 */
+}
+.system-prompt-editor .editor-actions button.danger:hover {
+    background-color: #c53030; /* 更深的红色 */
+    border-color: #c53030;
+}
+
 /* 非编辑模式下悬浮才高亮 */
 .system-prompt-display:not(.is-editing):hover {
     background-color: rgba(var(--primary-rgb), 0.15);
@@ -1340,7 +1350,7 @@ body.dark-theme .header-model-selector select#model option {
 
 /* --- 操作按钮的具体样式 --- */
 .system-prompt-editor .editor-actions button {
-    padding: 6px 16px; /* 按钮可以小一点，更精致 */
+    padding: 4px 14px; /* 按钮可以小一点，更精致 */
     font-size: 0.85rem;
     font-weight: 500;
     border-radius: var(--border-radius-sm);
@@ -3543,4 +3553,47 @@ body.light-theme .message-meta-info {
   font-style: italic;
   font-weight: 300;
   margin: 0; /* 移除可能的默认外边距 */
+}
+
+/* 对话列表项内联编辑输入框样式 */
+.conversation-item .conversation-title-input {
+    flex-grow: 1;
+    width: 100%; /* 确保输入框填充可用空间 */
+    min-width: 0; /* 允许输入框在 Flex 容器中收缩 */
+    
+    /* ★★★ 核心优化：调整内边距和边框 ★★★ */
+    padding: 6px 8px; /* 调整内边距，使其更紧凑，与文字高度协调 */
+    border: 1px solid var(--border-color); /* 使用通用边框颜色，更柔和 */
+    border-radius: var(--border-radius-md); /* 使用中等圆角，与按钮、选择器协调 */
+    
+    background-color: var(--input-bg); /* 使用输入框背景色，与聊天输入框一致 */
+    color: var(--text-color); /* 文字颜色 */
+    font-size: 1.05rem; /* 与 .title 字体大小一致 */
+    font-family: inherit;
+    outline: none; /* 移除默认焦点外框 */
+    box-sizing: border-box; /* 确保 padding 和 border 不会增加元素总宽度 */
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease; /* 增加背景色过渡 */
+}
+
+.conversation-item .conversation-title-input:focus {
+    border-color: var(--primary); /* 焦点时使用主色调边框 */
+    box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2); /* 焦点阴影 */
+    background-color: var(--input-bg); /* 确保焦点时背景色不变 */
+}
+
+/* 确保在亮色主题下也美观 */
+body.light-theme .conversation-item .conversation-title-input {
+    background-color: #ffffff; /* 亮色主题下更亮的背景 */
+    border-color: #d1d5db; /* 亮色主题下更浅的边框 */
+}
+
+body.light-theme .conversation-item .conversation-title-input:focus {
+    border-color: var(--primary-light);
+    box-shadow: 0 0 0 2px rgba(var(--primary-light-rgb), 0.2);
+}
+
+
+/* 编辑状态下，隐藏操作按钮，防止重叠 */
+.conversation-item.editing-title .conversation-item-actions {
+    display: none;
 }

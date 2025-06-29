@@ -163,26 +163,32 @@ export function showToast(message, type = 'info') {
 }
 
 /**
- * Updates the state of the submit button.
- * @param {boolean} isStopping - True if the button should show "Stop".
+ * 更新提交按钮的状态（“发送”或“停止”）。
+ * @param {boolean} isGenerating - True if the response is currently being generated.
  * @param {HTMLElement} buttonElement - The button element to update.
  */
-export function updateSubmitButtonState(isStopping, buttonElement) {
+export function updateSubmitButtonState(isGenerating, buttonElement) { // 再次移除 hasInputContent 参数
     if (!buttonElement) {
         console.error("updateSubmitButtonState: buttonElement is not defined or null!");
         return;
     }
     const textSpan = buttonElement.querySelector('span');
-    if (isStopping) {
+
+    if (isGenerating) {
+        // 处于生成状态：显示“停止”，按钮始终可点击
         buttonElement.classList.add('is-stopping');
         if (textSpan) textSpan.textContent = '停止';
         else buttonElement.textContent = '停止';
-        buttonElement.disabled = false;
+        // buttonElement.disabled = false; // 这一行可以保留，但因为默认就是false，所以可以省略
     } else {
+        // 不处于生成状态：显示“发送”，按钮始终可点击
         buttonElement.classList.remove('is-stopping');
         if (textSpan) textSpan.textContent = '发送';
         else buttonElement.textContent = '发送';
+        // buttonElement.disabled = false; // ★ 核心修复：始终确保按钮是可点击的
     }
+    // 明确设置 disabled 属性，确保它是 false，除非有其他外部逻辑设置它
+    buttonElement.disabled = false; 
 }
 
 /**

@@ -6,7 +6,7 @@
 
   /* 主色 - 参考图片，主色调为蓝色 */
   --primary-light: #379bff; /* 浅色主题主色 (道奇蓝) */
-  --primary-dark: #3b82f6; /* 深色主题主色 (Tailwind Blue 500), 与图片中按钮颜色接近 */
+  --primary-dark: #3b82f6; /* 深色主题主色 (Tailwind Blue 500) */
   --primary-light-rgb: 55, 155, 255; /* 浅色主题主色 RGB */
   --primary-dark-rgb: 59, 130, 246; /* 深色主题主色 RGB */
 

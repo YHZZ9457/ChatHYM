@@ -165,7 +165,7 @@
         {
           "text": "SF Qwen3-30B-A3B",
           "value": "siliconflow::Qwen/Qwen3-30B-A3B",
-          "isHidden": false
+          "isHidden": true
         },
         {
           "text": "SF Qwen3-14B",

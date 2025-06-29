@@ -6,7 +6,7 @@
  * 将内部对话历史映射为 Gemini API 所需的、严格交替角色的 `contents` 格式。
  * 这个版本会正确地合并连续的用户消息。
  * @param {Array} messagesHistory - 内部对话历史数组
- * @param {Array} currentFilesData - 当前要发送的文件数据
+ * @param {Array} currentFilesData - 当前要发送的文件数据 (包含 base64, type, name)
  * @returns {Array} - 符合 Gemini API 规范的 contents 数组
  */
 export function mapMessagesForGemini(messagesHistory, currentFilesData) {
@@ -22,6 +22,18 @@ export function mapMessagesForGemini(messagesHistory, currentFilesData) {
                 textContent = msg.content;
             } else if (msg.content && typeof msg.content.text === 'string') {
                 textContent = msg.content.text;
+            } else if (Array.isArray(msg.content)) { // 如果是多模态数组
+                const textPart = msg.content.find(p => p.type === 'text');
+                textContent = textPart ? textPart.text : '';
+                
+                // ★ 核心修复：处理历史消息中可能包含的非图片文件内容，将其文本化
+                // 假设历史中可能保存了 { type: 'file_content', file_name: '...', content: '...' }
+                const fileParts = msg.content.filter(p => p.type === 'file_content');
+                if (fileParts.length > 0) {
+                    fileParts.forEach(fp => {
+                        textContent += `\n\n--- 文件内容 (${fp.file_name}): ---\n${fp.content}\n--- 文件内容结束 ---`;
+                    });
+                }
             }
             
             if (textContent.trim()) {
@@ -52,7 +64,7 @@ export function mapMessagesForGemini(messagesHistory, currentFilesData) {
                 parts: [{ text: assistantContent || " " }] // 助手消息也需要内容
             });
         }
-        // 系统消息被忽略，因为它们在顶层单独处理
+        // 系统消息被忽略，因为它们在顶层单独处理（或被合并到第一条用户消息）
     }
 
     // 循环结束后，处理最后一轮的用户消息和当前要发送的文件
@@ -67,6 +79,19 @@ export function mapMessagesForGemini(messagesHistory, currentFilesData) {
                             mime_type: fileData.type,
                             data: fileData.base64.split(',')[1] // 纯 Base64 数据
                         }
+                    });
+                } else if (fileData.type === 'text/plain' || fileData.name.toLowerCase().endsWith('.txt')) {
+                    // ★ 核心修复：对于文本文件，将其内容读取并作为文本部分追加到 Prompt
+                    const decodedContent = atob(fileData.base64.split(',')[1]); // Base64 解码纯文本内容
+                    currentUserParts.push({ 
+                        type: 'text', 
+                        text: `\n\n--- 附件内容 (${fileData.name}): ---\n${decodedContent}\n--- 附件内容结束 ---` 
+                    });
+                } else {
+                    // 对于其他不支持的文件类型，添加提示文本
+                    currentUserParts.push({ 
+                        type: 'text', 
+                        text: `\n\n--- 附件: ${fileData.name} (类型 ${fileData.type} 不支持直接发送，内容可能被忽略) ---` 
                     });
                 }
             });
@@ -85,15 +110,15 @@ export function mapMessagesForGemini(messagesHistory, currentFilesData) {
  * 将内部对话历史映射为 OpenAI, Anthropic, Ollama 等 API 所需的 `messages` 格式。
  * @param {Array} messagesHistory - 内部对话历史数组
  * @param {string} provider - API 提供商 ('openai', 'anthropic', 'ollama', etc.)
- * @param {Array} currentFilesData - 当前要发送的文件数据
- * @returns {Array} - 符合 API 规范的 messages 数组
+ * @param {Array} currentFilesData - 当前要发送的文件数据 (包含 base64, type, name)
+ * @returns {Array} - 符合 API规范的 messages 数组
  */
 export function mapMessagesForStandardOrClaude(messagesHistory, provider, currentFilesData) {
     // 1. 映射历史消息
     const mappedApiMessages = messagesHistory.map(msg => {
         // --- 处理 System 消息 ---
+        // Anthropic 和 Ollama 的 system prompt 在顶层单独处理，这里不加入 messages 数组
         if (msg.role === 'system') {
-            // Anthropic 和 Ollama 的 system prompt 在顶层单独处理，这里不加入 messages 数组
             if (provider === 'anthropic' || provider === 'ollama') {
                 return null; // 返回 null，稍后过滤掉
             }
@@ -119,10 +144,19 @@ export function mapMessagesForStandardOrClaude(messagesHistory, provider, curren
                 historicTextContent = msg.content.text;
             } else if (Array.isArray(msg.content)) { // 如果是多模态数组
                 const textPart = msg.content.find(p => p.type === 'text');
-                historicTextContent = textPart ? textPart.text : '[multimodal content]';
+                historicTextContent = textPart ? textPart.text : '';
+                
+                // ★ 修复：处理历史消息中可能包含的非图片文件内容，将其文本化
+                // 如果历史中保存了 { type: 'file_content', file_name: '...', content: '...' }
+                const fileParts = msg.content.filter(p => p.type === 'file_content');
+                if (fileParts.length > 0) {
+                    fileParts.forEach(fp => {
+                        historicTextContent += `\n\n--- 文件内容 (${fp.file_name}): ---\n${fp.content}\n--- 文件内容结束 ---`;
+                    });
+                }
             }
             
-            // 为 Ollama 返回纯字符串
+            // 为 Ollama 返回纯字符串内容
             if (provider === 'ollama') {
                  return { role: 'user', content: historicTextContent.trim() || " " };
             }
@@ -151,10 +185,21 @@ export function mapMessagesForStandardOrClaude(messagesHistory, provider, curren
             // Ollama 需要纯字符串，并将图片信息作为文本描述
             let ollamaContentString = currentPromptText;
             if (currentFilesData && currentFilesData.length > 0) {
-                 const imageFiles = currentFilesData.filter(f => f.type?.startsWith('image/'));
-                 if (imageFiles.length > 0) {
-                     ollamaContentString += `\n(附带图片: ${imageFiles.map(f=>f.name).join(', ')})`;
-                 }
+                 currentFilesData.forEach(fileData => { // 遍历所有文件
+                     if (fileData.type?.startsWith('image/')) {
+                         // Ollama 可以直接处理 Base64 图像，但通常图片是作为单独的 'images' 字段
+                         // 如果你的 Ollama Proxy 期望图片 Base64 在 content 中，那保留此逻辑
+                         // 否则，更常见的 Ollama 图像处理是通过 bodyPayload.images 数组
+                         ollamaContentString += `\n(附带图片: ${fileData.name})`; // 简单描述图片
+                     } else if (fileData.type === 'text/plain' || fileData.name.toLowerCase().endsWith('.txt')) {
+                         // ★ 核心修复：对于文本文件，将其内容直接追加到 Prompt
+                         const decodedContent = atob(fileData.base64.split(',')[1]); // Base64 解码纯文本内容
+                         ollamaContentString += `\n\n--- 附件内容 (${fileData.name}): ---\n${decodedContent}\n--- 附件内容结束 ---`;
+                     } else {
+                         // 对于其他不支持的文件类型，提示用户或忽略
+                         ollamaContentString += `\n(附带文件: ${fileData.name} - 类型 ${fileData.type} 不支持直接发送，内容可能被忽略)`;
+                     }
+                 });
             }
             mappedApiMessages[lastMessageIndex].content = ollamaContentString.trim() || " ";
 
@@ -167,11 +212,10 @@ export function mapMessagesForStandardOrClaude(messagesHistory, provider, curren
                 currentUserContentParts.push({ type: 'text', text: currentPromptText.trim() });
             }
 
-            // 添加图片文件部分
+            // 添加文件部分
             if (currentFilesData && currentFilesData.length > 0) {
                 currentFilesData.forEach(fileData => {
                     if (fileData.type?.startsWith('image/')) {
-                        
                         // OpenAI, Deepseek, Siliconflow, Volcengine, OpenRouter 使用相同的 image_url 格式
                         if (['openai', 'deepseek', 'siliconflow', 'volcengine', 'openrouter'].includes(provider)) {
                             currentUserContentParts.push({
@@ -179,16 +223,28 @@ export function mapMessagesForStandardOrClaude(messagesHistory, provider, curren
                                 image_url: { url: fileData.base64 } // 发送 base64 Data URL
                             });
                         } else if (provider === 'anthropic') {
-                        currentUserContentParts.push({
-                            type: "image",
-                            source: {
-                                type: "base64",
-                                media_type: fileData.type,
-                                // ★★★ 核心修复：使用 split(',') 只取逗号后面的纯 Base64 数据 ★★★
-                                data: fileData.base64.split(',')[1] 
-                            }
-                        });
+                            currentUserContentParts.push({
+                                type: "image",
+                                source: {
+                                    type: "base64",
+                                    media_type: fileData.type,
+                                    data: fileData.base64.split(',')[1] 
+                                }
+                            });
                         }
+                    } else if (fileData.type === 'text/plain' || fileData.name.toLowerCase().endsWith('.txt')) {
+                        // ★ 核心修复：对于文本文件，将其内容读取并作为文本部分追加到 Prompt
+                        const decodedContent = atob(fileData.base64.split(',')[1]); // Base64 解码纯文本内容
+                        currentUserContentParts.push({ 
+                            type: 'text', 
+                            text: `\n\n--- 附件内容 (${fileData.name}): ---\n${decodedContent}\n--- 附件内容结束 ---` 
+                        });
+                    } else {
+                        // 对于其他不支持的文件类型，添加提示文本
+                        currentUserContentParts.push({ 
+                            type: 'text', 
+                            text: `\n\n--- 附件: ${fileData.name} (类型 ${fileData.type} 不支持直接发送，内容可能被忽略) ---` 
+                        });
                     }
                 });
             }

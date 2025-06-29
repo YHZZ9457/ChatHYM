@@ -149,7 +149,7 @@ export function getCurrentBranchMessages(conv) {
                 currentId = message.parentId;
             } else {
                 // 如果在回溯中找不到父消息，说明分支断裂，停止回溯
-                console.warn(`Branch broken: Cannot find message with parentId: ${currentId}. Stopping branch traversal.`);
+                console.log(`[DEBUG] Branch broken: Cannot find message with parentId: ${currentId}. Stopping branch traversal.`); // 替换为 log
                 break;
             }
         }
@@ -193,32 +193,39 @@ export function getCurrentBranchMessages(conv) {
 }
 
 /**
- * 向当前对话添加一条新消息，并更新活动分支。
- * @param {'user' | 'assistant'} role - 消息角色。
+ * 向指定对话添加一条新消息，并更新其活动分支。
+ * @param {object} targetConv - 消息将要添加到的对话对象。
+ * @param {'user' | 'assistant' | 'model'} role - 消息角色。
  * @param {any} content - 消息内容。
  * @param {object} metadata - 其他元数据，如 model, usage 等。
  * @returns {object} 新创建的消息对象。
  */
-export function addMessageToConversation(role, content, metadata = {}) {
-    const conv = state.getCurrentConversation();
-    if (!conv) return null;
+export function addMessageToConversation(targetConv, role, content, metadata = {}) { 
+    if (!targetConv) {
+        console.error("Attempted to add message to a null or undefined conversation object.");
+        return null;
+    }
+
+    // ★★★ 核心修复：防御性检查和初始化 targetConv.messages ★★★
+    if (!Array.isArray(targetConv.messages)) {
+        console.warn(`Conversation ${targetConv.id} messages array was not initialized or corrupted. Initializing to empty array.`);
+        targetConv.messages = [];
+    }
 
     const newMessage = {
         id: utils.generateSimpleId(),
-        // 新消息的父ID，就是当前活动分支的最后一条消息ID
-        parentId: conv.activeMessageId, 
+        parentId: targetConv.activeMessageId, 
         role,
         content,
         ...metadata,
     };
 
-    // 将新消息添加到对话的 "大数组" 中
-    conv.messages.push(newMessage);
+    // 将新消息添加到 targetConv 的 "大数组" 中
+    targetConv.messages.push(newMessage); // 这一行现在更安全了
     
-    // ★ 关键：将活动分支的指针移动到这条新消息上
-    conv.activeMessageId = newMessage.id;
+    targetConv.activeMessageId = newMessage.id; 
     
-    saveConversations();
+    saveConversations(); 
     return newMessage;
 }
 

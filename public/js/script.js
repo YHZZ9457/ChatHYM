@@ -23,79 +23,96 @@ import * as ui from './ui.js'; // ★ 统一使用 'ui' 作为模块别名
  *                                             注意：此参数现在仅用于在 `addOrUpdateFinalMessageInState` 中
  *                                             设置 `activeMessageId` 为父消息，而非直接进行DOM替换。
  */
-async function processApiRequest(historyForApi, targetElement = null) {
-    state.setGeneratingResponse(true);
-    utils.updateSubmitButtonState(true, ui.ui.submitActionBtn);
+async function processApiRequest(targetConv) { // ★ 核心：接收目标对话对象
+    const convId = targetConv.id; // 获取本次请求的对话ID
 
-    const currentConv = state.getCurrentConversation();
-    let tempMessageWrapper = null; // This will be the temporary DOM element for streaming
-    
-    // ★★★ 核心修复：简化全局加载指示器逻辑 ★★★
-    // 无论消息容器是否为空，只要调用此函数，就显示全局加载。
-    // 清理旧消息的责任在调用者（regenerate）那里。
-    let globalLoadingDiv = document.createElement('div');
-    globalLoadingDiv.className = 'loading-indicator-wrapper global-loading-indicator';
-    globalLoadingDiv.innerHTML = `<div class="loading-indicator-bubble"><span>正在加载…</span></div>`;
-    
-    if (ui.ui.messagesContainer) {
-        ui.ui.messagesContainer.appendChild(globalLoadingDiv);
-        ui.ui.messagesContainer.scrollTop = ui.ui.messagesContainer.scrollHeight;
-    } else {
-        document.body.appendChild(globalLoadingDiv);
-        console.warn("Messages container not found, appending global loading to body.");
+    // 1. 设置状态：这个对话正在生成响应
+    state.setConversationGeneratingStatus(convId, true);
+    // 更新当前显示对话的按钮状态 (如果它就是当前活跃对话)
+    if (state.currentConversationId === convId) {
+        utils.updateSubmitButtonState(true, ui.ui.submitActionBtn);
     }
 
-    // Helper to store/update message in state. This happens *after* stream.
-    const addOrUpdateFinalMessageInState = (role, content, metadata) => {
-        return conversation.addMessageToConversation(role, content, metadata);
-    };
+    let tempMessageWrapper = null; // 本次请求专用的临时 DOM 元素
+    let globalLoadingDiv = null;   // 本次请求专用的加载指示器
 
-    let accumulatedReply = '';
-    let accumulatedReasoning = '';
-    let finalUsage = null;
-    const responseRole = currentConv.model.startsWith('gemini::') ? 'model' : 'assistant';
+    // 在 UI 中添加加载指示器 (只对当前活跃的对话显示)
+    if (state.currentConversationId === convId && ui.ui.messagesContainer) {
+        globalLoadingDiv = document.createElement('div');
+        globalLoadingDiv.className = 'loading-indicator-wrapper global-loading-indicator';
+        globalLoadingDiv.innerHTML = `<div class="loading-indicator-bubble"><span>正在加载…</span></div>`;
+        ui.ui.messagesContainer.appendChild(globalLoadingDiv);
+        ui.ui.messagesContainer.scrollTop = ui.ui.messagesContainer.scrollHeight;
+    } else if (state.currentConversationId !== convId) {
+        console.log(`[Stream] Initiating background request for conv ${convId}.`);
+    }
 
+    // 这些累积变量现在是 processApiRequest 实例的局部变量
+    let accumulatedReply = '';                             
+    let accumulatedReasoningForStream = '';                
+    let usageData = null; // usageData 从 api.send 的 onStreamChunk 传来并累积
+
+    const responseRole = targetConv.model.startsWith('gemini::') ? 'model' : 'assistant';
+
+    // handleStreamChunk 仅操作属于它这个请求实例的变量
     const handleStreamChunk = (result) => {
-        // 1. Remove initial global loading spinner if it's there and we get first chunk
+        // ★ 核心：如果用户已经切换到其他对话，则停止更新这个流的 UI 元素 ★
+        if (state.currentConversationId !== convId) { 
+            console.warn(`[Stream] Ignoring UI update for conversation ${convId}, active conversation is ${state.currentConversationId}.`);
+            return; // 忽略 UI 更新
+        }
+
+        // 移除本次请求的加载指示器
         if (globalLoadingDiv && globalLoadingDiv.parentNode) {
             globalLoadingDiv.remove();
             globalLoadingDiv = null;
         }
 
-        // 2. Create the temporary streaming message wrapper if it doesn't exist yet
-        //    这个逻辑现在统一：无论是新消息还是重新生成，都创建一个新的临时元素并追加。
+        // 创建本次请求的临时消息包装器
         if (!tempMessageWrapper) {
             tempMessageWrapper = ui.createTemporaryMessageElement(responseRole); 
-            ui.ui.messagesContainer.appendChild(tempMessageWrapper); 
-            ui.ui.messagesContainer.scrollTop = ui.ui.messagesContainer.scrollHeight; 
+            // 确保只添加到当前显示的对话容器
+            if (ui.ui.messagesContainer) {
+                ui.ui.messagesContainer.appendChild(tempMessageWrapper); 
+                ui.ui.messagesContainer.scrollTop = ui.ui.messagesContainer.scrollHeight; 
+            }
         }
         
-        // Remove any inline loading spinner (if createTemporaryMessageElement added one)
         const inlineLoader = tempMessageWrapper.querySelector('.inline-loading-indicator');
         if (inlineLoader) {
             inlineLoader.remove();
         }
 
-        // Accumulate and update content
         if (result.reply) accumulatedReply += result.reply;
-        if (result.reasoning) accumulatedReasoning += result.reasoning;
-        if (result.usage) finalUsage = result.usage; 
+        if (result.reasoning) accumulatedReasoningForStream += result.reasoning; 
+        if (result.usage) usageData = { ...usageData, ...result.usage }; // 累积 usage
 
+        let currentThinkingText = ''; 
+        let currentReplyText = '';    
+
+        if (accumulatedReasoningForStream.trim().length > 0) {
+            currentThinkingText = accumulatedReasoningForStream;
+            currentReplyText = accumulatedReply; 
+        } else {
+            const extraction = utils.extractThinkingAndReply(accumulatedReply, '<think>', '</think>');
+            currentThinkingText = extraction.thinkingText;
+            currentReplyText = extraction.replyText; 
+        }
+        
         if (tempMessageWrapper.contentSpan) {
-            tempMessageWrapper.contentSpan.dataset.fullRawContent = accumulatedReply;
-            const { replyText } = utils.extractThinkingAndReply(accumulatedReply, '<think>', '</think>'); 
-            tempMessageWrapper.contentSpan.innerHTML = marked.parse(replyText); 
+            tempMessageWrapper.contentSpan.dataset.fullRawContent = accumulatedReply; 
+            tempMessageWrapper.contentSpan.innerHTML = marked.parse(currentReplyText); 
             ui.processPreBlocksForCopyButtons(tempMessageWrapper.contentSpan); 
             utils.pruneEmptyNodes(tempMessageWrapper.contentSpan); 
         }
+        
         if (tempMessageWrapper.reasoningContentEl) {
-            tempMessageWrapper.reasoningContentEl.textContent = accumulatedReasoning;
+            tempMessageWrapper.reasoningContentEl.textContent = currentThinkingText; 
             if (tempMessageWrapper.reasoningBlockEl) {
-                tempMessageWrapper.reasoningBlockEl.style.display = accumulatedReasoning.trim().length > 0 ? 'block' : 'none';
+                tempMessageWrapper.reasoningBlockEl.style.display = currentThinkingText.trim().length > 0 ? 'block' : 'none';
             }
         }
         
-        // Auto-scroll
         if (ui.ui.messagesContainer) { 
             const dist = ui.ui.messagesContainer.scrollHeight - ui.ui.messagesContainer.clientHeight - ui.ui.messagesContainer.scrollTop; 
             if (dist < 200) {
@@ -106,95 +123,115 @@ async function processApiRequest(historyForApi, targetElement = null) {
         }
     };
 
+    let finalResultFromApi = null; // Store final result from api.send
     try {
-        const finalHistoryForApi = conversation.getCurrentBranchMessages(currentConv); 
-        const finalResult = await api.send(finalHistoryForApi, handleStreamChunk);
-        
-        if (finalResult.success) {
-            accumulatedReply = finalResult.reply; 
-            accumulatedReasoning = finalResult.reasoning;
-            finalUsage = finalResult.usage;
+        const historyForApi = conversation.getCurrentBranchMessages(targetConv); // 获取目标对话的历史
+        const abortController = new AbortController();
+        state.setConversationAbortController(convId, abortController); // 存储 AbortController
 
-            if (!finalResult.aborted && currentConv.title === '新对话') {
-                const newTitle = utils.stripMarkdown(finalResult.reply).substring(0, 20).trim();
-                if (newTitle) currentConv.title = newTitle;
-            }
-        } else {
-            accumulatedReply = `错误: ${finalResult.reply || "未知错误"}`; 
+        finalResultFromApi = await api.send(historyForApi, handleStreamChunk, abortController.signal);
+        
+        let finalAssistantReply = finalResultFromApi.reply;
+        let finalAssistantReasoning = finalResultFromApi.reasoning; 
+
+        if (!finalResultFromApi.aborted && targetConv.title === '新对话') { // 使用 targetConv
+            const newTitle = utils.stripMarkdown(finalAssistantReply).substring(0, 20).trim();
+            if (newTitle) targetConv.title = newTitle; // 更新 targetConv 的标题
         }
 
-        addOrUpdateFinalMessageInState(responseRole, accumulatedReply, {
-            model: currentConv.model,
-            reasoning_content: accumulatedReasoning,
-            usage: finalUsage,
+        // 保存最终消息到状态中。addMessageToConversation 接收 targetConv
+        conversation.addMessageToConversation(targetConv, responseRole, finalAssistantReply, {
+            model: targetConv.model, // 使用 targetConv 的模型
+            reasoning_content: finalAssistantReasoning, 
+            usage: finalResultFromApi.usage, 
         });
 
     } catch (error) {
         if (error.name === 'AbortError') {
-            addOrUpdateFinalMessageInState(responseRole, (accumulatedReply.trim() || "") + "\n（用户已中止）", {
-                model: currentConv.model,
-                reasoning_content: accumulatedReasoning,
-                usage: finalUsage,
+            let abortedReply = finalResultFromApi?.reply || (accumulatedReply.trim() || "");
+            let abortedReasoning = finalResultFromApi?.reasoning || (accumulatedReasoningForStream.trim() || null); 
+
+            conversation.addMessageToConversation(targetConv, responseRole, abortedReply + "\n（用户已中止）", {
+                model: targetConv.model,
+                reasoning_content: abortedReasoning,
+                usage: finalResultFromApi?.usage || usageData, 
             });
         } else {
             console.error(`[API Send] 请求失败:`, error);
-            addOrUpdateFinalMessageInState(responseRole, `错误: ${error.message || "请求失败"}`, { model: currentConv.model });
+            conversation.addMessageToConversation(targetConv, responseRole, `错误: ${error.message || "请求失败"}`, { model: targetConv.model });
         }
     } finally {
-        state.setGeneratingResponse(false);
-        utils.updateSubmitButtonState(false, ui.ui.submitActionBtn); 
-        
-        if (tempMessageWrapper && tempMessageWrapper.parentNode) {
-            tempMessageWrapper.remove();
+        // 无论成功、失败或中止，都清除这个对话的生成状态和 AbortController
+        state.setConversationGeneratingStatus(convId, false);
+        state.setConversationAbortController(convId, null);
+
+        // 如果这个请求所属的对话仍然是当前激活的对话，才更新 UI
+        if (state.currentConversationId === convId) { 
+            utils.updateSubmitButtonState(false, ui.ui.submitActionBtn); // 更新按钮为“发送”
+            
+            if (tempMessageWrapper && tempMessageWrapper.parentNode) {
+                tempMessageWrapper.remove();
+            }
+            if (globalLoadingDiv && globalLoadingDiv.parentNode) {
+                globalLoadingDiv.remove();
+            }
+            // 重新渲染当前对话的 UI，确保显示最终结果
+            ui.loadAndRenderConversationUI(targetConv); // 使用 targetConv 刷新 UI
+            ui.renderConversationList(); // 刷新侧边栏列表 (可能更新标题)
+        } else {
+            // 如果用户已经切换了对话，则只做内部状态清理，不更新 UI
+            console.log(`[Stream] Request for conversation ${convId} finished, but active conversation is ${state.currentConversationId}. Skipping final UI render.`);
         }
-        if (globalLoadingDiv && globalLoadingDiv.parentNode) {
-            globalLoadingDiv.remove();
-        }
-        
-        ui.loadAndRenderConversationUI(currentConv); 
-        ui.renderConversationList(); 
     }
 }
 
 
+
+// handleSubmitActionClick 函数
 async function handleSubmitActionClick() {
-    // 1. 前置检查
-    if (state.isGeneratingResponse) {
-        if (state.currentAbortController) state.currentAbortController.abort();
-        return;
+    const currentConv = state.getCurrentConversation(); // 获取当前对话对象
+
+    // 1. 前置检查（无内容时阻止发送，如果正在生成则中止）
+    const originalPromptText = ui.ui.promptInput.value.trim(); 
+    const hasInputContent = originalPromptText.length > 0 || state.uploadedFilesData.length > 0;
+
+    // 如果当前对话正在生成，则点击按钮是“停止”
+    if (state.isConversationGenerating(currentConv.id)) { // ★ 核心：检查当前对话是否正在生成
+        const abortController = state.getConversationAbortController(currentConv.id);
+        if (abortController) {
+            abortController.abort(); // 中止当前对话的请求
+            utils.showToast("请求已中止。", "info");
+        }
+        return; 
     }
-    const currentConv = state.getCurrentConversation();
-    if (!currentConv || (!ui.ui.promptInput.value.trim() && state.uploadedFilesData.length === 0)) { // ★ 访问 ui.ui.promptInput
+    
+    // 如果没有内容，显示 Toast 并阻止发送
+    if (!currentConv || !hasInputContent) {
         utils.showToast("请输入问题或上传文件。", 'warning');
-        return;
+        return; 
     }
 
     // 2. 准备用户消息
     const filesToProcess = [...state.uploadedFilesData];
-    const originalPromptText = ui.ui.promptInput.value.trim(); // ★ 访问 ui.ui.promptInput
-    const processedFilesForMessage = [];
-    for (const fileData of filesToProcess) {
-        if (fileData.fileObject) {
-            const base64String = await utils.readFileAsBase64(fileData.fileObject);
-            processedFilesForMessage.push({ name: fileData.name, type: fileData.type, base64: base64String });
-        }
+    const finalFilesForNewMessage = filesToProcess.map(fileData => {
         if (fileData.previewUrl) URL.revokeObjectURL(fileData.previewUrl);
-    }
-    const userMessageContent = { text: originalPromptText, files: processedFilesForMessage };
+        return { name: fileData.name, type: fileData.type, base64: fileData.base64 };
+    });
+
+    const userMessageContent = { text: originalPromptText, files: finalFilesForNewMessage };
     
     // 3. 添加用户消息并更新UI
-    conversation.addMessageToConversation('user', userMessageContent, { model: currentConv.model });
-    ui.ui.promptInput.value = ''; // ★ 访问 ui.ui.promptInput
-    ui.autoResizePromptInput(); // ★ 访问 ui.autoResizePromptInput
-    state.setUploadedFiles([]);
-    ui.renderFilePreview(); // ★ 访问 ui.renderFilePreview
-    ui.loadAndRenderConversationUI(currentConv); // ★ 访问 ui.loadAndRenderConversationUI
+    conversation.addMessageToConversation(currentConv, 'user', userMessageContent, { model: currentConv.model });
+    ui.ui.promptInput.value = ''; 
+    ui.autoResizePromptInput(); 
+    state.setUploadedFiles([]); 
+    ui.renderFilePreview(); 
 
-    // 4. 获取要发送给API的历史记录
-    const historyForApi = conversation.getCurrentBranchMessages(currentConv);
-    
-    // 5. 调用通用的API处理函数
-    await processApiRequest(historyForApi);
+    // UI 刷新，显示用户消息
+    ui.loadAndRenderConversationUI(currentConv); 
+
+    // 4. 调用通用的API处理函数
+    await processApiRequest(currentConv); // ★ 核心：传入 currentConv 对象
 }
 
 
@@ -249,7 +286,14 @@ function loadConversationFlow(conversationId) {
             convToLoad.isNew = false;
             conversation.saveConversations();
         }
-        ui.loadAndRenderConversationUI(convToLoad); // ★ 访问 ui.loadAndRenderConversationUI
+        
+        ui.loadAndRenderConversationUI(convToLoad); 
+
+        // ★★★ 核心修复：加载新对话时，根据新对话的实际生成状态更新按钮 ★★★
+        // 按钮的可用性始终为 true (因为无内容时靠 toast 阻止)
+        const isGeneratingForThisConv = state.isConversationGenerating(conversationId);
+        utils.updateSubmitButtonState(isGeneratingForThisConv, ui.ui.submitActionBtn); 
+        
     } else {
         console.warn(`Attempted to load a non-existent conversation: ${conversationId}`);
     }
@@ -287,17 +331,31 @@ function bindEventListeners() {
     // --- 核心交互 (★ 全部修复) ---
     bindEvent(ui.ui.submitActionBtn, 'click', () => handleSubmitActionClick(false)); // ★ 访问 ui.ui.submitActionBtn
     bindEvent(ui.ui.promptInput, 'keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmitActionClick(false); } }); // ★ 访问 ui.ui.promptInput
-    bindEvent(ui.ui.promptInput, 'input', ui.autoResizePromptInput); // ★ 访问 ui.ui.promptInput, ui.autoResizePromptInput
-    bindEvent(ui.ui.promptInput, 'paste', () => setTimeout(ui.autoResizePromptInput, 0)); // ★ 访问 ui.ui.promptInput, ui.autoResizePromptInput
+    bindEvent(ui.ui.promptInput, 'input', () => {
+        ui.autoResizePromptInput(); // 自动调整大小
+        // 只有当当前对话不在生成响应时，才根据输入内容更新按钮状态
+        const currentConv = state.getCurrentConversation();
+        if (currentConv && !state.isConversationGenerating(currentConv.id)) {
+            utils.updateSubmitButtonState(false, ui.ui.submitActionBtn); // 按钮始终启用
+        }
+    });    bindEvent(ui.ui.promptInput, 'paste', () => setTimeout(ui.autoResizePromptInput, 0)); // ★ 访问 ui.ui.promptInput, ui.autoResizePromptInput
     bindEvent(ui.ui.uploadFileBtnInline, 'click', () => ui.ui.fileInputInline.click()); // ★ 访问 ui.ui.uploadFileBtnInline, ui.ui.fileInputInline
-    bindEvent(ui.ui.fileInputInline, 'change', handleFileSelection); // ★ 访问 ui.ui.fileInputInline
-    bindEvent(document.getElementById('clear-prompt-btn'), 'click', () => {
-        if (ui.ui.promptInput) { // ★ 访问 ui.ui.promptInput
-            ui.ui.promptInput.value = ''; // ★ 访问 ui.ui.promptInput
-            ui.ui.promptInput.focus(); // ★ 访问 ui.ui.promptInput
-            ui.autoResizePromptInput(); // ★ 访问 ui.autoResizePromptInput
+    bindEvent(ui.ui.fileInputInline, 'change', async (e) => {
+        await handleFileSelection(e); 
+    });    
+     bindEvent(document.getElementById('clear-prompt-btn'), 'click', () => {
+        if (ui.ui.promptInput) {
+            ui.ui.promptInput.value = '';
+            ui.ui.promptInput.focus();
+            ui.autoResizePromptInput();
+            // 清空后，如果当前对话不在生成响应，更新按钮状态
+            const currentConv = state.getCurrentConversation();
+            if (currentConv && !state.isConversationGenerating(currentConv.id)) {
+                utils.updateSubmitButtonState(false, ui.ui.submitActionBtn); // 按钮始终启用
+            }
         }
     });
+
 
     document.addEventListener('loadConversationRequest', (e) => {
         if (e.detail && e.detail.conversationId) {

@@ -795,58 +795,54 @@ export function handlePresetFormSubmit(event) {
 // 在 ui.js 中
 
 export function renderFilePreview() {
-    // 确保 ui.filePreviewArea 存在
     if (!ui.filePreviewArea) return;
 
-    // 清空现有的所有预览
     ui.filePreviewArea.innerHTML = '';
 
-    // 如果有待上传的文件，则开始渲染
     if (state.uploadedFilesData?.length > 0) {
         ui.filePreviewArea.style.display = 'flex';
 
-        // ★ 核心修改在这里的循环逻辑 ★
         state.uploadedFilesData.forEach((fileData, index) => {
-            // 为每一个文件创建一个预览项的容器
             const previewItem = document.createElement('div');
             previewItem.className = 'file-preview-item-sleek';
             previewItem.title = fileData.name;
 
-            // 根据文件类型，决定预览项的内容 (innerContent)
             let innerContent = '';
             if (fileData.type.startsWith('image/') && fileData.previewUrl) {
-                // 如果是图片，内容就是 <img> 标签
                 innerContent = `<img src="${fileData.previewUrl}" alt="${utils.escapeHtml(fileData.name)}" class="file-preview-image">`;
             } else {
-                // 如果是其他文件，内容就是包含文件名的 <div>
                 innerContent = `<div class="file-name-sleek">${utils.escapeHtml(fileData.name)}</div>`;
             }
 
-            // 将内容和统一的删除按钮组合起来，一次性赋给 previewItem
             previewItem.innerHTML = `
                 ${innerContent}
                 <button type="button" class="remove-file-btn-sleek" title="移除 ${utils.escapeHtml(fileData.name)}">×</button>
             `;
 
-            // 为删除按钮绑定事件
             previewItem.querySelector('.remove-file-btn-sleek').addEventListener('click', (e) => {
                 e.stopPropagation();
-                // 如果存在临时的预览URL，就释放它
                 if (fileData.previewUrl) {
                     URL.revokeObjectURL(fileData.previewUrl);
                 }
-                // 从 state 数组中移除这个文件的数据
                 state.uploadedFilesData.splice(index, 1);
-                // 重新渲染整个预览区
-                renderFilePreview();
+                // 当文件被移除时，直接重新渲染文件预览，并会触发下面的按钮更新逻辑
+                renderFilePreview(); 
             });
 
-            // 将这个创建好的预览项添加到预览区
             ui.filePreviewArea.appendChild(previewItem);
         });
     } else {
-        // 如果没有待上传的文件，则隐藏预览区
         ui.filePreviewArea.style.display = 'none';
+    }
+
+    // ★★★ 核心修复：在 renderFilePreview 函数的末尾，直接调用 updateSubmitButtonState ★★★
+    // 确保导入了 state 和 utils
+    const currentConv = state.getCurrentConversation(); // 获取当前对话
+    // 只有当当前对话存在且它没有正在生成响应时，才更新按钮状态
+    // 如果它正在生成，按钮应该是“停止”，不应被输入内容影响
+    if (currentConv && !state.isConversationGenerating(currentConv.id)) {
+        // utils.updateSubmitButtonState(isGenerating, buttonElement)
+        utils.updateSubmitButtonState(false, ui.submitActionBtn); // 按钮始终启用
     }
 }
 

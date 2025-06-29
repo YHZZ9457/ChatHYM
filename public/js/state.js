@@ -8,8 +8,9 @@ export let conversations = [];
 export let currentConversationId = null;
 
 // --- 请求与响应状态 ---
-export let isGeneratingResponse = false;
-export let currentAbortController = null;
+// ★ 核心：不再是全局 isGeneratingResponse，而是按对话ID追踪
+export let generatingConversations = new Set(); // 存储正在生成响应的对话ID
+export let conversationAbortControllers = new Map(); // 存储每个对话的 AbortController
 
 // --- 文件上传数据 ---
 export let uploadedFilesData = [];
@@ -65,6 +66,37 @@ export const DEFAULT_MAX_TOKENS_PLACEHOLDER = 4096;
     // ... 其他对话属性，如 archived, isPinned
   }
 */
+
+// ★ 新增：按对话ID设置生成状态
+export function setConversationGeneratingStatus(convId, status) {
+    if (status) {
+        generatingConversations.add(convId);
+    } else {
+        generatingConversations.delete(convId);
+    }
+    // 强制刷新按钮状态，因为这个状态变化会影响 UI
+    // 注意：这里的 ui 模块可能还没加载，所以不能直接调用 ui.updateSubmitButtonState
+    // 应该通过事件或者在 script.js 中集中处理
+}
+
+// ★ 新增：按对话ID获取生成状态
+export function isConversationGenerating(convId) {
+    return generatingConversations.has(convId);
+}
+
+// ★ 新增：按对话ID设置 AbortController
+export function setConversationAbortController(convId, controller) {
+    if (controller) {
+        conversationAbortControllers.set(convId, controller);
+    } else {
+        conversationAbortControllers.delete(convId);
+    }
+}
+
+// ★ 新增：按对话ID获取 AbortController
+export function getConversationAbortController(convId) {
+    return conversationAbortControllers.get(convId);
+}
 
 /**
  * 获取当前活动（被选中）的对话对象。

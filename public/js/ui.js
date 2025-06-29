@@ -431,41 +431,65 @@ export function processPreBlocksForCopyButtons(containerElement) {
  */
 export function createTemporaryMessageElement(role) {
     const messageWrapperDiv = document.createElement('div');
+    // 添加一个特殊类名，以便在 DOM 中唯一标识它
     messageWrapperDiv.className = `message-wrapper ${role === 'user' ? 'user-message-wrapper' : 'assistant-message-wrapper'} temporary-stream-message`;
     
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role === 'assistant' || role === 'model' ? 'assistant' : 'user'}`;
 
+    // 思考过程区 (默认隐藏，直到有内容)
     const reasoningBlockDiv = document.createElement('div');
     reasoningBlockDiv.className = 'reasoning-block';
-    reasoningBlockDiv.style.display = 'none'; // Initially hidden
+    reasoningBlockDiv.style.display = 'none'; 
     reasoningBlockDiv.innerHTML = `<div class="reasoning-label"><span>思考过程:</span><button type="button" class="copy-reasoning-btn">复制</button></div><div class="reasoning-content"></div>`;
     messageDiv.appendChild(reasoningBlockDiv);
 
+    // 内容区 (开始时可以放一个“正在生成”的泡泡)
     const contentDiv = document.createElement('div');
     contentDiv.className = 'text';
     const markdownContainer = document.createElement('span');
     markdownContainer.className = 'markdown-content';
+    // 初始内容可以是一个小的加载泡泡
+    markdownContainer.innerHTML = `<div class="loading-indicator-bubble inline-loading-indicator"><span>正在生成…</span></div>`;
     contentDiv.appendChild(markdownContainer);
     messageDiv.appendChild(contentDiv);
 
-    // Add a basic loading indicator for streaming
+    // 操作按钮容器 (空，或可加入一些通用操作)
     const actionsContainer = document.createElement('div');
     actionsContainer.className = 'message-actions-container';
-    const loader = document.createElement('div');
-    loader.className = 'loading-indicator-bubble inline-loading-indicator';
-    loader.innerHTML = '<span>正在生成…</span>';
-    actionsContainer.appendChild(loader);
-    
     messageWrapperDiv.appendChild(messageDiv);
     messageWrapperDiv.appendChild(actionsContainer);
 
-    // Attach references for stream updates
+    // 附加引用，方便外部访问和更新
     messageWrapperDiv.contentSpan = markdownContainer;
     messageWrapperDiv.reasoningContentEl = reasoningBlockDiv.querySelector('.reasoning-content');
     messageWrapperDiv.reasoningBlockEl = reasoningBlockDiv;
+    messageWrapperDiv.inlineLoader = markdownContainer.querySelector('.inline-loading-indicator'); // 方便移除内部加载
 
     return messageWrapperDiv;
+}
+
+
+// ui.js (appendLoading 函数)
+// 这个函数现在将变得非常简单，它只用于创建一个最基础的“对方正在输入”消息，
+// 主要是为了在没有实际流式回复时（例如等待第一个数据块）提供一个提示。
+// 它的生命周期由 processApiRequest 严格管理。
+export function appendLoading() {
+    if (!ui.messagesContainer) return null;
+    if (ui.emptyChatPlaceholder) ui.emptyChatPlaceholder.style.display = 'none';
+
+    const loadingWrapper = document.createElement('div');
+    // 添加一个特定类名，以便 processApiRequest 在收到流时可以识别并移除它
+    loadingWrapper.className = 'message-wrapper assistant-message-wrapper temporary-initial-loading-message'; 
+    
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message assistant';
+    messageDiv.innerHTML = `<div class="loading-indicator-bubble"><span>对方正在输入…</span></div>`;
+    
+    loadingWrapper.appendChild(messageDiv);
+    ui.messagesContainer.appendChild(loadingWrapper);
+    ui.messagesContainer.scrollTop = ui.messagesContainer.scrollHeight;
+    return loadingWrapper;
 }
 
 
@@ -1306,15 +1330,7 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
 
 
 
-export function appendLoading() {
-    if (!ui.messagesContainer) return null;
-    const loadingWrapper = document.createElement('div');
-    loadingWrapper.className = 'loading-indicator-wrapper';
-    loadingWrapper.innerHTML = `<div class="loading-indicator-bubble"><span>对方正在输入…</span></div>`;
-    ui.messagesContainer.appendChild(loadingWrapper);
-    ui.messagesContainer.scrollTop = ui.messagesContainer.scrollHeight;
-    return loadingWrapper;
-}
+
 
 /**
  * 渲染侧边栏的对话列表。

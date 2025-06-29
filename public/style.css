@@ -3597,3 +3597,63 @@ body.light-theme .conversation-item .conversation-title-input:focus {
 .conversation-item.editing-title .conversation-item-actions {
     display: none;
 }
+
+/* 1. 让最外层包装器居中 */
+.message-wrapper.temporary-initial-loading-message {
+    align-self: flex-start; /* ★ 核心修复：改为靠左对齐 */
+    /* 移除导致居中的 auto margin */
+    margin-left: unset; /* ★ 移除自动左外边距 */
+    margin-right: unset; /* ★ 移除自动右外边距 */
+
+    max-width: fit-content; 
+    box-shadow: none; 
+    background-color: transparent; 
+    border: none; 
+    padding: 0; 
+}
+
+/* 2. 消息气泡本身的样式调整 */
+.message-wrapper.temporary-initial-loading-message .message {
+    /* 移除消息气泡的默认边框/背景/阴影，因为它现在只是一个指示器 */
+    background-color: transparent; /* 透明背景 */
+    box-shadow: none; /* 移除阴影 */
+    border: none; /* 移除边框 */
+    padding: 0; /* 移除内边距 */
+}
+
+/* 3. 针对 .loading-indicator-bubble 的样式优化 */
+/* 这个类在 ui.appendLoading() 和 ui.createTemporaryMessageElement() 内部都使用了 */
+.loading-indicator-bubble {
+    height: 38px;
+    width: fit-content;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 16px;
+    box-sizing: border-box;
+    border: 1px solid var(--border-color); /* 使用主题边框色 */
+    border-radius: 999px; /* 椭圆形 */
+    color: var(--text-secondary); /* 使用次要文字颜色 */
+    background-color: var(--bg-secondary); /* 使用次要背景色，更柔和 */
+    font-size: 0.9rem;
+    animation: loading-pulse 2.5s infinite ease-in-out;
+    flex-shrink: 0; /* 防止被压缩 */
+}
+
+/* 亮色主题下的调整 */
+body.light-theme .loading-indicator-bubble {
+    background-color: #f0f2f5; /* 亮色下更浅的背景 */
+    border-color: #d1d5db; /* 亮色下更浅的边框 */
+    color: #52525b; /* 亮色下次要文字颜色 */
+}
+
+/* 动画保持不变 */
+@keyframes loading-pulse {
+  0%,
+  100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}

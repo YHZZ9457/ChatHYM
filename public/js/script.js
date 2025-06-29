@@ -23,69 +23,68 @@ import * as ui from './ui.js'; // ★ 统一使用 'ui' 作为模块别名
  *                                             注意：此参数现在仅用于在 `addOrUpdateFinalMessageInState` 中
  *                                             设置 `activeMessageId` 为父消息，而非直接进行DOM替换。
  */
-async function processApiRequest(targetConv) { // ★ 核心：接收目标对话对象
-    const convId = targetConv.id; // 获取本次请求的对话ID
+async function processApiRequest(targetConv) {
+    const convId = targetConv.id;
 
-    // 1. 设置状态：这个对话正在生成响应
     state.setConversationGeneratingStatus(convId, true);
-    // 更新当前显示对话的按钮状态 (如果它就是当前活跃对话)
     if (state.currentConversationId === convId) {
         utils.updateSubmitButtonState(true, ui.ui.submitActionBtn);
     }
 
-    let tempMessageWrapper = null; // 本次请求专用的临时 DOM 元素
-    let globalLoadingDiv = null;   // 本次请求专用的加载指示器
+    let tempMessageWrapper = null; 
+    let initialLoadingIndicator = null; // 初始的“对方正在输入”占位符
 
-    // 在 UI 中添加加载指示器 (只对当前活跃的对话显示)
+    // 仅当是当前活跃对话时才显示初始加载指示器
     if (state.currentConversationId === convId && ui.ui.messagesContainer) {
-        globalLoadingDiv = document.createElement('div');
-        globalLoadingDiv.className = 'loading-indicator-wrapper global-loading-indicator';
-        globalLoadingDiv.innerHTML = `<div class="loading-indicator-bubble"><span>正在加载…</span></div>`;
-        ui.ui.messagesContainer.appendChild(globalLoadingDiv);
-        ui.ui.messagesContainer.scrollTop = ui.ui.messagesContainer.scrollHeight;
-    } else if (state.currentConversationId !== convId) {
+        initialLoadingIndicator = ui.appendLoading(); // 使用 ui.appendLoading
+        // 不再添加 global-loading-indicator 类，因为它的生命周期由这里控制
+    } else {
         console.log(`[Stream] Initiating background request for conv ${convId}.`);
     }
 
-    // 这些累积变量现在是 processApiRequest 实例的局部变量
     let accumulatedReply = '';                             
     let accumulatedReasoningForStream = '';                
-    let usageData = null; // usageData 从 api.send 的 onStreamChunk 传来并累积
-
+    let usageData = null; 
     const responseRole = targetConv.model.startsWith('gemini::') ? 'model' : 'assistant';
 
-    // handleStreamChunk 仅操作属于它这个请求实例的变量
     const handleStreamChunk = (result) => {
-        // ★ 核心：如果用户已经切换到其他对话，则停止更新这个流的 UI 元素 ★
+        // 如果用户切换到其他对话，则停止更新 UI 元素
         if (state.currentConversationId !== convId) { 
-            console.warn(`[Stream] Ignoring UI update for conversation ${convId}, active conversation is ${state.currentConversationId}.`);
-            return; // 忽略 UI 更新
+            console.log(`[Stream] Ignoring UI update for conversation ${convId}, active conversation is ${state.currentConversationId}.`);
+            // 此时不移除任何指示器，因为它们将在 finally 中统一处理
+            return; 
         }
 
-        // 移除本次请求的加载指示器
-        if (globalLoadingDiv && globalLoadingDiv.parentNode) {
-            globalLoadingDiv.remove();
-            globalLoadingDiv = null;
+        // ★★★ 核心修复：在收到第一个流式数据块时，移除初始的“对方正在输入”占位符 ★★★
+        if (initialLoadingIndicator && initialLoadingIndicator.parentNode) {
+            initialLoadingIndicator.remove();
+            initialLoadingIndicator = null;
+        }
+        // 移除 loadConversationFlow 可能添加的占位符（如果它属于这个对话）
+        const existingPlaceholderFromLoad = ui.ui.messagesContainer.querySelector(`.loading-indicator-wrapper[data-conv-id="${convId}"]`);
+        if (existingPlaceholderFromLoad) {
+            existingPlaceholderFromLoad.remove();
         }
 
-        // 创建本次请求的临时消息包装器
+        // ★★★ 核心修复：如果 tempMessageWrapper 尚未创建，现在就创建它 ★★★
+        // 并且它将包含一个“正在生成”的内联泡泡
         if (!tempMessageWrapper) {
             tempMessageWrapper = ui.createTemporaryMessageElement(responseRole); 
-            // 确保只添加到当前显示的对话容器
             if (ui.ui.messagesContainer) {
                 ui.ui.messagesContainer.appendChild(tempMessageWrapper); 
                 ui.ui.messagesContainer.scrollTop = ui.ui.messagesContainer.scrollHeight; 
             }
         }
         
-        const inlineLoader = tempMessageWrapper.querySelector('.inline-loading-indicator');
-        if (inlineLoader) {
-            inlineLoader.remove();
+        // 移除 tempMessageWrapper 内部的初始加载指示器，因为已经有实际内容了
+        if (tempMessageWrapper.inlineLoader) {
+            tempMessageWrapper.inlineLoader.remove();
+            tempMessageWrapper.inlineLoader = null; // 清空引用
         }
 
         if (result.reply) accumulatedReply += result.reply;
         if (result.reasoning) accumulatedReasoningForStream += result.reasoning; 
-        if (result.usage) usageData = { ...usageData, ...result.usage }; // 累积 usage
+        if (result.usage) usageData = { ...usageData, ...result.usage }; 
 
         let currentThinkingText = ''; 
         let currentReplyText = '';    
@@ -123,25 +122,24 @@ async function processApiRequest(targetConv) { // ★ 核心：接收目标对�
         }
     };
 
-    let finalResultFromApi = null; // Store final result from api.send
+    let finalResultFromApi = null; 
     try {
-        const historyForApi = conversation.getCurrentBranchMessages(targetConv); // 获取目标对话的历史
+        const historyForApi = conversation.getCurrentBranchMessages(targetConv); 
         const abortController = new AbortController();
-        state.setConversationAbortController(convId, abortController); // 存储 AbortController
+        state.setConversationAbortController(convId, abortController); 
 
         finalResultFromApi = await api.send(historyForApi, handleStreamChunk, abortController.signal);
         
         let finalAssistantReply = finalResultFromApi.reply;
         let finalAssistantReasoning = finalResultFromApi.reasoning; 
 
-        if (!finalResultFromApi.aborted && targetConv.title === '新对话') { // 使用 targetConv
+        if (!finalResultFromApi.aborted && targetConv.title === '新对话') { 
             const newTitle = utils.stripMarkdown(finalAssistantReply).substring(0, 20).trim();
-            if (newTitle) targetConv.title = newTitle; // 更新 targetConv 的标题
+            if (newTitle) targetConv.title = newTitle; 
         }
 
-        // 保存最终消息到状态中。addMessageToConversation 接收 targetConv
         conversation.addMessageToConversation(targetConv, responseRole, finalAssistantReply, {
-            model: targetConv.model, // 使用 targetConv 的模型
+            model: targetConv.model, 
             reasoning_content: finalAssistantReasoning, 
             usage: finalResultFromApi.usage, 
         });
@@ -161,27 +159,69 @@ async function processApiRequest(targetConv) { // ★ 核心：接收目标对�
             conversation.addMessageToConversation(targetConv, responseRole, `错误: ${error.message || "请求失败"}`, { model: targetConv.model });
         }
     } finally {
-        // 无论成功、失败或中止，都清除这个对话的生成状态和 AbortController
         state.setConversationGeneratingStatus(convId, false);
         state.setConversationAbortController(convId, null);
 
-        // 如果这个请求所属的对话仍然是当前激活的对话，才更新 UI
-        if (state.currentConversationId === convId) { 
-            utils.updateSubmitButtonState(false, ui.ui.submitActionBtn); // 更新按钮为“发送”
-            
-            if (tempMessageWrapper && tempMessageWrapper.parentNode) {
-                tempMessageWrapper.remove();
-            }
-            if (globalLoadingDiv && globalLoadingDiv.parentNode) {
-                globalLoadingDiv.remove();
-            }
-            // 重新渲染当前对话的 UI，确保显示最终结果
-            ui.loadAndRenderConversationUI(targetConv); // 使用 targetConv 刷新 UI
-            ui.renderConversationList(); // 刷新侧边栏列表 (可能更新标题)
-        } else {
-            // 如果用户已经切换了对话，则只做内部状态清理，不更新 UI
-            console.log(`[Stream] Request for conversation ${convId} finished, but active conversation is ${state.currentConversationId}. Skipping final UI render.`);
+        // ★★★ 核心修复：在 finally 块中统一移除所有临时 UI 元素 ★★★
+        if (tempMessageWrapper && tempMessageWrapper.parentNode) {
+            tempMessageWrapper.remove();
         }
+        if (initialLoadingIndicator && initialLoadingIndicator.parentNode) { 
+            initialLoadingIndicator.remove();
+        }
+        const currentPlaceholder = ui.ui.messagesContainer.querySelector(`.loading-indicator-wrapper[data-conv-id="${convId}"]`);
+        if (currentPlaceholder) {
+            currentPlaceholder.remove();
+        }
+        
+        if (state.currentConversationId === convId) { 
+            utils.updateSubmitButtonState(false, ui.ui.submitActionBtn); 
+            ui.loadAndRenderConversationUI(targetConv); 
+            ui.renderConversationList(); 
+        } else {
+            console.log(`[Stream] Request for conversation ${convId} finished, but active conversation is ${state.currentConversationId}. Skipping final UI render.`);
+            ui.renderConversationList(); 
+        }
+    }
+}
+
+
+
+// script.js (loadConversationFlow 函数)
+
+function loadConversationFlow(conversationId) {
+    if (!conversationId) return;
+    const convToLoad = conversation.getConversationById(conversationId);
+    if (convToLoad) {
+        state.setCurrentConversationId(conversationId);
+        if (convToLoad.isNew) {
+            convToLoad.isNew = false;
+            conversation.saveConversations();
+        }
+        
+        ui.loadAndRenderConversationUI(convToLoad); 
+
+        const isGeneratingForThisConv = state.isConversationGenerating(conversationId);
+        utils.updateSubmitButtonState(isGeneratingForThisConv, ui.ui.submitActionBtn); 
+        
+        // ★★★ 核心修复：如果这个对话正在生成响应，显示占位符 ★★★
+        // 这个占位符现在是“对方正在输入…”的泡泡，它属于这个对话。
+        if (isGeneratingForThisConv) {
+            // 确保没有重复的占位符
+            const existingPlaceholder = ui.ui.messagesContainer.querySelector(`.loading-indicator-wrapper[data-conv-id="${conversationId}"]`);
+            if (!existingPlaceholder) {
+                const placeholder = ui.appendLoading(); // 使用你现有的 appendLoading 函数
+                if (placeholder) {
+                    placeholder.dataset.convId = conversationId; // 标记占位符属于哪个对话
+                }
+            }
+            // 如果这个对话正在生成，并且已经有一个临时流式消息在 DOM 中（用户切换回来时），
+            // 那么它应该被重新定位到当前对话的末尾。
+            // 暂时不处理重定位，依赖 loadAndRenderConversationUI 重新渲染。
+        }
+
+    } else {
+        console.warn(`Attempted to load a non-existent conversation: ${conversationId}`);
     }
 }
 
@@ -274,30 +314,7 @@ async function handleFileSelection(event) {
     event.target.value = null; // 清空<input>的值，以便可以再次选择同一个文件
 }
 
-/**
- * 协调加载特定对话的流程
- */
-function loadConversationFlow(conversationId) {
-    if (!conversationId) return;
-    const convToLoad = conversation.getConversationById(conversationId);
-    if (convToLoad) {
-        state.setCurrentConversationId(conversationId);
-        if (convToLoad.isNew) {
-            convToLoad.isNew = false;
-            conversation.saveConversations();
-        }
-        
-        ui.loadAndRenderConversationUI(convToLoad); 
 
-        // ★★★ 核心修复：加载新对话时，根据新对话的实际生成状态更新按钮 ★★★
-        // 按钮的可用性始终为 true (因为无内容时靠 toast 阻止)
-        const isGeneratingForThisConv = state.isConversationGenerating(conversationId);
-        utils.updateSubmitButtonState(isGeneratingForThisConv, ui.ui.submitActionBtn); 
-        
-    } else {
-        console.warn(`Attempted to load a non-existent conversation: ${conversationId}`);
-    }
-}
 
 // ========================================================================
 // 3. 应用主逻辑函数

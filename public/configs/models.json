@@ -206,6 +206,11 @@
           "text": "SF MiniMax-M1",
           "value": "siliconflow::MiniMaxAI/MiniMax-M1-80k",
           "isHidden": false
+        },
+        {
+          "text": "SF Hunyuan-A13B",
+          "value": "siliconflow::tencent/Hunyuan-A13B-Instruct",
+          "isHidden": false
         }
       ]
     },

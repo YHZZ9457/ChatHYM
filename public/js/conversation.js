@@ -520,7 +520,6 @@ function getBranchIds(allMessages, startNodeId) {
     return branchIds;
 }
 
-// --- START OF FILE conversation.js (The final, correct deleteMessageAndHandleChildren function) ---
 
 /**
  * 删除单条消息或整个分支，并智能处理后续UI状态。
@@ -530,7 +529,7 @@ function getBranchIds(allMessages, startNodeId) {
  * @param {boolean} [silent=false] - 是否静默执行，不弹出确认框。
  * @returns {{success: boolean, nextActiveId: string|null}} 返回操作结果和下一个活动ID
  */
-export function deleteMessageAndHandleChildren(conversationId, messageId, mode, silent = false) { // ★★★ 核心修复：添加第四个参数 silent = false
+export function deleteMessageAndHandleChildren(conversationId, messageId, mode, silent = false) {
     const conv = getConversationById(conversationId);
     if (!conv) return { success: false, nextActiveId: null };
 
@@ -557,12 +556,32 @@ export function deleteMessageAndHandleChildren(conversationId, messageId, mode, 
     // --- 决定删除后的下一个活动ID ---
     let nextActiveId = null;
     if (parentId) {
-        const siblings = findChildrenOf(conv, parentId).filter(m => m.id !== messageId);
-        if (siblings.length > 0) {
-            nextActiveId = siblings[0].id;
+        // 找到父消息的所有直接子节点 (兄弟分支)，并按 ID 排序（假设 ID 是时间戳，所以可以作为顺序）
+        const siblings = findChildrenOf(conv, parentId).sort((a, b) => a.id.localeCompare(b.id)); // 确保是升序
+        
+        // 找到要删除的消息在兄弟分支中的索引
+        const deletedMessageSiblingIndex = siblings.findIndex(m => m.id === messageId);
+
+        if (deletedMessageSiblingIndex > 0) {
+            // 如果不是第一个分支，选择上一个兄弟分支的 ID
+            nextActiveId = siblings[deletedMessageSiblingIndex - 1].id;
+        } else if (siblings.length > 1) {
+            // 如果是第一个分支被删除，但还有其他兄弟分支，选择下一个兄弟分支的 ID
+            // (你也可以选择回到父消息，这里为了兼容“回到上一个”的逻辑，如果没有上一个，就回到第一个存在的兄弟)
+            nextActiveId = siblings[deletedMessageSiblingIndex + 1].id;
         } else {
+            // 如果没有其他兄弟分支（只剩下它自己，或者它是唯一一个被删除的），回到父消息
             nextActiveId = parentId;
         }
+    } else {
+        // 如果被删除的消息没有父消息 (即它是根消息，如系统指令或对话的第一条用户消息)
+        // 这种情况下，我们通常会回到一个新的对话或第一条非归档对话。
+        // 或者，如果还有其他根消息，则选择下一个可用的根消息。
+        // 对于你“删除分支回到上一个消息”的需求，如果这是根消息，则没有“上一个消息”
+        // 最安全的做法是让它回到新的对话或默认对话。
+        // 不过，由于这个函数通常只处理实际聊天消息，parentId 为 null 的情况可能很少触发删除分支模式。
+        // 如果要处理，需要更复杂的逻辑来寻找下一个根消息。
+        // 暂时保持其通过后续的 conv.messages.length > 0 逻辑来处理。
     }
 
     // --- 执行删除操作 ---
@@ -583,9 +602,13 @@ export function deleteMessageAndHandleChildren(conversationId, messageId, mode, 
     if (nextActiveId && conv.messages.some(m => m.id === nextActiveId)) {
          conv.activeMessageId = findLeafNodeId(conv, nextActiveId);
     } else if (conv.messages.length > 0) {
+         // 如果计算出的 nextActiveId 不存在（例如，上一个兄弟也被删除了，或者没有上一个），
+         // 则尝试回到对话的最后一条消息（通常是当前分支的末端）。
+         // 这是一个回退方案。
          const lastMessage = conv.messages[conv.messages.length - 1];
          conv.activeMessageId = lastMessage.id;
     } else {
+        // 如果对话被清空了
         conv.activeMessageId = null;
     }
 

@@ -123,22 +123,6 @@
       ]
     },
     {
-      "groupLabel": "Deepseek",
-      "isGroupHidden": false,
-      "options": [
-        {
-          "text": "Deepseek-V3 0324",
-          "value": "deepseek::deepseek-chat",
-          "isHidden": false
-        },
-        {
-          "text": "Deepseek-R1 0528",
-          "value": "deepseek::deepseek-reasoner",
-          "isHidden": false
-        }
-      ]
-    },
-    {
       "groupLabel": "深度求索（SiliconFlow）",
       "isGroupHidden": false,
       "options": [
@@ -165,7 +149,7 @@
         {
           "text": "SF Qwen3-30B-A3B",
           "value": "siliconflow::Qwen/Qwen3-30B-A3B",
-          "isHidden": true
+          "isHidden": false
         },
         {
           "text": "SF Qwen3-14B",
@@ -210,6 +194,27 @@
         {
           "text": "SF Hunyuan-A13B",
           "value": "siliconflow::tencent/Hunyuan-A13B-Instruct",
+          "isHidden": false
+        },
+        {
+          "text": "SF Deepseek-V3 0324",
+          "value": "SiliconFlow::deepseek-ai/DeepSeek-V3",
+          "isHidden": false
+        }
+      ]
+    },
+    {
+      "groupLabel": "Deepseek",
+      "isGroupHidden": false,
+      "options": [
+        {
+          "text": "Deepseek-V3 0324",
+          "value": "deepseek::deepseek-chat",
+          "isHidden": false
+        },
+        {
+          "text": "Deepseek-R1 0528",
+          "value": "deepseek::deepseek-reasoner",
           "isHidden": false
         }
       ]

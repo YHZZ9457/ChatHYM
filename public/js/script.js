@@ -15,13 +15,11 @@ import * as ui from './ui.js'; // ★ 统一使用 'ui' 作为模块别名
 
 
 // script.js
+// --- START OF FILE js/script.js (processApiRequest - Final Fixes) ---
 
 /**
  * 通用的API请求与处理函数
- * @param {Array} historyForApi - 发送给API的、干净的消息历史。
- * @param {HTMLElement} [targetElement=null] - (可选) 如果是重新生成，这是被替换的旧消息元素。
- *                                             注意：此参数现在仅用于在 `addOrUpdateFinalMessageInState` 中
- *                                             设置 `activeMessageId` 为父消息，而非直接进行DOM替换。
+ * @param {object} targetConv - 当前对话对象。
  */
 async function processApiRequest(targetConv) {
     const convId = targetConv.id;
@@ -31,159 +29,175 @@ async function processApiRequest(targetConv) {
         utils.updateSubmitButtonState(true, ui.ui.submitActionBtn);
     }
 
-    let tempMessageWrapper = null; 
+    let tempMessageWrapper = null;
     let initialLoadingIndicator = null; // 初始的“对方正在输入”占位符
 
     // 仅当是当前活跃对话时才显示初始加载指示器
     if (state.currentConversationId === convId && ui.ui.messagesContainer) {
         initialLoadingIndicator = ui.appendLoading(); // 使用 ui.appendLoading
-        // 不再添加 global-loading-indicator 类，因为它的生命周期由这里控制
     } else {
-        console.log(`[Stream] Initiating background request for conv ${convId}.`);
+        console.log(`[Stream Debug] Initiating background request for conv ${convId}.`);
     }
 
-    let accumulatedReply = '';                             
-    let accumulatedReasoningForStream = '';                
-    let usageData = null; 
+    let accumulatedReply = '';
+    let accumulatedReasoningForStream = '';
+    let usageData = null;
     const responseRole = targetConv.model.startsWith('gemini::') ? 'model' : 'assistant';
 
     const handleStreamChunk = (result) => {
         // 如果用户切换到其他对话，则停止更新 UI 元素
-        if (state.currentConversationId !== convId) { 
-            console.log(`[Stream] Ignoring UI update for conversation ${convId}, active conversation is ${state.currentConversationId}.`);
-            // 此时不移除任何指示器，因为它们将在 finally 中统一处理
-            return; 
+        if (state.currentConversationId !== convId) {
+            console.log(`[Stream Debug] Ignoring UI update for conversation ${convId}, active conversation is ${state.currentConversationId}.`);
+            return;
         }
+        
+        console.log("[Stream Debug] Received stream chunk:", result); // ★ 新增调试日志：每次收到数据块都打印
 
-        // ★★★ 核心修复：在收到第一个流式数据块时，移除初始的“对方正在输入”占位符 ★★★
+        // 核心：在收到第一个流式数据块时，移除初始的“对方正在输入”占位符
         if (initialLoadingIndicator && initialLoadingIndicator.parentNode) {
             initialLoadingIndicator.remove();
             initialLoadingIndicator = null;
+            console.log("[Stream Debug] Removed initial loading indicator."); // ★ 新增调试日志
         }
         // 移除 loadConversationFlow 可能添加的占位符（如果它属于这个对话）
         const existingPlaceholderFromLoad = ui.ui.messagesContainer.querySelector(`.loading-indicator-wrapper[data-conv-id="${convId}"]`);
         if (existingPlaceholderFromLoad) {
             existingPlaceholderFromLoad.remove();
+            console.log("[Stream Debug] Removed existing placeholder from loadConversationFlow."); // ★ 新增调试日志
         }
 
-        // ★★★ 核心修复：如果 tempMessageWrapper 尚未创建，现在就创建它 ★★★
-        // 并且它将包含一个“正在生成”的内联泡泡
+        // 核心：如果 tempMessageWrapper 尚未创建，现在就创建它
         if (!tempMessageWrapper) {
-            tempMessageWrapper = ui.createTemporaryMessageElement(responseRole); 
+            tempMessageWrapper = ui.createTemporaryMessageElement(responseRole);
             if (ui.ui.messagesContainer) {
-                ui.ui.messagesContainer.appendChild(tempMessageWrapper); 
-                ui.ui.messagesContainer.scrollTop = ui.ui.messagesContainer.scrollHeight; 
+                ui.ui.messagesContainer.appendChild(tempMessageWrapper);
+                // 确保滚动，但只在创建时滚动一次，或者在后面统一滚动
+                ui.ui.messagesContainer.scrollTop = ui.ui.messagesContainer.scrollHeight;
+                console.log("[Stream Debug] Created temporary message wrapper."); // ★ 新增调试日志
             }
         }
         
         // 移除 tempMessageWrapper 内部的初始加载指示器，因为已经有实际内容了
         if (tempMessageWrapper.inlineLoader) {
             tempMessageWrapper.inlineLoader.remove();
-            tempMessageWrapper.inlineLoader = null; // 清空引用
+            tempMessageWrapper.inlineLoader = null;
+            console.log("[Stream Debug] Removed inline loader from temporary message."); // ★ 新增调试日志
         }
 
         if (result.reply) accumulatedReply += result.reply;
-        if (result.reasoning) accumulatedReasoningForStream += result.reasoning; 
-        if (result.usage) usageData = { ...usageData, ...result.usage }; 
+        if (result.reasoning) accumulatedReasoningForStream += result.reasoning;
+        if (result.usage) usageData = { ...usageData, ...result.usage };
 
-        let currentThinkingText = ''; 
-        let currentReplyText = '';    
+        let currentThinkingText = '';
+        let currentReplyText = '';
 
         if (accumulatedReasoningForStream.trim().length > 0) {
             currentThinkingText = accumulatedReasoningForStream;
-            currentReplyText = accumulatedReply; 
+            currentReplyText = accumulatedReply;
         } else {
             const extraction = utils.extractThinkingAndReply(accumulatedReply, '<think>', '</think>');
             currentThinkingText = extraction.thinkingText;
-            currentReplyText = extraction.replyText; 
+            currentReplyText = extraction.replyText;
         }
         
+        // 核心：更新临时消息元素的 DOM 内容
         if (tempMessageWrapper.contentSpan) {
-            tempMessageWrapper.contentSpan.dataset.fullRawContent = accumulatedReply; 
-            tempMessageWrapper.contentSpan.innerHTML = marked.parse(currentReplyText); 
-            ui.processPreBlocksForCopyButtons(tempMessageWrapper.contentSpan); 
-            utils.pruneEmptyNodes(tempMessageWrapper.contentSpan); 
+            tempMessageWrapper.contentSpan.dataset.fullRawContent = accumulatedReply;
+            tempMessageWrapper.contentSpan.innerHTML = marked.parse(currentReplyText);
+            ui.processPreBlocksForCopyButtons(tempMessageWrapper.contentSpan);
+            utils.pruneEmptyNodes(tempMessageWrapper.contentSpan);
+            console.log("[Stream Debug] Updated temporary message content."); // ★ 新增调试日志
         }
         
         if (tempMessageWrapper.reasoningContentEl) {
-            tempMessageWrapper.reasoningContentEl.textContent = currentThinkingText; 
+            tempMessageWrapper.reasoningContentEl.textContent = currentThinkingText;
             if (tempMessageWrapper.reasoningBlockEl) {
                 tempMessageWrapper.reasoningBlockEl.style.display = currentThinkingText.trim().length > 0 ? 'block' : 'none';
+                console.log("[Stream Debug] Updated reasoning content display."); // ★ 新增调试日志
             }
         }
         
-        if (ui.ui.messagesContainer) { 
-            const dist = ui.ui.messagesContainer.scrollHeight - ui.ui.messagesContainer.clientHeight - ui.ui.messagesContainer.scrollTop; 
-            if (dist < 200) {
-                requestAnimationFrame(() => { 
-                    ui.ui.messagesContainer.scrollTop = ui.ui.messagesContainer.scrollHeight; 
+        // 自动滚动到底部
+        if (ui.ui.messagesContainer) {
+            const dist = ui.ui.messagesContainer.scrollHeight - ui.ui.messagesContainer.clientHeight - ui.ui.messagesContainer.scrollTop;
+            if (dist < 200) { // 只有在接近底部时才自动滚动
+                requestAnimationFrame(() => {
+                    ui.ui.messagesContainer.scrollTop = ui.ui.messagesContainer.scrollHeight;
                 });
             }
         }
     };
 
-    let finalResultFromApi = null; 
+    let finalResultFromApi = null;
     try {
-        const historyForApi = conversation.getCurrentBranchMessages(targetConv); 
+        const historyForApi = conversation.getCurrentBranchMessages(targetConv);
         const abortController = new AbortController();
-        state.setConversationAbortController(convId, abortController); 
+        state.setConversationAbortController(convId, abortController);
 
         finalResultFromApi = await api.send(historyForApi, handleStreamChunk, abortController.signal);
         
+        // ... (后续的非流式处理和错误处理逻辑不变) ...
         let finalAssistantReply = finalResultFromApi.reply;
-        let finalAssistantReasoning = finalResultFromApi.reasoning; 
+        let finalAssistantReasoning = finalResultFromApi.reasoning;
 
-        if (!finalResultFromApi.aborted && targetConv.title === '新对话') { 
+        if (!finalResultFromApi.aborted && targetConv.title === '新对话') {
             const newTitle = utils.stripMarkdown(finalAssistantReply).substring(0, 20).trim();
-            if (newTitle) targetConv.title = newTitle; 
+            if (newTitle) targetConv.title = newTitle;
         }
 
         conversation.addMessageToConversation(targetConv, responseRole, finalAssistantReply, {
-            model: targetConv.model, 
-            reasoning_content: finalAssistantReasoning, 
-            usage: finalResultFromApi.usage, 
+            model: targetConv.model,
+            reasoning_content: finalAssistantReasoning,
+            usage: finalResultFromApi.usage,
         });
 
     } catch (error) {
         if (error.name === 'AbortError') {
             let abortedReply = finalResultFromApi?.reply || (accumulatedReply.trim() || "");
-            let abortedReasoning = finalResultFromApi?.reasoning || (accumulatedReasoningForStream.trim() || null); 
+            let abortedReasoning = finalResultFromApi?.reasoning || (accumulatedReasoningForStream.trim() || null);
 
             conversation.addMessageToConversation(targetConv, responseRole, abortedReply + "\n（用户已中止）", {
                 model: targetConv.model,
                 reasoning_content: abortedReasoning,
-                usage: finalResultFromApi?.usage || usageData, 
+                usage: finalResultFromApi?.usage || usageData,
             });
+            console.warn("[Stream Debug] Request aborted by user."); // ★ 新增调试日志
         } else {
-            console.error(`[API Send] 请求失败:`, error);
+            console.error(`[Stream Debug] API Request Failed:`, error); // ★ 修改日志级别和信息
             conversation.addMessageToConversation(targetConv, responseRole, `错误: ${error.message || "请求失败"}`, { model: targetConv.model });
         }
     } finally {
         state.setConversationGeneratingStatus(convId, false);
         state.setConversationAbortController(convId, null);
 
-        // ★★★ 核心修复：在 finally 块中统一移除所有临时 UI 元素 ★★★
+        // 核心修复：在 finally 块中统一移除所有临时 UI 元素
         if (tempMessageWrapper && tempMessageWrapper.parentNode) {
             tempMessageWrapper.remove();
+            console.log("[Stream Debug] Removed final temporary message wrapper."); // ★ 新增调试日志
         }
-        if (initialLoadingIndicator && initialLoadingIndicator.parentNode) { 
+        if (initialLoadingIndicator && initialLoadingIndicator.parentNode) {
             initialLoadingIndicator.remove();
+            console.log("[Stream Debug] Removed initial loading indicator in finally."); // ★ 新增调试日志
         }
         const currentPlaceholder = ui.ui.messagesContainer.querySelector(`.loading-indicator-wrapper[data-conv-id="${convId}"]`);
         if (currentPlaceholder) {
             currentPlaceholder.remove();
+            console.log("[Stream Debug] Removed lingering placeholder in finally."); // ★ 新增调试日志
         }
         
-        if (state.currentConversationId === convId) { 
-            utils.updateSubmitButtonState(false, ui.ui.submitActionBtn); 
-            ui.loadAndRenderConversationUI(targetConv); 
-            ui.renderConversationList(); 
+        if (state.currentConversationId === convId) {
+            utils.updateSubmitButtonState(false, ui.ui.submitActionBtn);
+            ui.loadAndRenderConversationUI(targetConv); // 重新渲染最终消息和分支
+            ui.renderConversationList(); // 刷新侧边栏标题等
+            console.log("[Stream Debug] Final UI update for current conversation."); // ★ 新增调试日志
         } else {
-            console.log(`[Stream] Request for conversation ${convId} finished, but active conversation is ${state.currentConversationId}. Skipping final UI render.`);
-            ui.renderConversationList(); 
+            console.log(`[Stream Debug] Request for conversation ${convId} finished, but active conversation is ${state.currentConversationId}. Skipping immediate UI render.`);
+            ui.renderConversationList(); // 刷新侧边栏标题等
         }
     }
 }
+
+// --- END OF FILE js/script.js (processApiRequest - Final Fixes) ---
 
 
 
@@ -521,28 +535,43 @@ bindEvent(ui.ui.maxTokensInputInline, 'change', (e) => { // ★ 访问 ui.ui.max
     });
 
     // ★★★ 在这里添加 API Key 保存按钮的事件绑定 ★★★
-    bindEvent(ui.ui.saveApiKeyBtn, 'click', async () => { // ★ 访问 ui.ui.saveApiKeyBtn
-        const provider = ui.ui.apiProviderSelect.value; // ★ 访问 ui.ui.apiProviderSelect
-        const apiKey = ui.ui.apiKeyInput.value.trim(); // ★ 访问 ui.ui.apiKeyInput
+    // ★★★ 在 bindEventListeners 中，找到这段代码并修改 ★★★
+bindEvent(ui.ui.saveApiKeyBtn, 'click', async () => {
+    const provider = ui.ui.apiProviderSelect.value;
+    const apiKey = ui.ui.apiKeyInput.value.trim();
+    // const apiEndpoint = ui.ui.apiEndpointInput.value.trim(); // <-- 删除这一行
 
-        if (!provider) {
-            utils.showToast('请选择一个 API 提供商。', 'warning');
-            return;
-        }
-        if (!apiKey) {
-            utils.showToast('API Key 不能为空。', 'warning');
-            return;
-        }
+    if (!provider) {
+        utils.showToast('请选择一个 API 提供商。', 'warning');
+        return;
+    }
+    
+    // ★ 按要求，现在只检查 API Key 是否输入
+    if (!apiKey) {
+        utils.showToast('请输入 API Key。', 'warning');
+        return;
+    }
 
-        const success = await api.saveApiKey(provider, apiKey);
-        if (success) {
-            // 保存成功后，立即刷新状态
-            const configuredProviders = await api.getKeysStatus();
-            ui.updateApiKeyStatusUI(configuredProviders); // ★ 访问 ui.updateApiKeyStatusUI
-            // 清空输入框，以显示占位符
-            ui.ui.apiKeyInput.value = ''; // ★ 访问 ui.ui.apiKeyInput
-        }
-    });
+    // ★ 更新调用，不再传递 apiEndpoint
+    const success = await api.saveApiKey(provider, apiKey); 
+    if (success) {
+        const configuredProviders = await api.getKeysStatus();
+        ui.updateApiKeyStatusUI(configuredProviders);
+        ui.ui.apiKeyInput.value = '';
+        // ui.ui.apiEndpointInput.value = ''; // <-- 删除这一行
+    }
+});
+
+// ★★★ 在 bindEventListeners 中，找到并删除或注释掉这一行 ★★★
+// bindEvent(ui.ui.showApiKeyManagementBtn, 'click', ui.showApiKeyManagement);
+
+// ★★★ 在 bindEventListeners 中，添加新的按钮事件绑定 ★★★
+const manageProvidersBtn = document.getElementById('manage-providers-from-settings-btn');
+if (manageProvidersBtn) {
+    bindEvent(manageProvidersBtn, 'click', ui.showProviderManagement);
+} else {
+    console.warn("[script.js] '管理提供商' 按钮 (manage-providers-from-settings-btn) 未找到。");
+}
     bindEvent(ui.ui.importFileInput, 'change', async e => { // ★ 访问 ui.ui.importFileInput
         const file = e.target.files[0]; if (!file) return;
         try {
@@ -579,6 +608,17 @@ bindEvent(ui.ui.maxTokensInputInline, 'change', (e) => { // ★ 访问 ui.ui.max
     bindEvent(ui.ui.savePresetsToFileBtn, 'click', () => api.savePresetsToFile(true).then(ui.populatePresetPromptsList)); // ★ 访问 ui.ui.savePresetsToFileBtn, ui.populatePresetPromptsList
     bindEvent(ui.ui.presetForm, 'submit', ui.handlePresetFormSubmit); // ★ 访问 ui.ui.presetForm, ui.handlePresetFormSubmit
     
+    console.log("[Bind Events Debug] Attempting to bind showApiKeyManagementBtn.");
+    console.log("[Bind Events Debug] ui.ui.showApiKeyManagementBtn is:", ui.ui.showApiKeyManagementBtn);
+
+
+    if (ui.ui.backToSettingsFromApiKeyBtn) {
+        bindEvent(ui.ui.backToSettingsFromApiKeyBtn, 'click', ui.showSettings);
+    } else {
+        console.warn("[script.js] '返回设置' 按钮 (backToSettingsFromApiKeyBtn) 未找到，请检查 HTML ID。");
+    }
+
+
     // ★★★ 核心修复：使用 'ui.ui' 访问模态框元素 ★★★
     bindEvent(ui.ui.modelFormModal.querySelector('.close-modal-btn'), 'click', ui.closeModelForm); // ★ 访问 ui.ui.modelFormModal, ui.closeModelForm
     bindEvent(document.getElementById('cancel-model-detail-btn'), 'click', ui.closeModelForm); // ★ 访问 ui.closeModelForm
@@ -634,7 +674,71 @@ bindEvent(ui.ui.maxTokensInputInline, 'change', (e) => { // ★ 访问 ui.ui.max
             }
         });
     }
+    const showProviderManagementBtn = document.getElementById('show-provider-management-btn'); // 假设你有这样一个按钮
+    if (showProviderManagementBtn) {
+        bindEvent(showProviderManagementBtn, 'click', ui.showProviderManagement);
+    } else {
+        // 如果没有专门的按钮，你可以在设置页面的某个地方添加一个触发器
+        // 例如，在 "配置管理" 那一行添加一个 "管理提供商" 按钮
+    }
+        if (ui.ui.showProviderManagementBtn) {
+        bindEvent(ui.ui.showProviderManagementBtn, 'click', ui.showProviderManagement);
+    } else {
+        console.warn("[script.js] '管理提供商' 按钮 (showProviderManagementBtn) 未找到，请检查 HTML ID。");
+    }
+    bindEvent(ui.ui.showModelManagementBtn, 'click', ui.showModelManagement);
+    bindEvent(ui.ui.showPresetManagementBtn, 'click', ui.showPresetManagement);
+    // ★★★ 新增：为“管理 API 密钥”按钮绑定事件 ★★★
+    bindEvent(ui.ui.showApiKeyManagementBtn, 'click', ui.showApiKeyManagement);
+    bindEvent(ui.ui.backToSettingsFromProviderManagementBtn, 'click', ui.showSettings); 
 
+    // ★★★ 新增：为 API 密钥管理页的“返回设置”按钮绑定事件 ★★★
+    // 注意：我们将它绑定到 `ui.showSettings`，而不是 `ui.showChatArea`
+    bindEvent(ui.ui.backToSettingsFromApiKeyBtn, 'click', ui.showSettings);
+    
+    bindEvent(document.getElementById('back-to-chat-from-provider-management-btn'), 'click', ui.showChatArea);
+    bindEvent(document.getElementById('add-new-provider-btn'), 'click', () => ui.openProviderFormForEdit());
+    
+    bindEvent(document.getElementById('save-providers-to-file-btn'), 'click', async () => {
+        const updatedProviders = await api.saveProvidersToFile(state.providersConfig);
+        if (updatedProviders) {
+            // 保存成功后，重新填充API提供商下拉菜单，以反映更改
+            ui.populateApiProviderDropdown();
+            // 如果当前API Key状态UI依赖于提供商列表，也需要更新
+            const configuredProviders = await api.getKeysStatus();
+            ui.updateApiKeyStatusUI(configuredProviders);
+        }
+    });
+    if (ui.ui.addNewProviderBtnHeader) { // 使用新的 ID
+        bindEvent(ui.ui.addNewProviderBtnHeader, 'click', () => ui.openProviderFormForEdit());
+    } else {
+        console.warn("[script.js] '添加新提供商' 按钮 (addNewProviderBtnHeader) 未找到。");
+    }
+
+    if (ui.ui.saveProvidersToFileBtnHeader) { // 使用新的 ID
+        bindEvent(ui.ui.saveProvidersToFileBtnHeader, 'click', async () => {
+            const updatedProviders = await api.saveProvidersToFile(state.providersConfig);
+            if (updatedProviders) {
+                ui.populateApiProviderDropdown();
+                const configuredProviders = await api.getKeysStatus();
+                ui.updateApiKeyStatusUI(configuredProviders);
+                ui.renderProviderManagementUI(); // 刷新提供商列表
+            }
+        });
+    } else {
+        console.warn("[script.js] '保存更改' 按钮 (saveProvidersToFileBtnHeader) 未找到。");
+    }
+
+    // ★★★ 确保返回聊天按钮的绑定是正确的 ID，并调用 showChatArea ★★★
+    if (ui.ui.backToChatFromProviderManagementBtn) {
+        bindEvent(ui.ui.backToChatFromProviderManagementBtn, 'click', ui.showChatArea); // 返回聊天
+    } else {
+        console.warn("[script.js] '返回聊天' 按钮 (backToChatFromProviderManagementBtn) 未找到，请检查 HTML ID。");
+    }
+
+    bindEvent(document.getElementById('provider-form'), 'submit', ui.handleProviderFormSubmit);
+    bindEvent(ui.ui.providerFormModal.querySelector('.close-modal-btn'), 'click', ui.closeProviderForm);
+    bindEvent(document.getElementById('cancel-provider-detail-btn'), 'click', ui.closeProviderForm);
          // --- 消息操作按钮 (事件委托) ---
     bindEvent(ui.ui.messagesContainer, 'click', async e => { 
         const button = e.target.closest('.message-action-btn');
@@ -666,25 +770,20 @@ bindEvent(ui.ui.maxTokensInputInline, 'change', (e) => { // ★ 访问 ui.ui.max
                 break;
 
                 case 'regenerate':
-            const assistantMsgToRegen = conv.messages[messageIndex];
-            if (assistantMsgToRegen && assistantMsgToRegen.parentId) {
-                // 1. 设置当前对话的 activeMessageId 为被重新生成消息的父ID。
-                //    这会将对话分支“回溯”到用户最后一次提问。
-                conv.activeMessageId = assistantMsgToRegen.parentId;
-                
-                // ★★★ 核心修复：在这里立即调用 ui.loadAndRenderConversationUI(conv); ★★★
-                // 这会清空整个 messagesContainer，并只渲染到新的 activeMessageId 所在的消息（即用户消息）。
-                // 这样，当 processApiRequest 函数被调用时，messagesContainer 就是干净的了。
-                ui.loadAndRenderConversationUI(conv); 
-                
-                // 2. 获取基于新活跃分支的API历史记录。
-                const historyForApi = conversation.getCurrentBranchMessages(conv); 
-
-                // 3. 调用通用的API处理函数。
-                //    processApiRequest 现在会负责在一个干净的 UI 上显示它的加载和流式输出。
-                await processApiRequest(historyForApi); 
-            }
-            break;
+    const assistantMsgToRegen = conv.messages[messageIndex];
+    if (assistantMsgToRegen && assistantMsgToRegen.parentId) {
+        // 1. 设置当前对话的 activeMessageId 为被重新生成消息的父ID。
+        //    这会将对话分支“回溯”到用户最后一次提问。
+        conv.activeMessageId = assistantMsgToRegen.parentId;
+        
+        // 2. 立即更新UI，清空旧的AI回复，只显示到用户提问为止。
+        ui.loadAndRenderConversationUI(conv); 
+        
+        // 3. 调用通用的API处理函数，并正确地传递整个对话对象 `conv`。
+        //    processApiRequest 函数会自己处理后续的一切。
+        await processApiRequest(conv); // ★★★ 核心修复 ★★★
+    }
+    break;
             case 'delete_single':
             case 'delete_branch':
                 const mode = action === 'delete_single' ? 'single' : 'branch';
@@ -745,11 +844,18 @@ async function initializeApp() {
     
 
 
+    // ★★★ 核心修改：在 Promise.all 中添加 api.loadProvidersConfig() ★★★
     // 加载外部配置
     await Promise.all([
         api.loadModelsFromConfig(),
-        api.loadPresetsFromConfig()
+        api.loadPresetsFromConfig(),
+        api.loadProvidersConfig() // <--- 新增此行
     ]);
+
+    // ★★★ 核心修改：在填充UI之前，先调用函数根据新加载的配置填充API提供商下拉菜单 ★★★
+    ui.populateApiProviderDropdown();
+    ui.populateModelDropdown(state.modelConfigData.models); // 再填充模型
+    ui.populatePresetPromptsList();
 
      try {
         const configuredProviders = await api.getKeysStatus();
@@ -758,10 +864,6 @@ async function initializeApp() {
         console.error("获取 API Key 状态失败:", error);
     }
     
-    // 填充UI
-    ui.populateModelDropdown(state.modelConfigData.models); // ★ 访问 ui.populateModelDropdown
-    ui.populatePresetPromptsList(); // ★ 访问 ui.populatePresetPromptsList
-
     // 加载和渲染对话
     conversation.loadConversations();
     const initialConvId = conversation.getInitialConversationId();

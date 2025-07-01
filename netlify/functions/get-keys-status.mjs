@@ -1,71 +1,57 @@
-// 文件路径: netlify/functions/get-keys-status.mjs (最终修复版)
+// --- START OF FILE netlify/functions/get-keys-status.mjs (最终正确返回格式版) ---
 
-import { promises as fs } from 'fs';
-import path from 'path';
-
-export default async (request) => {
-  if (request.method !== 'GET') {
-    return new Response('Method Not Allowed', { status: 405 });
-  }
-
-  try {
-    const envPath = path.join(process.cwd(), '.env');
-    let envContent = '';
-
+export async function handler(request, context) {
     try {
-      envContent = await fs.readFile(envPath, 'utf8');
-    } catch (error) {
-      if (error.code === 'ENOENT') {
-        return new Response(JSON.stringify({ configuredProviders: [] }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-      throw error;
-    }
+        console.log('[GetKeysStatus] Function execution started.');
 
-    const configuredProviders = [];
-    const lines = envContent.split(/\r?\n/);
+        const providers = [
+            "OpenAI", "Anthropic", "Gemini", "DeepSeek", "Siliconflow", 
+            "Openrouter", "Volcengine", "DashScope", "Ollama", "Suanlema"
+        ];
 
-    for (const line of lines) {
-      const trimmedLine = line.trim();
-      if (!trimmedLine || trimmedLine.startsWith('#')) {
-        continue;
-      }
+        const configuredStatus = {};
 
-      // ★★★ 核心修复：采用更简单、更可靠的分割和检查逻辑 ★★★
-      const parts = trimmedLine.split('=');
-      if (parts.length >= 2) {
-        const keyName = parts[0].trim();
-        const keyValue = parts.slice(1).join('=').trim(); // 处理 key 值中可能包含 '=' 的情况
+        console.log('[GetKeysStatus] Starting provider loop to check environment variables.');
+        
+        // 调试日志可以保留或移除，现在我们知道它工作正常了
+        // console.log('[GetKeysStatus] [DEBUG] All available process.env keys:', Object.keys(process.env));
 
-        // 检查 key 的格式是否正确，并且 key 的值不为空
-        if (keyName.endsWith('_API_KEY_SECRET') && keyValue) {
-          // 从 keyName 中提取出提供商名字
-          const providerNameUpper = keyName.replace('_API_KEY_SECRET', '');
-          
-          // 将大写和下划线格式转换为首字母大写的格式
-          const formattedProvider = providerNameUpper
-            .toLowerCase()
-            .split('_')
-            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-            .join('');
-          
-          configuredProviders.push(formattedProvider);
+        for (const provider of providers) {
+            const keyEnvVarName = `${provider.toUpperCase()}_API_KEY_SECRET`;
+            const apiKey = process.env[keyEnvVarName];
+
+            configuredStatus[provider.toLowerCase()] = {
+                keyConfigured: apiKey !== undefined && apiKey.trim() !== '',
+            };
         }
-      }
+        
+        console.log('[GetKeysStatus] Provider loop finished successfully.');
+        console.log('[GetKeysStatus] Final Configured API Status to be sent to frontend:', configuredStatus);
+
+        // ★★★ 核心修复：使用标准的 Netlify Functions 返回对象格式 ★★★
+        return {
+            statusCode: 200, // 'S' 和 'C' 必须大写
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            body: JSON.stringify(configuredStatus) // body 是一个字符串
+        };
+
+    } catch (error) {
+        console.error('[GetKeysStatus] FATAL ERROR during function execution:', error);
+        
+        // ★★★ 核心修复：错误返回也使用标准格式 ★★★
+        return {
+            statusCode: 500,
+            headers: {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            body: JSON.stringify({
+                error: 'Backend function get-keys-status encountered an internal error.',
+                details: error.message
+            })
+        };
     }
-
-    return new Response(JSON.stringify({ configuredProviders }), {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-  } catch (error) {
-    console.error('Error in get-keys-status function:', error);
-    return new Response(JSON.stringify({ message: `Internal Server Error: ${error.message}` }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-};
+}

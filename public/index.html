@@ -12,16 +12,14 @@
     <!-- ===== Main Layout Container ===== -->
     <!-- 这个 div 是整个布局的核心，它将侧边栏和主内容区并排排列 -->
     <div class="container">
- <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" title="收起/展开侧边栏">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="15 18 9 12 15 6"></polyline>
-                    </svg>
-                </button>
+        <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" title="收起/展开侧边栏">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="15 18 9 12 15 6"></polyline>
+            </svg>
+        </button>
         <!-- ===== Sidebar ===== -->
         <aside class="sidebar">
-         
             <div class="sidebar-header" id="sidebar-header">
-                
                 <div class="logo" id="logo-display" title="点击搜索对话...">ChatHYM v1.3</div>
                 <div class="search-wrapper" id="search-wrapper" style="display: none;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon">
@@ -57,25 +55,23 @@
                         </select>
                     </div>
                     <button id="system-prompt-btn" class="system-prompt-header-btn" title="设置系统指令">
-                        
                         <span>系统指令</span>
                     </button>
-                  <div class="header-actions">
-    <!-- 分裂按钮容器，它现在只包含两个按钮 -->
-    <div class="split-button-container">
-        <button id="export-default-btn" class="split-button-action" title="导出为 Markdown">导出</button>
-        <button id="export-options-btn" class="split-button-dropdown" title="更多导出选项">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="6 9 12 15 18 9"></polyline>
-            </svg>
-        </button>
-    </div> <!-- 分裂按钮容器在这里结束 -->
-
-    <!-- ★★★ 核心修复：将其他按钮移到容器外部，作为 .header-actions 的直接子元素 ★★★ -->
-    <button id="archive-current-btn" title="归档当前会话">归档</button>
-    <button id="clear-current-btn" class="warning" title="清空当前对话">清空</button>
-    <button id="delete-current-btn" title="删除当前会话">删除</button>
-</div>
+                    <div class="header-actions">
+                        <!-- 分裂按钮容器，它现在只包含两个按钮 -->
+                        <div class="split-button-container">
+                            <button id="export-default-btn" class="split-button-action" title="导出为 Markdown">导出</button>
+                            <button id="export-options-btn" class="split-button-dropdown" title="更多导出选项">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </button>
+                        </div>
+                        <!-- 其他按钮作为 .header-actions 的直接子元素 -->
+                        <button id="archive-current-btn" title="归档当前会话">归档</button>
+                        <button id="clear-current-btn" class="warning" title="清空当前对话">清空</button>
+                        <button id="delete-current-btn" title="删除当前会话">删除</button>
+                    </div>
                 </header>
 
                 <div id="empty-chat-placeholder" class="empty-chat-placeholder" style="display: none;">
@@ -191,62 +187,78 @@
                         </div>
                     </div>
                 </div>
-                <div class="setting-group api-key-management">
-                    <h3>API 密钥管理</h3>
-                    <p class="description">在此处保存您的 API 密钥。密钥将被直接写入您本地的 .env 文件并立即生效。</p>
-                    <div class="setting-item">
-                        <label for="api-provider-select">选择 API 提供商:</label>
-                        <div class="controls-group">
-                            <select id="api-provider-select">
-                                <option value="OpenAI">OpenAI</option>
-                                <option value="Anthropic">Anthropic</option>
-                                <option value="Gemini">Gemini</option>
-                                <option value="DeepSeek">DeepSeek</option>
-                                <option value="Siliconflow">硅基流动</option>
-                                <option value="OpenRouter">Openrouter</option>
-                                <option value="VOLCENGINE">火山引擎</option>
-                            </select>
+                <!-- ★★★ 用这个新的 setting-group 替换掉旧的 "API 管理" 卡片 ★★★ -->
+<div class="setting-group">
+    <!-- 这个 setting-item 作为新卡片的标题行 -->
+    <div class="setting-item">
+        <label>API 密钥管理</label>
+        <div class="controls-group">
+            <!-- 这个描述文字现在放在右侧 -->
+            <p style="margin: 0; font-size: 0.9em; color: var(--text-secondary);">
+                在此处保存您的 API 密钥，它将被写入本地 .env 文件。
+            </p>
+        </div>
+    </div>
+
+    <!-- 下面的 setting-item 包含具体的输入控件 -->
+    <div class="setting-item">
+        <label for="api-provider-select">选择提供商</label>
+        <div class="controls-group">
+            <select id="api-provider-select">
+                <!-- JS 会动态填充这里 -->
+            </select>
+        </div>
+    </div>
+    <div class="setting-item">
+        <label for="api-key-input">输入 API Key</label>
+        <div class="controls-group">
+            <input type="password" id="api-key-input" placeholder="粘贴您的 API Key">
+        </div>
+    </div>
+
+    <!-- ★ API 接口输入框已按要求删除 ★ -->
+
+    <!-- 新的按钮行 -->
+    <div class="setting-item">
+        <label></label> <!-- 左侧留空，使按钮组靠右对齐 -->
+        <div class="controls-group">
+            <!-- ★ 新增的管理提供商按钮，在左侧 -->
+            <button id="manage-providers-from-settings-btn" class="action-btn">管理提供商</button>
+            <!-- 保存按钮在右侧，作为主操作 -->
+            <button id="save-api-key-btn" class="action-btn primary-action">保存 API Key</button>
+        </div>
+    </div>
+</div>
+<!-- ★★★ 替换结束 ★★★ -->
+
+
+                <div class="collapsible-info-section">
+                    <!-- 第一个可折叠项：关于 & 联系 -->
+                    <div class="collapsible-item">
+                        <button type="button" class="collapsible-trigger">
+                            <span>关于 & 联系</span>
+                            <svg class="collapsible-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                        <div class="collapsible-content">
+                            <p>感谢您使用 ChatHYM ！ 喵~<br>如果您有任何问题或建议，请通过以下方式联系我：</p>
+                            <ul>
+                                <li>QQ：2680159691</li>
+                                <li>GitHub：<a href="https://github.com/YHZZ9457/ChatHYM/" target="_blank" rel="noopener noreferrer">项目仓库</a></li>
+                            </ul>
                         </div>
                     </div>
-                    <div class="setting-item">
-                        <label for="api-key-input">输入 API Key:</label>
-                        <div class="controls-group"><input type="password" id="api-key-input" placeholder="粘贴您的 API Key"></div>
-                    </div>
-                    <div class="setting-item">
-                        <label></label>
-                        <div class="controls-group"><button id="save-api-key-btn" class="action-btn primary-action">保存 API Key</button></div>
+
+                    <!-- 第二个可折叠项：版本信息 -->
+                    <div class="collapsible-item">
+                        <button type="button" class="collapsible-trigger">
+                            <span>版本信息</span>
+                            <svg class="collapsible-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </button>
+                        <div class="collapsible-content">
+                            <p>当前版本：v1.3 (构建日期：2025-06-26)<br>基于 LocalGPT 框架。</p>
+                        </div>
                     </div>
                 </div>
-                <div class="collapsible-info-section">
-
-    <!-- 第一个可折叠项：关于 & 联系 -->
-    <div class="collapsible-item">
-        <button type="button" class="collapsible-trigger">
-            <span>关于 & 联系</span>
-            <svg class="collapsible-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </button>
-        <div class="collapsible-content">
-            <p>感谢您使用 ChatHYM ！ 喵~<br>如果您有任何问题或建议，请通过以下方式联系我：</p>
-            <ul>
-                <li>QQ：2680159691</li>
-                <li>GitHub：<a href="https://github.com/YHZZ9457/ChatHYM/" target="_blank" rel="noopener noreferrer">项目仓库</a></li>
-            </ul>
-        </div>
-    </div>
-
-    <!-- 第二个可折叠项：版本信息 -->
-    <div class="collapsible-item">
-        <button type="button" class="collapsible-trigger">
-            <span>版本信息</span>
-            <svg class="collapsible-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
-        </button>
-        <div class="collapsible-content">
-            <p>当前版本：v1.3 (构建日期：2025-06-26)<br>基于 LocalGPT 框架。</p>
-        </div>
-    </div>
-
-</div>
-
             </section>
 
             <!-- Model Management Area -->
@@ -274,12 +286,35 @@
                 </header>
                 <div id="preset-list-editor" class="preset-list-editor"></div>
             </section>
-        </main>
 
+            
+ <section id="provider-management-area" class="settings-area" style="display: none;">
+                <!-- ★★★ 核心修复：添加回这个头部容器 ★★★ -->
+                <div class="settings-header-container">
+                    <h2>API 提供商管理</h2>
+                    <!-- ★★★ 将按钮组移到 header-controls 内部 ★★★ -->
+                    <div class="header-controls">
+                        <!-- '添加新提供商' 按钮 -->
+                        <button id="add-new-provider-btn-header" class="action-btn">＋ 添加新提供商</button>
+                        <!-- '保存更改' 按钮 -->
+                        <button id="save-providers-to-file-btn-header" class="action-btn primary-action">保存更改</button>
+                        <!-- '返回聊天' 按钮 -->
+                        <button id="back-to-chat-from-provider-management-btn" class="action-btn">返回聊天</button>
+                    </div>
+                </div>
+
+                <!-- ★★★ 原有的 management-controls 已经移动到 header 中，这里不再需要 ★★★ -->
+
+                <div id="provider-list-editor" class="model-list-editor">
+                    <!-- JS 会在这里动态填充提供商列表 -->
+                </div>
+            </section>
+
+        </main>
     </div> <!-- End of .container -->
 
     <!-- ===== Floating Modals & Menus ===== -->
-    <!-- 这些元素不参与主布局，因此放在 .container 外部 -->
+    <!-- 这些元素不参与主布局，因此放在 .container 外部，且相互之间应是同级 -->
     
     <!-- Model Form Modal -->
     <div id="model-form-modal" class="modal" style="display: none;">
@@ -362,7 +397,94 @@
             </form>
         </div>
     </div>
-      
+    
+    <!-- ★★★ 提供商编辑模态框 (Provider Form Modal) - 务必完整复制此段 ★★★ -->
+    <div id="provider-form-modal" class="modal" style="display: none;">
+        <div class="modal-content">
+            <span class="close-modal-btn">×</span>
+            <h3 id="provider-form-title">添加新提供商</h3>
+            <form id="provider-form">
+                <input type="hidden" id="edit-provider-index">
+
+                <div class="form-group">
+                    <label for="provider-name">显示名称</label>
+                    <div class="form-control-wrapper">
+                        <input type="text" id="provider-name" required placeholder="例如：Suanlema">
+                        <small>在UI中显示的名称。</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="provider-value">内部值 (ID)</label>
+                    <div class="form-control-wrapper">
+                        <input type="text" id="provider-value" required placeholder="例如：suanlema (全小写，无空格)">
+                        <small>用于内部识别，必须唯一，建议全小写。</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="provider-api-key-env">API Key 变量</label>
+                    <div class="form-control-wrapper">
+                        <input type="text" id="provider-api-key-env" required placeholder="例如：SUANLEMA_API_KEY_SECRET">
+                        <small>在 .env 文件中对应的 API Key 环境变量名。</small>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label for="provider-default-endpoint">默认 Endpoint</label>
+                    <div class="form-control-wrapper">
+                        <input type="text" id="provider-default-endpoint" placeholder="例如：https://api.suanli.cn/v1/chat/completions">
+                        <small>该提供商的默认 API 接口地址。</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="provider-proxy-path">后端代理路径</label>
+                    <div class="form-control-wrapper">
+                        <input type="text" id="provider-proxy-path" required value="/api/openai-compatible-proxy">
+                        <small>请求将发送到哪个后端代理函数。对于大多数兼容API，使用通用代理。</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="provider-mapper-type">消息映射类型</label>
+                    <div class="form-control-wrapper">
+                        <select id="provider-mapper-type">
+                            <option value="standard" selected>Standard (OpenAI 兼容)</option>
+                            <option value="anthropic">Anthropic</option>
+                            <option value="gemini">Gemini</option>
+                            <option value="ollama">Ollama</option>
+                        </select>
+                        <small>前端如何格式化发送给API的消息。</small>
+                    </div>
+                </div>
+
+                <div class="form-group">
+    <label>其他选项</label>
+    <div class="form-control-wrapper">
+        <label class="switch-like-label">
+            <input type="checkbox" id="provider-stream-support">
+            <span>支持流式输出</span>
+        </label>
+        <label class="switch-like-label">
+            <input type="checkbox" id="provider-is-special-case">
+            <span>是特殊用例</span>
+        </label>
+        <label class="switch-like-label">
+            <input type="checkbox" id="provider-is-self-hosted">
+            <span>是自托管</span>
+        </label>
+    </div>
+</div>
+
+                <div class="form-actions">
+                    <button type="button" id="cancel-provider-detail-btn" class="secondary">取消</button>
+                    <button type="submit" >保存提供商</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
     <!-- Other Floating Elements -->
     <div id="global-actions-menu" class="actions-dropdown-menu"></div>
     <div id="secret-menu" class="secret-menu" style="display: none;">

@@ -1,28 +1,49 @@
-// netlify/functions/deepseek-proxy.mjs
-// (假设运行在期望返回标准 Response 对象的 Node.js 环境，例如 Netlify Edge Functions 或较新的 Lambda)
+// --- START OF FILE netlify/functions/deepseek-proxy.mjs (最终修正 - 匹配标准结构) ---
 
-// Node.js 18+ 全局有 fetch。如果遇到 fetch is not defined，
-// 你可能需要在函数的 package.json (如果为该函数单独配置) 或项目根目录的 package.json
-// 中添加 "node-fetch" 作为依赖，并在顶部 import fetch from 'node-fetch';
-// 但 Netlify 通常会使用较新的 Node.js 版本。
+// 这个 Netlify Function 专门用于代理 DeepSeek API 请求。
 
-console.log("DeepSeek Proxy Function Loaded. Reading DEEPSEEK_API_KEY_SECRET from env.");
+import { readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-export default async function handler(request, context) { // 使用 request, context 签名，更符合 Edge/Web API
-  const API_KEY = process.env.DEEPSEEK_API_KEY_SECRET;
-  const API_URL = 'https://api.deepseek.com/v1/chat/completions';
 
-  console.log("[DeepSeek Proxy] 被调用，方法:", request.method);
+// 定义一个解析 .env 文件内容的辅助函数
+function parseEnvFile(filePath) {
+    const envVars = {};
+    try {
+        const fileContent = readFileSync(filePath, 'utf8');
+        fileContent.split('\n').forEach(line => {
+            const trimmedLine = line.trim();
+            if (trimmedLine && !trimmedLine.startsWith('#')) {
+                const parts = trimmedLine.split('=');
+                if (parts.length >= 2) {
+                    const key = parts[0].trim();
+                    const value = parts.slice(1).join('=').trim().replace(/^['"]|['"]$/g, '');
+                    envVars[key] = value;
+                }
+            }
+        });
+    } catch (err) {
+        if (err.code === 'ENOENT') {
+            console.error(`[DeepSeek Proxy] .env file not found at ${filePath}.`);
+        } else {
+            console.error(`[DeepSeek Proxy] Error reading .env file at ${filePath}:`, err);
+        }
+        throw new Error(`Failed to load environment variables from .env file: ${err.message}`);
+    }
+    return envVars;
+}
 
+export default async function handler(request) { // 使用 request 签名，与 Web Fetch API 兼容
   // 1. CORS 预检处理 (OPTIONS 请求)
   if (request.method === 'OPTIONS') {
-    return new Response(null, { // 对于 OPTIONS，body 可以是 null
-      status: 204, // No Content
+    return new Response(null, {
+      status: 204,
       headers: {
-        'Access-Control-Allow-Origin': '*', // 允许所有源 (或更严格地指定你的前端源)
+        'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization', // Authorization 是你实际发给Deepseek的，前端发给代理的通常只有Content-Type
-        'Access-Control-Max-Age': '86400', // 预检结果缓存时间
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Max-Age': '86400',
       }
     });
   }
@@ -35,59 +56,64 @@ export default async function handler(request, context) { // 使用 request, con
     });
   }
 
-  // 3. 检查 API Key 是否已配置
-  if (!API_KEY) {
-    console.error("DeepSeek API Key 未在环境变量中配置 (DEEPSEEK_API_KEY_SECRET)!");
-    return new Response(JSON.stringify({ error: 'Server Configuration Error: DeepSeek API Key not set.' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
-  }
-
-  // 4. 解析前端发送过来的请求体
-  let requestBodyFromFrontend;
   try {
-    requestBodyFromFrontend = await request.json(); // 使用 request.json()
-  } catch (error) {
-    console.error("无法解析前端请求体:", error, "原始 body (可能不是字符串，取决于运行时):", await request.text().catch(() => '无法读取body'));
-    return new Response(JSON.stringify({ error: 'Bad Request: Invalid JSON body' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
-  }
+    // 读取 .env 文件并获取环境变量
+    const envVars = parseEnvFile(resolve(__dirname, '../../../.env'));
+    const API_KEY = envVars.DEEPSEEK_API_KEY_SECRET;
+    const CUSTOM_API_ENDPOINT = envVars.DEEPSEEK_API_ENDPOINT_URL; // 获取自定义 Endpoint
 
-  const { model, messages, temperature, max_tokens, stream } = requestBodyFromFrontend; // 接收 stream 参数
+    // 检查 API Key 是否已配置
+    if (!API_KEY) {
+      console.error("[DeepSeek Proxy] DEEPSEEK_API_KEY_SECRET not set in .env file!");
+      return new Response(JSON.stringify({ error: 'Server Configuration Error: DeepSeek API Key not set.' }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
+    }
+    
+    // 确定最终使用的 API Endpoint
+    const DEFAULT_API_ENDPOINT = 'https://api.deepseek.com/v1/chat/completions';
+    const API_ENDPOINT = CUSTOM_API_ENDPOINT || DEFAULT_API_ENDPOINT;
 
-  if (!model || !messages) {
-    return new Response(JSON.stringify({ error: 'Bad Request: "model" and "messages" are required.' }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-    });
-  }
+    if (!API_ENDPOINT) {
+        console.error(`[DeepSeek Proxy] API Endpoint for DeepSeek is not configured (neither custom nor default).`);
+        return Response.json({ error: { message: `Server Configuration Error: API Endpoint for DeepSeek is missing.` } }, { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } });
+    }
 
-  // 5. 构建发送给 DeepSeek API 的请求体
-  const deepseekPayload = {
-    model: model,
-    messages: messages, // 假设前端已按 Deepseek 要求格式化 (user/assistant)
-    max_tokens: max_tokens || 1024,
-    temperature: temperature !== undefined ? temperature : 0.7,
-    stream: stream || false, // 将前端传递的 stream 参数或默认 false 传递给 DeepSeek
-  };
+    // 解析前端发送过来的请求体
+    const requestBodyFromFrontend = await request.json(); 
+    // ★★★ 核心修复 2：从 fullModelString 中解析出实际模型名 ★★★
+    const fullModelString = requestBodyFromFrontend.model;
+    let modelNameForAPI = fullModelString;
+    if (fullModelString && typeof fullModelString === 'string' && fullModelString.includes('::')) {
+        modelNameForAPI = fullModelString.split('::')[1];
+    } else {
+        console.warn(`[DeepSeek Proxy] Model string '${fullModelString}' does not contain '::'. Using it as is, which might be incorrect.`);
+    }
 
-  console.log("[DeepSeek Proxy] 发送给 DeepSeek API 的请求体 (stream:", deepseekPayload.stream, "):", JSON.stringify(deepseekPayload, null, 2));
+    const stream = requestBodyFromFrontend.stream || false;
 
-  // 6. 调用 DeepSeek API
-  try {
-    const apiResponse = await fetch(API_URL, {
+    // 构建发送给 DeepSeek API 的请求体
+    const deepseekPayload = {
+      model: modelNameForAPI, // ★ 使用解析后的模型名称
+      messages: requestBodyFromFrontend.messages, 
+      max_tokens: requestBodyFromFrontend.max_tokens || 1024,
+      temperature: requestBodyFromFrontend.temperature !== undefined ? requestBodyFromFrontend.temperature : 0.7,
+      stream: stream, 
+    };
+
+    console.log("[DeepSeek Proxy] 发送给 DeepSeek API 的请求体 (stream:", deepseekPayload.stream, "):", JSON.stringify(deepseekPayload, null, 2));
+
+    // 调用 DeepSeek API
+    const apiResponse = await fetch(API_ENDPOINT, { // 使用解析后的 API_ENDPOINT
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${API_KEY}`,
-        'Accept': deepseekPayload.stream ? 'text/event-stream' : 'application/json', // 根据是否流式设置 Accept
+        'Accept': deepseekPayload.stream ? 'text/event-stream' : 'application/json',
       },
       body: JSON.stringify(deepseekPayload),
-      // 对于 Node.js 的 fetch (如 node-fetch)，流式响应体 (response.body) 本身就是 ReadableStream
-      // 对于标准 Web Fetch API，response.body 也是 ReadableStream
+      signal: request.signal, // ★★★ 修复 3：添加 AbortSignal 转发 ★★★
     });
 
     console.log("[DeepSeek Proxy] 从 DeepSeek API 收到的状态码:", apiResponse.status);
@@ -95,7 +121,6 @@ export default async function handler(request, context) { // 使用 request, con
     if (!apiResponse.ok) {
       const errorText = await apiResponse.text();
       console.error("[DeepSeek Proxy] DeepSeek API 错误响应:", errorText);
-      // 尝试解析错误信息，如果Deepseek返回JSON错误
       let errorDetail = errorText;
       try {
           const errJson = JSON.parse(errorText);
@@ -103,7 +128,7 @@ export default async function handler(request, context) { // 使用 request, con
       } catch(e) { /* 保持原始文本错误 */ }
 
       return new Response(JSON.stringify({ error: `DeepSeek API Error (${apiResponse.status})`, details: errorDetail }), {
-        status: apiResponse.status, // 使用原始错误状态码
+        status: apiResponse.status,
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       });
     }
@@ -111,13 +136,14 @@ export default async function handler(request, context) { // 使用 request, con
     // 如果是流式响应，直接将 ReadableStream 透传给前端
     if (deepseekPayload.stream && apiResponse.body) {
       console.log("[DeepSeek Proxy] 正在流式传输 DeepSeek 响应...");
+      // DeepSeek 返回标准的 SSE 事件流，可以直接透传给前端
       return new Response(apiResponse.body, {
         status: apiResponse.status,
         headers: {
-          'Content-Type': 'text/event-stream', // 关键：设置正确的 Content-Type for SSE
+          'Content-Type': 'text/event-stream',
           'Cache-Control': 'no-cache',
           'Connection': 'keep-alive',
-          'Access-Control-Allow-Origin': '*', // 确保CORS头部也设置在流式响应上
+          'Access-Control-Allow-Origin': '*',
         }
       });
     } else if (apiResponse.body) { // 非流式，一次性读取
@@ -137,14 +163,13 @@ export default async function handler(request, context) { // 使用 request, con
         headers: { 'Content-Type': contentType, 'Access-Control-Allow-Origin': '*' }
       });
     } else {
-        // 应该不会到这里，如果 apiResponse.ok 为 true
         return new Response(JSON.stringify({error: "Empty response body from DeepSeek"}), {status: 500, headers: {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'}});
     }
 
   } catch (error) {
     console.error('[DeepSeek Proxy] 调用 DeepSeek API 时发生网络或其他错误:', error);
     return new Response(JSON.stringify({ error: 'Proxy failed to fetch from DeepSeek API', details: error.message }), {
-      status: 502, // Bad Gateway
+      status: 502,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
   }

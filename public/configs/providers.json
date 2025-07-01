@@ -1,0 +1,114 @@
+{
+  "providers": [
+    {
+      "name": "OpenAI",
+      "value": "openai",
+      "apiKeyEnv": "OPENAI_API_KEY_SECRET",
+      "defaultEndpoint": "https://api.openai.com/v1/chat/completions",
+      "proxyPath": "/api/openai-compatible-proxy",
+      "mapperType": "standard",
+      "streamSupport": true,
+      "isSpecialCase": false,
+      "isSelfHosted": false
+    },
+    {
+      "name": "Anthropic",
+      "value": "anthropic",
+      "apiKeyEnv": "ANTHROPIC_API_KEY_SECRET",
+      "defaultEndpoint": "https://api.anthropic.com/v1/messages",
+      "proxyPath": "/api/anthropic-proxy",
+      "mapperType": "anthropic",
+      "streamSupport": true,
+      "isSpecialCase": true,
+      "isSelfHosted": false
+    },
+    {
+      "name": "Gemini",
+      "value": "gemini",
+      "apiKeyEnv": "GEMINI_API_KEY_SECRET",
+      "defaultEndpoint": "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+      "proxyPath": "/api/gemini-proxy",
+      "mapperType": "gemini",
+      "streamSupport": true,
+      "isSpecialCase": true,
+      "isSelfHosted": false
+    },
+    {
+      "name": "DeepSeek",
+      "value": "deepseek",
+      "apiKeyEnv": "DEEPSEEK_API_KEY_SECRET",
+      "defaultEndpoint": "https://api.deepseek.com/v1/chat/completions",
+      "proxyPath": "/api/openai-compatible-proxy",
+      "mapperType": "standard",
+      "streamSupport": true,
+      "isSpecialCase": false,
+      "isSelfHosted": false
+    },
+    {
+      "name": "Siliconflow",
+      "value": "siliconflow",
+      "apiKeyEnv": "SILICONFLOW_API_KEY_SECRET",
+      "defaultEndpoint": "https://api.siliconflow.cn/v1/chat/completions",
+      "proxyPath": "/api/openai-compatible-proxy",
+      "mapperType": "standard",
+      "streamSupport": true,
+      "isSpecialCase": false,
+      "isSelfHosted": false
+    },
+    {
+      "name": "Openrouter",
+      "value": "openrouter",
+      "apiKeyEnv": "OPENROUTER_API_KEY_SECRET",
+      "defaultEndpoint": "https://openrouter.ai/api/v1/chat/completions",
+      "proxyPath": "/api/openrouter-proxy",
+      "mapperType": "standard",
+      "streamSupport": true,
+      "isSpecialCase": true,
+      "isSelfHosted": false
+    },
+    {
+      "name": "Volcengine",
+      "value": "volcengine",
+      "apiKeyEnv": "VOLCENGINE_API_KEY_SECRET",
+      "defaultEndpoint": "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
+      "proxyPath": "/api/openai-compatible-proxy",
+      "mapperType": "standard",
+      "streamSupport": true,
+      "isSpecialCase": false,
+      "isSelfHosted": false
+    },
+    {
+      "name": "Ollama",
+      "value": "ollama",
+      "apiKeyEnv": "OLLAMA_API_KEY_SECRET",
+      "defaultEndpoint": "http://localhost:11434/api/chat",
+      "proxyPath": "/api/ollama-proxy",
+      "mapperType": "ollama",
+      "streamSupport": true,
+      "isSpecialCase": true,
+      "isSelfHosted": true
+    },
+    {
+      "name": "Suanlema",
+      "value": "suanlema",
+      "apiKeyEnv": "SUANLEMA_API_KEY_SECRET",
+      "defaultEndpoint": "https://api.suanli.cn/v1/chat/completions",
+      "proxyPath": "/api/openai-compatible-proxy",
+      "mapperType": "standard",
+      "streamSupport": true,
+      "isSpecialCase": false,
+      "isSelfHosted": false
+    },
+    {
+      "name": "X",
+      "value": "x",
+      "apiKeyEnv": "X_API_SECRET_KEYS",
+      "defaultEndpoint": "",
+      "proxyPath": "/api/openai-compatible-proxy",
+      "mapperType": "standard",
+      "streamSupport": true,
+      "isSpecialCase": false,
+      "isSelfHosted": false
+    }
+  ]
+}

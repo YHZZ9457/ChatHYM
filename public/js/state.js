@@ -19,6 +19,7 @@ export let uploadedFilesData = [];
 export let modelConfigData = null;       // 原始模型配置
 export let editableModelConfig = null;   // 可编辑的模型配置
 export let loadedPresetPrompts = [];     // 预设模板
+export let providersConfig = [];   
 
 // --- 用户设置 (会被保存到LocalStorage) ---
 export let isStreamingEnabled = true;
@@ -201,4 +202,14 @@ export function setIsAutoThinkModeEnabled(value) {
  */
 export function setCurrentMaxTokens(value) {
     currentMaxTokens = value;
+}
+
+// ★ 新增：设置提供商配置
+export function setProvidersConfig(config) {
+    providersConfig = config;
+}
+
+// ★ 新增：获取某个提供商的配置
+export function getProviderConfig(providerValue) {
+    return providersConfig.find(p => p.value === providerValue.toLowerCase());
 }

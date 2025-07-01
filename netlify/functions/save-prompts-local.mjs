@@ -1,16 +1,18 @@
-// netlify/functions/save-prompts-local.mjs
+// --- START OF FILE netlify/functions/save-prompts-local.mjs (最终修正 - 正确路径和导入) ---
 
-import fs from 'fs/promises';
-import path from 'path';
+// 这个 Netlify Function 负责将预设模板保存到本地的 public/configs/prompts.json 文件。
 
-// 获取项目根目录的正确路径
-// 在 Netlify build 环境中，__dirname 指向函数文件所在的目录
-const projectRoot = path.resolve(process.cwd());
-// 目标文件相对于项目根目录的路径
-const targetPath = path.join(projectRoot, 'public', 'configs', 'prompts.json');
+// ★★★ 核心修复 1: 正确导入 fs 和 path 模块 ★★★
+import { writeFile } from 'fs/promises'; // 异步写入
+import { resolve } from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+
+// ★★★ 核心修复 3: 正确构建目标文件路径 ★★★
+const targetPath = resolve(__dirname, '../../../public/configs/prompts.json');
 
 export async function handler(event, context) {
-    // 1. 只允许 POST 请求
     if (event.httpMethod !== 'POST') {
         return {
             statusCode: 405,
@@ -19,10 +21,8 @@ export async function handler(event, context) {
     }
 
     try {
-        // 2. 解析请求体中的 JSON 数据
         const data = JSON.parse(event.body);
 
-        // 3. 验证数据结构 (可选但推荐)
         if (!data || !Array.isArray(data.prompts)) {
             return {
                 statusCode: 400,
@@ -30,25 +30,21 @@ export async function handler(event, context) {
             };
         }
 
-        // 4. 将数据格式化为带缩进的 JSON 字符串
         const jsonString = JSON.stringify(data, null, 2);
 
-        // 5. 异步写入文件
-        await fs.writeFile(targetPath, jsonString, 'utf-8');
+        // 使用异步写入文件
+        await writeFile(targetPath, jsonString, 'utf-8');
 
-        // 6. 返回成功响应
         return {
             statusCode: 200,
-            body: JSON.stringify({ message: 'Prompts saved successfully!' }),
+            body: JSON.stringify({ message: '预设模板已成功保存！' }), // 更友好的提示
         };
 
     } catch (error) {
         console.error('Error saving prompts.json:', error);
-
-        // 7. 返回服务器错误响应
         return {
             statusCode: 500,
-            body: JSON.stringify({ message: 'Failed to save prompts.', error: error.message }),
+            body: JSON.stringify({ message: '保存预设模板失败。', error: error.message }),
         };
     }
 }

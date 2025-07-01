@@ -1,92 +1,117 @@
-// 文件路径: netlify/functions/save-keys.mjs (ESM 最终版 - 强化调试)
+// --- START OF FILE netlify/functions/save-keys.mjs (最终无 dotenv 版本) ---
 
-import { promises as fs } from 'fs';
-import path from 'path';
+// 这个 Netlify Function 负责将 API Key 和 Endpoint 信息写入项目根目录的 .env 文件。
+// 它使用 Node.js 的内置 'fs' 和 'path' 模块。
+// 注意：此文件不依赖 dotenv，因为它是直接操作文件，而不是读取环境变量。
 
-export default async (request) => {
-  // CORS 预检请求 (保持不变)
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' } });
+import { appendFileSync, readFileSync, writeFileSync } from 'fs'; // Node.js 内置模块
+import { resolve, dirname } from 'path'; // Node.js 内置模块
+import { fileURLToPath } from 'url'; // Node.js 内置模块
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// 移除所有 dotenv 相关的代码！
+// import dotenv from 'dotenv';
+// if (process.env.NODE_ENV !== 'production') {
+//     dotenv.config({ path: resolve(__dirname, '../../../.env') }); 
+// }
+
+export default async (request, context) => {
+  if (request.method !== 'POST') {
+    return new Response('Method Not Allowed', { status: 405 });
   }
 
-  console.log('[save-keys] Received POST request.'); // 调试日志
-
   try {
-    const { provider, apiKey } = await request.json();
-    console.log(`[save-keys] Attempting to save key for provider: ${provider}`); // 调试日志
+    const { provider, apiKey, apiEndpoint } = await request.json();
 
-    if (!provider || !apiKey) {
-      console.error('[save-keys] Missing provider or API key in request body.'); // 调试日志
-      return new Response(JSON.stringify({ message: 'Provider and API Key are required.' }), { 
-        status: 400,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } // 确保 CORS 头
-      });
+    if (!provider) {
+      return new Response(JSON.stringify({ message: 'Provider is required.' }), { status: 400 });
+    }
+    if (!apiKey && !apiEndpoint) {
+        return new Response(JSON.stringify({ message: 'API Key 或 API Endpoint 至少需要填写一项。' }), { status: 400 });
     }
 
-    const variableName = `${provider.toUpperCase().replace('-', '_')}_API_KEY_SECRET`;
-    const newEntry = `${variableName}=${apiKey}`;
+    // 确保 envFilePath 指向项目根目录的 .env 文件
+    // 假设函数文件在 project-root/netlify/functions/，那么 .env 在 project-root/
+    const envFilePath = resolve(__dirname, '../../../.env'); 
 
-    const envPath = path.join(process.cwd(), '.env');
-    console.log(`[save-keys] .env file path: ${envPath}`); // 调试日志
-
-    let envContent = '';
-    
+    let fileContent = '';
     try {
-      envContent = await fs.readFile(envPath, 'utf8');
-      console.log(`[save-keys] Existing .env content read successfully.`); // 调试日志
-    } catch (readError) {
-      if (readError.code === 'ENOENT') {
-        console.log(`[save-keys] .env file not found, creating new one.`); // 调试日志
-        envContent = ''; // 文件不存在，从空字符串开始
-      } else {
-        // 如果是其他读取错误，直接抛出，让外层 catch 捕获
-        console.error(`[save-keys] Error reading .env file:`, readError); // 调试日志
-        throw readError; 
-      }
+        fileContent = readFileSync(envFilePath, 'utf8');
+    } catch (err) {
+        // 如果文件不存在，则创建它
+        if (err.code === 'ENOENT') {
+            console.warn(`.env file not found at ${envFilePath}, creating a new one.`);
+            fileContent = '';
+            writeFileSync(envFilePath, ''); // 创建空文件
+        } else {
+            throw err; // 其他错误抛出
+        }
     }
-
-    const lines = envContent.split(/\r?\n/);
-    let keyFound = false;
-
-    const updatedLines = lines.map(line => {
-      if (line.trim().startsWith(`${variableName}=`)) {
-        keyFound = true;
-        return newEntry;
-      }
-      return line;
-    }).filter(line => line.trim() !== ''); // 过滤空行
-
-    if (!keyFound) {
-      updatedLines.push(newEntry);
-    }
-
-    const finalEnvContent = updatedLines.join('\n') + '\n';
-    console.log(`[save-keys] Attempting to write to .env with content length: ${finalEnvContent.length}`); // 调试日志
-    console.log(`[save-keys] Final .env content preview: ${finalEnvContent.substring(0, 100)}...`); // 调试日志
-
-    await fs.writeFile(envPath, finalEnvContent, 'utf8');
-    console.log(`[save-keys] Successfully wrote to .env file.`); // 调试日志
     
-    return new Response(JSON.stringify({ message: `API Key for ${provider} has been saved.` }), {
+    let lines = fileContent.split('\n');
+    let updated = false;
+    let message = '';
+
+    const envVarKeyName = `${provider.toUpperCase()}_API_KEY_SECRET`;
+    const envVarEndpointName = `${provider.toUpperCase()}_API_ENDPOINT_URL`;
+
+    // 构建正则表达式，用于匹配现有行
+    const keyRegex = new RegExp(`^${envVarKeyName}=.*`, 'gm');
+    const endpointRegex = new RegExp(`^${envVarEndpointName}=.*`, 'gm');
+
+    // 过滤掉所有可能被更新或删除的旧行
+    lines = lines.filter(line => 
+        !line.match(keyRegex) && !line.match(endpointRegex) && line.trim() !== ''
+    );
+
+    // 处理 API Key
+    if (apiKey) {
+        const newKeyLine = `${envVarKeyName}="${apiKey}"`;
+        lines.push(newKeyLine);
+        message += `${provider} 的 API Key 已保存/更新！`;
+        updated = true;
+    } else {
+        // 如果 apiKey 为空，且之前存在，则表示移除
+        // 过滤阶段已经移除了，这里只需要更新消息
+        if (fileContent.match(keyRegex)) { // 检查旧文件内容是否包含该 Key
+            message += `${provider} 的 API Key 已移除！`;
+            updated = true;
+        }
+    }
+
+    // 处理 API Endpoint
+    if (apiEndpoint) {
+        const newEndpointLine = `${envVarEndpointName}="${apiEndpoint}"`;
+        lines.push(newEndpointLine);
+        if (updated) message += ' 并且 ';
+        message += `${provider} 的 API Endpoint 已保存/更新！`;
+        updated = true;
+    } else {
+        // 如果 apiEndpoint 为空，且之前存在，则表示移除
+        if (fileContent.match(endpointRegex)) { // 检查旧文件内容是否包含该 Endpoint
+            if (updated) message += ' 并且 ';
+            message += `${provider} 的 API Endpoint 已移除！`;
+            updated = true;
+        }
+    }
+
+    if (updated) {
+        // 确保文件末尾有且只有一个换行符
+        const finalContent = lines.join('\n') + '\n';
+        writeFileSync(envFilePath, finalContent);
+    } else {
+        message = '没有进行任何修改。';
+    }
+    
+    return new Response(JSON.stringify({ message: message || '操作完成。' }), {
       status: 200,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, // 确保 CORS 头
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
     });
 
   } catch (error) {
-    // 捕获所有内部错误，并返回统一的 JSON 格式
-    console.error('[save-keys] Error saving API key (caught):', error); // 调试日志
-    // 确保返回的 error.message 是一个字符串，并且没有包含函数对象
-    let errorMessage = 'An unknown error occurred.';
-    if (error && typeof error.message === 'string') {
-        errorMessage = error.message;
-    } else if (error) {
-        // 尝试将非字符串错误转换为字符串，避免 Function n 这样的情况
-        errorMessage = String(error); 
-    }
-
-    return new Response(JSON.stringify({ message: `Internal Server Error: ${errorMessage}` }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }, // 确保 CORS 头
-    });
+    console.error('Failed to save API Key/Endpoint:', error);
+    return new Response(JSON.stringify({ message: '保存失败：' + error.message }), { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } });
   }
 };

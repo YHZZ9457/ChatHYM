@@ -24,24 +24,15 @@ let presetSortable = null;
 // --- START OF FILE ui.js (Complete and Corrected initializeUI function) ---
 
 /**
- * 在 DOM 加载后，获取所有需要的 DOM 元素引用并填充 ui 对象。
+ * 在 DOM 加载后，获取所有需要的 DOM 元素引用并填充导出的 ui 对象。
  * @returns {boolean} 如果关键元素获取成功，则返回 true，否则返回 false。
  */
 export function initializeUI() {
+    console.log("[UI Init] Starting UI element acquisition.");
 
-    console.log("initializeUI: Starting UI initialization."); // 新增日志
-    
-    // ★ 关键：严格检查每个重要的 UI 元素是否被获取
-    ui.messagesContainer = document.getElementById('messages');
-    console.log("initializeUI: ui.messagesContainer =", ui.messagesContainer); // 检查这里是否是 null 或 undefined
-
-    ui.promptInput = document.getElementById('prompt');
-    console.log("initializeUI: ui.promptInput =", ui.promptInput); // 检查这里
-
-    ui.submitActionBtn = document.getElementById('submit-action-btn');
-    console.log("initializeUI: ui.submitActionBtn =", ui.submitActionBtn); // 检查这里
-    // ★ 核心修复：恢复所有原始元素的获取
+    // ★★★ 确保这里包含了所有你需要的 ID，特别是 API 配置相关的元素 ★★★
     Object.assign(ui, {
+        // --- Sidebar ---
         sidebar: document.querySelector('.sidebar'),
         sidebarToggleBtn: document.getElementById('sidebar-toggle-btn'),
         sidebarHeader: document.getElementById('sidebar-header'),
@@ -51,87 +42,102 @@ export function initializeUI() {
         newConvBtn: document.getElementById('new-conv-btn'),
         conversationList: document.getElementById('conversation-list'),
         showSettingsBtn: document.getElementById('show-settings-btn'),
-        sidebarResizer: document.getElementById('sidebar-resizer'),
+
+        // --- Main Area ---
         chatArea: document.getElementById('chat-area'),
-        systemPromptBtn: document.getElementById('system-prompt-btn'),
-        settingsArea: document.getElementById('settings-area'),
-        apiProviderSelect: document.getElementById('api-provider-select'),
-        apiKeyInput: document.getElementById('api-key-input'),
-        modelManagementArea: document.getElementById('model-management-area'),
-        presetManagementArea: document.getElementById('preset-management-area'),
+        chatHeader: document.querySelector('.chat-header'),
         chatTitle: document.getElementById('chat-title'),
-        saveApiKeyBtn: document.getElementById('save-api-key-btn'),
         modelSelect: document.getElementById('model'),
-        exportCurrentBtn: document.getElementById('export-current-btn'),
+        systemPromptBtn: document.getElementById('system-prompt-btn'),
+        headerActions: document.querySelector('.header-actions'),
+        exportDefaultBtn: document.getElementById('export-default-btn'),
+        exportOptionsBtn: document.getElementById('export-options-btn'),
         archiveCurrentBtn: document.getElementById('archive-current-btn'),
         clearCurrentBtn: document.getElementById('clear-current-btn'),
         deleteCurrentBtn: document.getElementById('delete-current-btn'),
-        emptyChatPlaceholder: document.getElementById('empty-chat-placeholder'),
         messagesContainer: document.getElementById('messages'),
+        emptyChatPlaceholder: document.getElementById('empty-chat-placeholder'),
         scrollToBottomBtn: document.getElementById('scroll-to-bottom-btn'),
+
+        // --- Input Area ---
+        promptInput: document.getElementById('prompt'),
+        submitActionBtn: document.getElementById('submit-action-btn'),
         filePreviewArea: document.getElementById('file-preview-area'),
         uploadFileBtnInline: document.getElementById('upload-file-btn-inline'),
         fileInputInline: document.getElementById('file-input-inline'),
         chatSettingsBtnInline: document.getElementById('chat-settings-btn-inline'),
         inlineChatSettingsPanel: document.getElementById('inline-chat-settings-panel'),
-        temperatureInputInline: document.getElementById('temperature-input-inline'),
-        temperatureValueDisplay: document.getElementById('temperature-value-inline'),
         maxTokensInputInline: document.getElementById('max-tokens-input-inline'),
         thinkModeToggle: document.getElementById('think-mode-toggle'),
         showPresetPromptsBtn: document.getElementById('show-preset-prompts-btn'),
         presetPromptsListPanel: document.getElementById('preset-prompts-list-panel'),
         presetPromptsUl: document.getElementById('preset-prompts-ul'),
-        promptInput: document.getElementById('prompt'), // 关键元素
-        submitActionBtn: document.getElementById('submit-action-btn'),
+
+        // --- Settings Area ---
+        settingsArea: document.getElementById('settings-area'),
         backToChatBtn: document.getElementById('back-to-chat-btn'),
-        clearAllHistoryBtn: document.getElementById('clear-all-history-btn'),
-        exportHistoryBtn: document.getElementById('export-history-btn'),
-        importFileInput: document.getElementById('import-file'),
         toggleThemeBtn: document.getElementById('toggle-theme-btn'),
         uiScaleOptions: document.getElementById('ui-scale-options'),
         streamingToggle: document.getElementById('streaming-toggle'),
         autoThinkModeToggle: document.getElementById('auto-think-mode-toggle'),
         showModelManagementBtn: document.getElementById('show-model-management-btn'),
         showPresetManagementBtn: document.getElementById('show-preset-management-btn'),
-        modelListEditor: document.getElementById('model-list-editor'),
+        
+        // ★★★ 核心修复：确保这些 API 配置元素在这里被正确获取 ★★★
+        backToSettingsFromApiKeyBtn: document.getElementById('back-to-settings-from-api-key-btn'), // 这个是API管理区域的返回按钮
+        apiProviderSelect: document.getElementById('api-provider-select'),
+        apiKeyInput: document.getElementById('api-key-input'),
+        apiEndpointInput: document.getElementById('api-endpoint-input'),
+        // 注意：apiEndpointNote 是一个类名，所以要用 querySelector
+        apiEndpointNote: document.querySelector('.api-endpoint-note'), 
+        saveApiKeyBtn: document.getElementById('save-api-key-btn'),
+        
+        // --- Model/Preset Management Areas & Modals ---
+        modelManagementArea: document.getElementById('model-management-area'),
         backToChatFromModelBtn: document.getElementById('back-to-chat-from-model-management-btn'),
+        modelListEditor: document.getElementById('model-list-editor'),
         addNewModelBtn: document.getElementById('add-new-model-btn'),
         saveModelsToFileBtn: document.getElementById('save-models-to-file-btn'),
-        backToChatFromPresetBtn: document.getElementById('back-to-chat-from-preset-management-btn'),
-        addNewPresetBtn: document.getElementById('add-new-preset-btn'),
-        savePresetsToFileBtn: document.getElementById('save-presets-to-file-btn'),
-        presetListEditor: document.getElementById('preset-list-editor'),
         modelFormModal: document.getElementById('model-form-modal'),
         modelForm: document.getElementById('model-form'),
         modelFormTitle: document.getElementById('model-form-title'),
+        
+        presetManagementArea: document.getElementById('preset-management-area'),
+        backToChatFromPresetBtn: document.getElementById('back-to-chat-from-preset-management-btn'),
+        presetListEditor: document.getElementById('preset-list-editor'),
+        addNewPresetBtn: document.getElementById('add-new-preset-btn'),
+        savePresetsToFileBtn: document.getElementById('save-presets-to-file-btn'),
         presetFormModal: document.getElementById('preset-form-modal'),
         presetForm: document.getElementById('preset-form'),
         presetFormTitle: document.getElementById('preset-form-title'),
-        globalActionsMenu: document.getElementById('global-actions-menu'),
-        secretMenu: document.getElementById('secret-menu'),
-        chatHeader: document.querySelector('.chat-header'),
+
+        // --- Provider Management (这个是你上次添加的) ---
+        showProviderManagementBtn: document.getElementById('show-provider-management-btn'), // 这个按钮在设置页
+        providerManagementArea: document.getElementById('provider-management-area'), // 这个是提供商管理区域
+        backToSettingsFromProviderManagementBtn: document.getElementById('back-to-settings-from-provider-management-btn'), // 提供商管理区域的返回按钮
+        providerListEditor: document.getElementById('provider-list-editor'),
+        saveProvidersToFileBtnHeader: document.getElementById('save-providers-to-file-btn-header'),
+        addNewProviderBtnHeader: document.getElementById('add-new-provider-btn-header'),
+
+       
+        saveProvidersToFileBtn: document.getElementById('save-providers-to-file-btn'),
+        providerFormModal: document.getElementById('provider-form-modal'), 
+        providerForm: document.getElementById('provider-form'),
+        providerFormTitle: document.getElementById('provider-form-title'),
+        cancelProviderDetailBtn: document.getElementById('cancel-provider-detail-btn'), // 新增，确保它能被找到
+
+        // --- Floating Menus ---
+        globalActionsMenu: document.getElementById('global-actions-menu')
     });
-
-    // ★ 并且包含我们新增的 messageActionsMenu 逻辑
-    let menuElement = document.getElementById('message-actions-menu');
-    if (!menuElement) {
-        menuElement = document.createElement('div');
-        menuElement.id = 'message-actions-menu';
-        menuElement.className = 'global-actions-menu';
-        document.body.appendChild(menuElement);
-    }
-    ui.messageActionsMenu = menuElement;
-
-     if (!ui.messagesContainer || !ui.promptInput || !ui.submitActionBtn /* 添加所有你认为关键的元素 */) {
-        console.error("initializeUI FAILED: One or more critical UI elements could not be found.");
-        // 详细列出哪些元素未找到
-        if (!ui.messagesContainer) console.error("Missing: #messages");
-        if (!ui.promptInput) console.error("Missing: #prompt");
-        if (!ui.submitActionBtn) console.error("Missing: #submit-action-btn");
+    
+    // 检查 providerFormModal 这个错误源
+    if (!ui.providerFormModal) {
+        console.error("[UI Init] CRITICAL FAILURE: The element with ID 'provider-form-modal' was not found. This is causing issues in bindEventListeners.");
         return false;
     }
+    
 
-    console.log("initializeUI SUCCESS: All critical UI elements captured.");
+    console.log("[UI Init] SUCCESS: All expected UI elements were captured.");
     return true;
 }
 
@@ -393,34 +399,6 @@ export function applyInitialSidebarState(isCollapsed) {
     }
 }
 
-export function processPreBlocksForCopyButtons(containerElement) {
-    if (!containerElement || typeof marked === 'undefined') return;
-    containerElement.querySelectorAll('pre').forEach((pre) => {
-        if (pre.querySelector('.copy-btn')) return;
-        pre.style.position = 'relative';
-        const btn = document.createElement('button');
-        btn.className = 'copy-btn';
-        btn.textContent = '复制';
-        btn.setAttribute('aria-label', '复制此代码块');
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            const preClone = pre.cloneNode(true);
-            preClone.querySelector('.copy-btn')?.remove();
-            let textToCopy = (preClone.querySelector('code') ? preClone.querySelector('code').innerText : preClone.innerText).trim();
-            if (textToCopy === "") {
-                btn.textContent = '无内容';
-                btn.disabled = true;
-                setTimeout(() => { btn.textContent = '复制'; btn.disabled = false; }, 2000);
-                return;
-            }
-            navigator.clipboard.writeText(textToCopy).then(() => {
-                btn.textContent = '已复制!';
-                setTimeout(() => { btn.textContent = '复制'; }, 2000);
-            }).catch(() => utils.showToast('自动复制失败。'));
-        });
-        pre.appendChild(btn);
-    });
-}
 
 /**
  * 创建一个用于流式输出的临时消息包装器。
@@ -704,25 +682,7 @@ function determineDropdownAction() {
 
 // --- 公开的 UI 操作函数 ---
 
-export function showModelManagement() {
-    document.body.classList.add('management-view-active');
-    if (ui.chatArea) ui.chatArea.style.display = 'none';
-    if (ui.settingsArea) ui.settingsArea.style.display = 'none';
-    if (ui.presetManagementArea) ui.presetManagementArea.style.display = 'none';
-    if (ui.sidebar) ui.sidebar.style.display = 'none';
-    if (ui.modelManagementArea) ui.modelManagementArea.style.display = 'flex';
-    renderModelManagementUI();
-}
 
-export function showPresetManagement() {
-    document.body.classList.add('management-view-active');
-    if (ui.chatArea) ui.chatArea.style.display = 'none';
-    if (ui.settingsArea) ui.settingsArea.style.display = 'none';
-    if (ui.modelManagementArea) ui.modelManagementArea.style.display = 'none';
-    if (ui.sidebar) ui.sidebar.style.display = 'none';
-    if (ui.presetManagementArea) ui.presetManagementArea.style.display = 'flex';
-    renderPresetManagementUI();
-}
 
 export function openModelFormForEdit(groupIndex, optionIndex, presetGroupLabel = '') {
     if (!ui.modelForm || !ui.modelFormModal) return;
@@ -884,53 +844,74 @@ export function handleScrollToBottomClick() {
 }
 
 /**
- * 根据已配置的提供商列表，更新 API Key 设置UI。
- * @param {string[]} configuredProviders - 已配置密钥的提供商名称数组。
+ * 根据后端返回的 API Key 配置状态更新 UI。
+ * @param {object} configuredStatus - 后端返回的配置状态对象。
  */
-export function updateApiKeyStatusUI(configuredProviders) {
-    if (!ui.apiProviderSelect || !ui.apiKeyInput) {
-        console.error("updateApiKeyStatusUI: 关键 UI 元素未找到。");
+// js/ui.js
+export function updateApiKeyStatusUI(configuredStatus) {
+    //highlight-start
+console.log('[UI DEBUG] updateApiKeyStatusUI called with status:', JSON.stringify(configuredStatus, null, 2));
+    //highlight-end
+    if (!ui.apiProviderSelect || !ui.apiKeyInput) { // 确认 apiKeyInput 存在
+        console.error("updateApiKeyStatusUI: 关键 API 配置 UI 元素未找到。");
         return;
     }
 
-    const configuredSet = new Set(
-        (configuredProviders || []).map(p => p.trim().toLowerCase())
-    );
-
-    // 更新下拉菜单选项的显示
-    for (const option of ui.apiProviderSelect.options) {
-        const originalText = option.dataset.originalText || option.text.replace(' ✅', '');
-        option.dataset.originalText = originalText;
-        const optionValueLower = option.value.trim().toLowerCase();
+    // --- (1) 更新下拉菜单选项的文本和样式 ---
+    Array.from(ui.apiProviderSelect.options).forEach(option => {
+        const providerValue = option.value;
+        const status = configuredStatus[providerValue.toLowerCase()];
         
-        if (configuredSet.has(optionValueLower)) {
-            option.textContent = `${originalText} ✅`;
+        // 重置文本为原始名称
+        const originalText = option.dataset.originalText || option.textContent.split(' ')[0];
+        option.dataset.originalText = originalText;
+        option.textContent = originalText;
+        
+        option.classList.remove('key-configured', 'key-not-configured');
+        option.style.color = '';
+        option.style.fontWeight = '';
+        option.style.fontStyle = '';
+
+        if (status) {
+            if (status.keyConfigured) {
+                option.dataset.keyConfigured = 'true';
+                option.classList.add('key-configured');
+                option.textContent += ' (✓ 已设置)'; // ★ 使用 ✓ 符号作为标记
+            } else {
+                option.dataset.keyConfigured = 'false';
+                option.classList.add('key-not-configured');
+                option.textContent += ' (未设置)';
+            }
         } else {
-            option.textContent = originalText;
+            option.dataset.keyConfigured = 'false';
+            option.classList.add('key-not-configured');
+            option.textContent += ' (未设置)';
+        }
+    });
+
+    // --- (2) ★★★ 核心修复：根据当前选中项的状态，更新 API Key 输入框 ★★★ ---
+    const selectedOption = ui.apiProviderSelect.options[ui.apiProviderSelect.selectedIndex];
+    
+    if (selectedOption) {
+        const isKeyConfigured = selectedOption.dataset.keyConfigured === 'true';
+
+        if (isKeyConfigured) {
+            // 如果 Key 已配置，显示提示信息
+            ui.apiKeyInput.placeholder = '························ (Api Keys已填充)';
+            ui.apiKeyInput.type = 'text'; // 改为 text 类型，以便 placeholder 完全显示
+            ui.apiKeyInput.value = ''; // 确保输入框是空的，只显示 placeholder
+        } else {
+            // 如果 Key 未配置，显示正常的输入提示
+            const selectedProviderConfig = state.getProviderConfig(selectedOption.value);
+            if (selectedProviderConfig) {
+                ui.apiKeyInput.placeholder = `粘贴您的 ${selectedProviderConfig.name} API Key`;
+            } else {
+                ui.apiKeyInput.placeholder = '粘贴您的 API Key';
+            }
+            ui.apiKeyInput.type = 'password'; // 保持为 password 类型
         }
     }
-
-    // 定义一个函数，用于根据当前选中的提供商更新输入框
-    const updateInputState = () => {
-        const selectedProviderLower = ui.apiProviderSelect.value.trim().toLowerCase();
-        if (configuredSet.has(selectedProviderLower)) {
-            // 如果已配置，清空输入框并显示占位符
-            ui.apiKeyInput.value = '';
-            ui.apiKeyInput.placeholder = '•••••••••••••••• (已配置，留空以保留)';
-        } else {
-            // 如果未配置，显示正常提示
-            ui.apiKeyInput.placeholder = '粘贴您的 API Key';
-        }
-    };
-    
-    // 立即更新一次
-    updateInputState();
-
-    // 绑定 change 事件，以便在用户切换选项时也更新
-    ui.apiProviderSelect.removeEventListener('change', updateInputState); // 防止重复绑定
-    ui.apiProviderSelect.addEventListener('change', updateInputState);
 }
-
 
 /**
  * 切换系统指令编辑区的显示和隐藏。
@@ -1064,6 +1045,7 @@ export function renderSystemPromptDisplay(content) {
 }
 
 
+
 /**
  * 创建并向聊天区域追加一条新消息的 DOM 元素。
  * (最终整合版，支持附件、思考过程、分支指示器和元信息)
@@ -1122,8 +1104,9 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
             e.stopPropagation();
             navigator.clipboard.writeText(reasoningText).then(() => {
                 e.target.textContent = '已复制!';
+                utils.showToast('思考过程已复制', 'success'); // 添加 toast
                 setTimeout(() => { e.target.textContent = '复制'; }, 2000);
-            });
+            }).catch(() => utils.showToast('自动复制失败。', 'error')); // 添加 toast
         });
         messageDiv.appendChild(reasoningBlockDiv);
     }
@@ -1146,7 +1129,24 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     if (finalMarkdown.trim()) {
         markdownContainer.dataset.fullRawContent = finalMarkdown;
         markdownContainer.innerHTML = marked.parse(finalMarkdown);
-        utils.pruneEmptyNodes(markdownContainer); // 对 markdownContainer 进行清理
+
+        // ★★★ 核心修复：处理代码块开头的多余空行和空白符 ★★★
+        markdownContainer.querySelectorAll('pre').forEach(preElement => {
+            const codeElement = preElement.querySelector('code');
+            const targetElement = codeElement || preElement; // 如果有 code 标签则处理 code，否则处理 pre
+
+            let text = targetElement.textContent; // 获取当前文本内容
+
+            // 使用正则表达式移除开头的所有空白字符（包括空格、制表符等）和换行符
+            // 这将确保代码内容从第一行开始，没有任何多余的空行或空格
+            text = text.replace(/^[\s\n]+/, ''); // 匹配开头的一个或多个空白字符或换行符
+
+            // 更新元素的文本内容
+            targetElement.textContent = text;
+        });
+        // ★★★ 修复结束 ★★★
+
+        utils.pruneEmptyNodes(markdownContainer); // 对 markdownContainer 进行清理 (处理空<p>和空文本节点)
         contentDiv.appendChild(markdownContainer);
         messageDiv.appendChild(contentDiv);
         
@@ -1270,7 +1270,11 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     copyMessageBtn.className = 'message-action-btn copy-message-btn';
     copyMessageBtn.title = '复制消息内容';
     copyMessageBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-copy" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/></svg>`;
-    copyMessageBtn.addEventListener('click', () => { navigator.clipboard.writeText(finalMarkdown.trim()).then(() => utils.showToast('消息内容已复制', 'success')); });
+    copyMessageBtn.addEventListener('click', () => { 
+        navigator.clipboard.writeText(finalMarkdown.trim()).then(() => {
+            utils.showToast('消息内容已复制', 'success');
+        }).catch(() => utils.showToast('复制失败。', 'error'));
+    });
     actionsContainer.appendChild(copyMessageBtn);
 
      // 7b. ★ 核心修改：根据角色渲染不同的按钮 ★
@@ -1328,13 +1332,121 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
 }
 
 
+// ui.js 中的 processPreBlocksForCopyButtons 函数
+export function processPreBlocksForCopyButtons(containerElement) {
+    if (!containerElement || typeof marked === 'undefined') return;
 
+    containerElement.querySelectorAll('pre').forEach((pre) => {
+        // 防止重复添加按钮
+        if (pre.querySelector('.code-actions')) {
+            return;
+        }
+
+        // 确保 pre 元素是相对定位，以便内部按钮可以绝对定位
+        pre.style.position = 'relative';
+
+        // 创建一个容器来放置复制和下载按钮
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'code-actions';
+
+        // --- 复制按钮 ---
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'code-action-btn copy-btn';
+        copyBtn.title = '复制'; // 悬停提示
+        copyBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-copy" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/>
+            </svg>
+        `;
+        copyBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            // 获取 code 标签内的文本，如果不存在则获取 pre 的文本
+            const codeElement = pre.querySelector('code');
+            const textToCopy = codeElement ? codeElement.innerText.trim() : pre.innerText.trim();
+
+            if (textToCopy === "") {
+                copyBtn.title = '无内容';
+                utils.showToast('代码块内容为空', 'warning'); // ★ 新增 toast 提示
+                setTimeout(() => copyBtn.title = '复制', 2000); // 2秒后恢复提示
+                return;
+            }
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                copyBtn.title = '已复制!';
+                utils.showToast('代码已复制', 'success'); // ★ 新增 toast 提示
+                setTimeout(() => copyBtn.title = '复制', 2000);
+            }).catch(() => utils.showToast('自动复制失败。', 'error')); // ★ 新增 toast 提示
+        });
+        actionsDiv.appendChild(copyBtn);
+
+        // --- 下载按钮 ---
+        const downloadBtn = document.createElement('button');
+        downloadBtn.className = 'code-action-btn download-btn';
+        downloadBtn.title = '下载代码'; // 悬停提示
+        downloadBtn.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-download" viewBox="0 0 16 16">
+                <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+                <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V3.5a.5.5 0 0 0-1 0v6.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+            </svg>
+        `;
+        downloadBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const codeElement = pre.querySelector('code');
+            const textToDownload = codeElement ? codeElement.innerText.trim() : pre.innerText.trim();
+
+            if (textToDownload === "") {
+                downloadBtn.title = '无内容可下载';
+                utils.showToast('代码块内容为空', 'warning'); // ★ 新增 toast 提示
+                setTimeout(() => downloadBtn.title = '下载代码', 2000);
+                return;
+            }
+
+            // 尝试从 class 中获取语言，作为文件扩展名
+            let filename = 'code_snippet.txt';
+            if (codeElement && codeElement.classList.length > 0) {
+                const langClass = Array.from(codeElement.classList).find(cls => cls.startsWith('language-'));
+                if (langClass) {
+                    const extension = langClass.substring('language-'.length);
+                    // 简单的扩展名映射，可以根据需要扩展
+                    const knownExtensions = {
+                        'js': 'js', 'javascript': 'js', 'ts': 'ts', 'typescript': 'ts',
+                        'py': 'py', 'python': 'py', 'java': 'java', 'c': 'c', 'cpp': 'cpp',
+                        'cs': 'cs', 'go': 'go', 'json': 'json', 'xml': 'xml', 'html': 'html',
+                        'css': 'css', 'scss': 'scss', 'bash': 'sh', 'sh': 'sh', 'shell': 'sh',
+                        'md': 'md', 'markdown': 'md', 'sql': 'sql', 'php': 'php', 'ruby': 'rb',
+                        'swift': 'swift', 'kt': 'kt', 'kotlin': 'kt', 'yaml': 'yaml', 'yml': 'yml'
+                    };
+                    filename = `code_snippet.${knownExtensions[extension.toLowerCase()] || 'txt'}`;
+                }
+            }
+
+            const blob = new Blob([textToDownload], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename; // 设置下载文件名
+            document.body.appendChild(a); // 某些浏览器需要添加到 DOM
+            a.click(); // 模拟点击
+            document.body.removeChild(a); // 清理临时元素
+            URL.revokeObjectURL(url); // 释放内存
+
+            downloadBtn.title = '已下载!';
+            utils.showToast('代码已下载', 'success'); // ★ 新增 toast 提示
+            setTimeout(() => downloadBtn.title = '下载代码', 2000);
+        });
+        actionsDiv.appendChild(downloadBtn);
+
+        // 将按钮容器添加到 pre 元素中
+        pre.appendChild(actionsDiv);
+    });
+}
 
 
 
 /**
  * 渲染侧边栏的对话列表。
- * (最终重构版，支持置顶和拖拽排序)
+ * (最终重构版，支持置顶和拖拽排序，并扩展搜索范围)
  * @param {string} [searchTerm=''] - 用于过滤对话的搜索词。
  */
 export function renderConversationList(searchTerm = '') {
@@ -1350,9 +1462,39 @@ export function renderConversationList(searchTerm = '') {
     let conversationsToProcess = [...state.conversations];
     if (searchTerm.trim()) {
         const lowerCaseSearchTerm = searchTerm.toLowerCase().trim();
-        conversationsToProcess = conversationsToProcess.filter(c => 
-            c.title.toLowerCase().includes(lowerCaseSearchTerm)
-        );
+        conversationsToProcess = conversationsToProcess.filter(c => {
+            // ★★★ 核心修改：扩展搜索逻辑 ★★★
+            // 搜索条件：匹配标题 OR 匹配任何一条消息的内容
+            const titleMatches = c.title.toLowerCase().includes(lowerCaseSearchTerm);
+            
+            const contentMatches = c.messages.some(msg => {
+                // 跳过系统消息，通常不搜索
+                if (msg.role === 'system') return false; 
+
+                let msgContentText = '';
+                // 确保能从不同格式的 content 中提取文本
+                if (typeof msg.content === 'string') {
+                    msgContentText = msg.content;
+                } else if (msg.content && typeof msg.content.text === 'string') {
+                    msgContentText = msg.content.text;
+                } else if (Array.isArray(msg.content)) {
+                    const textPart = msg.content.find(p => p.type === 'text');
+                    msgContentText = textPart ? textPart.text : '';
+                    // 仅搜索文本，不搜索文件数据（如 base64）
+                    // 如果需要搜索文件内容，则在 file_content 类型中提取其内容
+                    const fileParts = msg.content.filter(p => p.type === 'file_content');
+                    if (fileParts.length > 0) {
+                        fileParts.forEach(fp => {
+                            msgContentText += ` ${fp.content}`; // 将文件内容也加入搜索文本
+                        });
+                    }
+                }
+                
+                return msgContentText.toLowerCase().includes(lowerCaseSearchTerm);
+            });
+
+            return titleMatches || contentMatches; // 只要标题或内容匹配就显示
+        });
     }
 
     // 4. 将数据清晰地分为三组：置顶、普通、已归档
@@ -1363,20 +1505,18 @@ export function renderConversationList(searchTerm = '') {
     // 5. 渲染不可拖拽的“置顶”部分
     pinned.forEach(conv => {
         const listItem = createConversationListItem(conv);
-        // 明确给置顶项添加 'pinned' 类，以便 CSS 和 SortableJS 的 filter 生效
         listItem.classList.add('pinned'); 
         ui.conversationList.appendChild(listItem);
     });
 
     // 6. ★ 核心：为可拖拽的“普通”对话创建一个专门的容器 ★
     const draggableList = document.createElement('ul');
-    draggableList.id = 'draggable-conversation-list'; // 给它一个唯一的ID
-    draggableList.className = 'conv-nav';             // 复用现有的 ul 样式
+    draggableList.id = 'draggable-conversation-list';
+    draggableList.className = 'conv-nav';
     normal.forEach(conv => {
         const listItem = createConversationListItem(conv);
         draggableList.appendChild(listItem);
     });
-    // 将这个只包含可拖拽项的列表容器添加到主列表中
     ui.conversationList.appendChild(draggableList);
 
     // 7. ★ 核心：只对这个专门的容器激活拖拽功能 ★
@@ -1409,7 +1549,6 @@ export function renderConversationList(searchTerm = '') {
         ui.conversationList.appendChild(subList);
     }
 }
-
 
 export function showGlobalActionsMenu(buttonElement, convId, convTitle, isPinned, titleSpanElement) {
     if (!ui.globalActionsMenu) return;
@@ -1550,22 +1689,6 @@ export function loadAndRenderConversationUI(convToLoad) {
 
 
 
-export function showChatArea() {
-
-    if (ui.settingsArea) ui.settingsArea.style.display = 'none';
-    if (ui.modelManagementArea) ui.modelManagementArea.style.display = 'none';
-    if (ui.presetManagementArea) ui.presetManagementArea.style.display = 'none';
-    if (ui.chatArea) ui.chatArea.style.display = 'flex';
-    if (ui.sidebar) ui.sidebar.style.display = 'flex';
-}
-
-export function showSettings() {
-
-    if (ui.chatArea) ui.chatArea.style.display = 'none';
-    if (ui.modelManagementArea) ui.modelManagementArea.style.display = 'none';
-    if (ui.presetManagementArea) ui.presetManagementArea.style.display = 'none';
-    if (ui.settingsArea) ui.settingsArea.style.display = 'flex';
-}
 
 export function updateChatTitle(newTitle) {
     if (ui.chatTitle) ui.chatTitle.textContent = newTitle;
@@ -1598,6 +1721,73 @@ export function populateModelDropdown(modelsArray) {
         if (!hasVisibleOptions) ui.modelSelect.innerHTML = '<option value="error::no-visible-models">无可见模型</option>';
     }
     return determineDropdownAction();
+}
+
+// js/ui.js
+export function populateApiProviderDropdown() {
+    // 1. 检查 UI 元素是否存在
+    if (!ui.apiProviderSelect) {
+        console.error("populateApiProviderDropdown: ui.apiProviderSelect is not found.");
+        return;
+    }
+    
+    // 2. 清空现有选项
+    ui.apiProviderSelect.innerHTML = ''; 
+
+    // 3. 移除旧的事件监听器，防止内存泄漏和重复绑定
+    ui.apiProviderSelect.removeEventListener('change', handleProviderChange);
+
+    // 4. 检查是否有提供商配置数据
+    if (!state.providersConfig || state.providersConfig.length === 0) {
+        // 如果没有配置，显示提示信息
+        const option = document.createElement('option');
+        option.value = "";
+        option.textContent = "无可用提供商配置";
+        ui.apiProviderSelect.appendChild(option);
+        // 因为没有提供商，所以直接返回，不进行后续操作
+        return;
+    }
+
+    // 5. 遍历配置数据，创建并添加每个 <option> 元素
+    state.providersConfig.forEach(provider => {
+        const option = document.createElement('option');
+        // 设置 value，例如 "openai"
+        option.value = provider.value; 
+        // 设置显示的文本，例如 "OpenAI"
+        option.textContent = provider.name;
+        // 使用 dataset 存储原始名称，用于后续更新状态文本
+        option.dataset.originalText = provider.name; 
+        // 将创建好的 option 添加到 select 中
+        ui.apiProviderSelect.appendChild(option);
+    });
+
+    // 6. 如果有选项，默认选中第一个
+    if (ui.apiProviderSelect.options.length > 0) {
+        ui.apiProviderSelect.selectedIndex = 0;
+    }
+    
+    // 7. 添加新的 'change' 事件监听器
+    ui.apiProviderSelect.addEventListener('change', handleProviderChange);
+    
+    // 8. ★★★ 关键：在填充完列表后，立即调用 API 获取 Key 的状态，并更新 UI ★★★
+    api.getKeysStatus().then(configuredStatus => {
+        // 调用我们之前修复好的 updateApiKeyStatusUI 函数
+        updateApiKeyStatusUI(configuredStatus);
+    }).catch(error => {
+        console.error("Failed to update API key status after populating dropdown:", error);
+    });
+}
+
+// ★★★ 新增一个辅助函数来处理 change 事件 ★★★
+async function handleProviderChange() {
+    try {
+        const configuredStatus = await api.getKeysStatus();
+        updateApiKeyStatusUI(configuredStatus);
+    } catch (error) {
+        console.error("Failed to update status on provider change:", error);
+        // 即使获取失败，也尝试用空对象更新，以重置状态
+        updateApiKeyStatusUI({});
+    }
 }
 
 /**
@@ -1806,3 +1996,173 @@ export function showExportOptionsMenu(targetButton) {
 }
 
 
+
+let providerSortable = null;
+
+export function showProviderManagement() {
+    // ★★★ 在这里添加缺失的代码 ★★★
+    document.body.classList.add('management-view-active');
+
+    if (ui.chatArea) ui.chatArea.style.display = 'none';
+    if (ui.settingsArea) ui.settingsArea.style.display = 'none';
+    if (ui.modelManagementArea) ui.modelManagementArea.style.display = 'none';
+    if (ui.presetManagementArea) ui.presetManagementArea.style.display = 'none';
+    if (ui.sidebar) ui.sidebar.style.display = 'none';
+    if (ui.providerManagementArea) ui.providerManagementArea.style.display = 'flex';
+    renderProviderManagementUI();
+}
+
+export function renderProviderManagementUI() {
+    if (!ui.providerListEditor) return;
+
+    if (providerSortable) providerSortable.destroy();
+    ui.providerListEditor.innerHTML = '';
+
+    (state.providersConfig || []).forEach((provider, index) => {
+        const itemDiv = document.createElement('div');
+        itemDiv.className = 'model-option-editor'; // 复用模型选项的样式
+        
+        const detailsHtml = `
+            <strong>${utils.escapeHtml(provider.name)}</strong>
+            <span>ID: ${utils.escapeHtml(provider.value)} | 代理: ${utils.escapeHtml(provider.proxyPath)} | 映射: ${utils.escapeHtml(provider.mapperType)}</span>
+        `;
+        
+        itemDiv.innerHTML = `
+            <span class="drag-handle" title="拖动排序">⠿</span>
+            <div class="details">${detailsHtml}</div>
+            <div class="actions">
+                <button class="edit-btn">编辑</button>
+                <button class="delete-btn danger-text">删除</button>
+            </div>`;
+        
+        itemDiv.querySelector('.edit-btn').onclick = () => openProviderFormForEdit(index);
+        itemDiv.querySelector('.delete-btn').onclick = () => {
+            if (confirm(`确定删除提供商 "${provider.name}"?`)) {
+                state.providersConfig.splice(index, 1);
+                renderProviderManagementUI();
+            }
+        };
+        
+        ui.providerListEditor.appendChild(itemDiv);
+    });
+
+    if (typeof Sortable !== 'undefined') {
+        providerSortable = Sortable.create(ui.providerListEditor, {
+            animation: 150,
+            handle: '.drag-handle',
+            onEnd: (evt) => {
+                const [movedItem] = state.providersConfig.splice(evt.oldIndex, 1);
+                state.providersConfig.splice(evt.newIndex, 0, movedItem);
+                renderProviderManagementUI();
+            }
+        });
+    }
+}
+
+export function openProviderFormForEdit(index) {
+    if (!ui.providerForm || !ui.providerFormModal) return;
+    ui.providerForm.reset();
+    document.getElementById('edit-provider-index').value = '';
+    
+    if (typeof index !== 'undefined' && state.providersConfig[index]) {
+        const provider = state.providersConfig[index];
+        ui.providerFormTitle.textContent = '编辑提供商';
+        document.getElementById('edit-provider-index').value = index;
+        document.getElementById('provider-name').value = provider.name || '';
+        document.getElementById('provider-value').value = provider.value || '';
+        document.getElementById('provider-api-key-env').value = provider.apiKeyEnv || '';
+        document.getElementById('provider-default-endpoint').value = provider.defaultEndpoint || '';
+        document.getElementById('provider-proxy-path').value = provider.proxyPath || '/api/openai-compatible-proxy';
+        document.getElementById('provider-mapper-type').value = provider.mapperType || 'standard';
+        document.getElementById('provider-stream-support').checked = !!provider.streamSupport;
+        document.getElementById('provider-is-special-case').checked = !!provider.isSpecialCase;
+        document.getElementById('provider-is-self-hosted').checked = !!provider.isSelfHosted;
+    } else {
+        ui.providerFormTitle.textContent = '添加新提供商';
+        // 为新提供商设置默认值
+        document.getElementById('provider-proxy-path').value = '/api/openai-compatible-proxy';
+        document.getElementById('provider-mapper-type').value = 'standard';
+        document.getElementById('provider-stream-support').checked = true;
+    }
+    
+    ui.providerFormModal.style.display = 'flex';
+}
+
+export function closeProviderForm() {
+    if (ui.providerFormModal) ui.providerFormModal.style.display = 'none';
+}
+
+export function handleProviderFormSubmit(event) {
+    event.preventDefault();
+
+    const providerData = {
+        name: document.getElementById('provider-name').value,
+        value: document.getElementById('provider-value').value,
+        apiKeyEnv: document.getElementById('provider-api-key-env').value,
+        defaultEndpoint: document.getElementById('provider-default-endpoint').value,
+        proxyPath: document.getElementById('provider-proxy-path').value,
+        mapperType: document.getElementById('provider-mapper-type').value,
+        streamSupport: document.getElementById('provider-stream-support').checked,
+        isSpecialCase: document.getElementById('provider-is-special-case').checked,
+        isSelfHosted: document.getElementById('provider-is-self-hosted').checked,
+    };
+
+    if (!providerData.name || !providerData.value || !providerData.apiKeyEnv) {
+        utils.showToast('名称、内部值和API Key变量为必填项！', 'warning');
+        return;
+    }
+
+    const editIndex = document.getElementById('edit-provider-index').value;
+    if (editIndex !== '') {
+        state.providersConfig[parseInt(editIndex, 10)] = providerData;
+    } else {
+        state.providersConfig.push(providerData);
+    }
+    
+    renderProviderManagementUI();
+    closeProviderForm();
+}
+
+// ★★★ 更新现有的视图切换函数，确保它们能隐藏新的 API 管理区域 ★★★
+
+export function showChatArea() {
+    // ★★★ 在这里添加缺失的代码，移除管理视图状态 ★★★
+    document.body.classList.remove('management-view-active');
+
+    if (ui.settingsArea) ui.settingsArea.style.display = 'none';
+    if (ui.modelManagementArea) ui.modelManagementArea.style.display = 'none';
+    if (ui.presetManagementArea) ui.presetManagementArea.style.display = 'none';
+    if (ui.providerManagementArea) ui.providerManagementArea.style.display = 'none'; 
+    if (ui.chatArea) ui.chatArea.style.display = 'flex';
+    if (ui.sidebar) ui.sidebar.style.display = 'flex';
+}
+
+export function showSettings() {
+    if (ui.chatArea) ui.chatArea.style.display = 'none';
+    if (ui.modelManagementArea) ui.modelManagementArea.style.display = 'none';
+    if (ui.presetManagementArea) ui.presetManagementArea.style.display = 'none';
+    if (ui.providerManagementArea) ui.providerManagementArea.style.display = 'none'; // 新增
+    if (ui.settingsArea) ui.settingsArea.style.display = 'flex';
+}
+
+export function showModelManagement() {
+    document.body.classList.add('management-view-active');
+    if (ui.chatArea) ui.chatArea.style.display = 'none';
+    if (ui.settingsArea) ui.settingsArea.style.display = 'none';
+    if (ui.presetManagementArea) ui.presetManagementArea.style.display = 'none';
+    if (ui.providerManagementArea) ui.providerManagementArea.style.display = 'none'; // 新增
+    if (ui.sidebar) ui.sidebar.style.display = 'none';
+    if (ui.modelManagementArea) ui.modelManagementArea.style.display = 'flex';
+    renderModelManagementUI();
+}
+
+export function showPresetManagement() {
+    document.body.classList.add('management-view-active');
+    if (ui.chatArea) ui.chatArea.style.display = 'none';
+    if (ui.settingsArea) ui.settingsArea.style.display = 'none';
+    if (ui.modelManagementArea) ui.modelManagementArea.style.display = 'none';
+    if (ui.providerManagementArea) ui.providerManagementArea.style.display = 'none'; // 新增
+    if (ui.sidebar) ui.sidebar.style.display = 'none';
+    if (ui.presetManagementArea) ui.presetManagementArea.style.display = 'flex';
+    renderPresetManagementUI();
+}

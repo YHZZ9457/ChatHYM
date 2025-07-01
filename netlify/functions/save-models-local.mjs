@@ -1,19 +1,29 @@
-// netlify/functions/save-models-local.mjs
-import fs from 'node:fs';
-import path from 'node:path';
-// 我们将不再依赖 import.meta.url 和 fileURLToPath 来获取 __dirname
+// --- START OF FILE netlify/functions/save-models-local.mjs (最终修正 - 正确路径和导入) ---
 
-// ★★★ 使用 process.cwd() 来获取项目根目录 (在 netlify dev 中通常有效) ★★★
-const projectRoot = process.cwd();
-const modelsFilePath = path.join(projectRoot, 'public', 'configs', 'models.json'); 
+// 这个 Netlify Function 负责将模型配置保存到本地的 public/configs/models.json 文件。
+// 适用于本地开发环境，在生产环境此操作可能受限或不推荐。
 
-// 启动时的调试日志
+// ★★★ 核心修复 1: 正确导入 fs 和 path 模块 ★★★
+import { writeFileSync, readFileSync } from 'fs'; // readFileSync 也是为了调试或确认路径
+import { resolve, join } from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+
+// ★★★ 核心修复 3: 正确构建目标文件路径 ★★★
+// 假设函数文件在 `your-repo/netlify/functions/`
+// 目标文件在 `your-repo/public/configs/models.json`
+// 所以从 `__dirname` 到 `public/configs/models.json` 是 `../../../public/configs/models.json`
+const modelsFilePath = resolve(__dirname, '../../../public/configs/models.json'); 
+
+// 启动时的调试日志 (这些日志会在 Netlify 控制台看到)
 console.log('--- save-models-local.mjs ---');
-console.log('Detected Project Root (cwd):', projectRoot);
+console.log('Detected __dirname:', __dirname);
 console.log('Target models.json Path:', modelsFilePath);
 console.log('--- end initial path debug ---');
 
-export async function handler(event) {
+// ★★★ 核心修复 4: handler 函数签名 ★★★
+export async function handler(event, context) {
     if (event.httpMethod !== 'POST') {
         return { statusCode: 405, body: 'Method Not Allowed' };
     }
@@ -22,7 +32,6 @@ export async function handler(event) {
     console.log('[save-models-local] Will attempt to write to:', modelsFilePath);
 
     try {
-        // 确保 modelsFilePath 是一个有效的字符串路径
         if (typeof modelsFilePath !== 'string' || !modelsFilePath) {
             console.error("[save-models-local] CRITICAL: modelsFilePath is invalid or undefined.", modelsFilePath);
             throw new Error("Internal server error: File path for models.json is not configured correctly.");
@@ -38,7 +47,9 @@ export async function handler(event) {
             };
         }
 
-        fs.writeFileSync(modelsFilePath, JSON.stringify(newModelsConfig, null, 2), 'utf8');
+        // 使用同步写入（writeFileSync）在本地文件系统上，这通常是安全的，因为是无服务器函数的一次性操作。
+        // 如果文件较大或需要更高性能，可以考虑 fs.promises.writeFile。
+        writeFileSync(modelsFilePath, JSON.stringify(newModelsConfig, null, 2), 'utf8');
         console.log(`[save-models-local] SUCCESS: models.json at ${modelsFilePath} has been updated!`);
         return {
             statusCode: 200,
@@ -49,9 +60,9 @@ export async function handler(event) {
         return {
             statusCode: 500,
             body: JSON.stringify({
-                message: `保存 models.json 文件失败 (路径: ${modelsFilePath || '路径未定义'})。`, // 包含路径以便调试
+                message: `保存 models.json 文件失败 (路径: ${modelsFilePath || '路径未定义'})。`,
                 error: error.message,
-                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined // 开发模式下显示堆栈
+                stack: process.env.NODE_ENV === 'development' ? error.stack : undefined 
             }),
         };
     }

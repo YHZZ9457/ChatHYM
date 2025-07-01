@@ -14,7 +14,7 @@ import { dirname } from 'path';
 // 假设函数文件在 `your-repo/netlify/functions/`
 // 目标文件在 `your-repo/public/configs/models.json`
 // 所以从 `__dirname` 到 `public/configs/models.json` 是 `../../../public/configs/models.json`
-const modelsFilePath = resolve(__dirname, '../../../public/configs/models.json'); 
+const modelsFilePath = resolve(process.cwd(), 'public/configs/models.json');
 
 // 启动时的调试日志 (这些日志会在 Netlify 控制台看到)
 console.log('--- save-models-local.mjs ---');

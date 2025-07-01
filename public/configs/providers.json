@@ -98,17 +98,6 @@
       "streamSupport": true,
       "isSpecialCase": false,
       "isSelfHosted": false
-    },
-    {
-      "name": "X",
-      "value": "x",
-      "apiKeyEnv": "X_API_SECRET_KEYS",
-      "defaultEndpoint": "",
-      "proxyPath": "/api/openai-compatible-proxy",
-      "mapperType": "standard",
-      "streamSupport": true,
-      "isSpecialCase": false,
-      "isSelfHosted": false
     }
   ]
 }

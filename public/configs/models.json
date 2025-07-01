@@ -132,6 +132,11 @@
           "isHidden": false
         },
         {
+          "text": "SF Deepseek-V3 0324",
+          "value": "SiliconFlow::deepseek-ai/DeepSeek-V3",
+          "isHidden": false
+        },
+        {
           "text": "SF Qwen3-235B-A22B",
           "value": "siliconflow::Qwen/Qwen3-235B-A22B",
           "isHidden": false
@@ -177,16 +182,6 @@
           "isHidden": true
         },
         {
-          "text": "SF GLM-Z1-9B",
-          "value": "siliconflow::THUDM/GLM-Z1-9B-0414",
-          "isHidden": true
-        },
-        {
-          "text": "SF GLM-4-9B",
-          "value": "siliconflow::THUDM/GLM-4-9B-0414",
-          "isHidden": true
-        },
-        {
           "text": "SF MiniMax-M1",
           "value": "siliconflow::MiniMaxAI/MiniMax-M1-80k",
           "isHidden": false
@@ -197,8 +192,8 @@
           "isHidden": false
         },
         {
-          "text": "SF Deepseek-V3 0324",
-          "value": "SiliconFlow::deepseek-ai/DeepSeek-V3",
+          "text": "SF ERNIE-4.5-300B-A47B",
+          "value": "siliconflow::baidu/ERNIE-4.5-300B-A47B",
           "isHidden": false
         }
       ]

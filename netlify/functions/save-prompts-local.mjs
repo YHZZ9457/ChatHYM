@@ -10,7 +10,7 @@ import { dirname } from 'path';
 
 
 // ★★★ 核心修复 3: 正确构建目标文件路径 ★★★
-const targetPath = resolve(__dirname, '../../../public/configs/prompts.json');
+const targetPath = resolve(process.cwd(), 'public/configs/prompts.json');
 
 export async function handler(event, context) {
     if (event.httpMethod !== 'POST') {

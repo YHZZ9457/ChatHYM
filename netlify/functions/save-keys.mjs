@@ -1,21 +1,29 @@
-// --- START OF FILE netlify/functions/save-keys.mjs (最终无 dotenv 版本) ---
+// --- START OF FILE netlify/functions/save-keys.mjs (Intelligent Quoting Fix) ---
 
 // 这个 Netlify Function 负责将 API Key 和 Endpoint 信息写入项目根目录的 .env 文件。
 // 它使用 Node.js 的内置 'fs' 和 'path' 模块。
-// 注意：此文件不依赖 dotenv，因为它是直接操作文件，而不是读取环境变量。
 
-import { appendFileSync, readFileSync, writeFileSync } from 'fs'; // Node.js 内置模块
-import { resolve, dirname } from 'path'; // Node.js 内置模块
-import { fileURLToPath } from 'url'; // Node.js 内置模块
+import { readFileSync, writeFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// 移除所有 dotenv 相关的代码！
-// import dotenv from 'dotenv';
-// if (process.env.NODE_ENV !== 'production') {
-//     dotenv.config({ path: resolve(__dirname, '../../../.env') }); 
-// }
+// ★★★ 核心修复 1：添加一个辅助函数，用于智能地为值添加引号 ★★★
+/**
+ * Formats a value for a .env file.
+ * If the value contains spaces, '=', or '#', it will be wrapped in double quotes.
+ * @param {string} value The value to format.
+ * @returns {string} The formatted value.
+ */
+function formatEnvValue(value) {
+    // 如果值中包含空格、等号、#号，或者它本身就是空的，则用双引号包裹
+    if (/\s|=|#/.test(value) || value === '') {
+        // 在包裹之前，需要对内部的双引号和反斜杠进行转义
+        const escapedValue = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+        return `"${escapedValue}"`;
+    }
+    // 否则，直接返回值
+    return value;
+}
 
 export default async (request, context) => {
   if (request.method !== 'POST') {
@@ -32,21 +40,20 @@ export default async (request, context) => {
         return new Response(JSON.stringify({ message: 'API Key 或 API Endpoint 至少需要填写一项。' }), { status: 400 });
     }
 
-    // 确保 envFilePath 指向项目根目录的 .env 文件
-    // 假设函数文件在 project-root/netlify/functions/，那么 .env 在 project-root/
+    // ★★★ 核心修复 2：在函数内部安全地获取 __dirname ★★★
+    const __dirname = dirname(fileURLToPath(import.meta.url));
     const envFilePath = resolve(__dirname, '../../../.env'); 
 
     let fileContent = '';
     try {
         fileContent = readFileSync(envFilePath, 'utf8');
     } catch (err) {
-        // 如果文件不存在，则创建它
         if (err.code === 'ENOENT') {
             console.warn(`.env file not found at ${envFilePath}, creating a new one.`);
             fileContent = '';
-            writeFileSync(envFilePath, ''); // 创建空文件
+            writeFileSync(envFilePath, '');
         } else {
-            throw err; // 其他错误抛出
+            throw err;
         }
     }
     
@@ -57,25 +64,22 @@ export default async (request, context) => {
     const envVarKeyName = `${provider.toUpperCase()}_API_KEY_SECRET`;
     const envVarEndpointName = `${provider.toUpperCase()}_API_ENDPOINT_URL`;
 
-    // 构建正则表达式，用于匹配现有行
-    const keyRegex = new RegExp(`^${envVarKeyName}=.*`, 'gm');
-    const endpointRegex = new RegExp(`^${envVarEndpointName}=.*`, 'gm');
+    const keyRegex = new RegExp(`^\\s*${envVarKeyName}\\s*=.*`, 'i');
+    const endpointRegex = new RegExp(`^\\s*${envVarEndpointName}\\s*=.*`, 'i');
 
-    // 过滤掉所有可能被更新或删除的旧行
     lines = lines.filter(line => 
-        !line.match(keyRegex) && !line.match(endpointRegex) && line.trim() !== ''
+        !keyRegex.test(line) && !endpointRegex.test(line) && line.trim() !== ''
     );
 
     // 处理 API Key
     if (apiKey) {
-        const newKeyLine = `${envVarKeyName}="${apiKey}"`;
+        // ★★★ 核心修复 3：使用辅助函数来格式化值 ★★★
+        const newKeyLine = `${envVarKeyName}=${formatEnvValue(apiKey)}`;
         lines.push(newKeyLine);
         message += `${provider} 的 API Key 已保存/更新！`;
         updated = true;
     } else {
-        // 如果 apiKey 为空，且之前存在，则表示移除
-        // 过滤阶段已经移除了，这里只需要更新消息
-        if (fileContent.match(keyRegex)) { // 检查旧文件内容是否包含该 Key
+        if (fileContent.match(keyRegex)) {
             message += `${provider} 的 API Key 已移除！`;
             updated = true;
         }
@@ -83,14 +87,14 @@ export default async (request, context) => {
 
     // 处理 API Endpoint
     if (apiEndpoint) {
-        const newEndpointLine = `${envVarEndpointName}="${apiEndpoint}"`;
+        // ★★★ 核心修复 3：使用辅助函数来格式化值 ★★★
+        const newEndpointLine = `${envVarEndpointName}=${formatEnvValue(apiEndpoint)}`;
         lines.push(newEndpointLine);
         if (updated) message += ' 并且 ';
         message += `${provider} 的 API Endpoint 已保存/更新！`;
         updated = true;
     } else {
-        // 如果 apiEndpoint 为空，且之前存在，则表示移除
-        if (fileContent.match(endpointRegex)) { // 检查旧文件内容是否包含该 Endpoint
+        if (fileContent.match(endpointRegex)) {
             if (updated) message += ' 并且 ';
             message += `${provider} 的 API Endpoint 已移除！`;
             updated = true;
@@ -98,7 +102,6 @@ export default async (request, context) => {
     }
 
     if (updated) {
-        // 确保文件末尾有且只有一个换行符
         const finalContent = lines.join('\n') + '\n';
         writeFileSync(envFilePath, finalContent);
     } else {
@@ -115,3 +118,5 @@ export default async (request, context) => {
     return new Response(JSON.stringify({ message: '保存失败：' + error.message }), { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } });
   }
 };
+
+// --- END OF FILE netlify/functions/save-keys.mjs (Intelligent Quoting Fix) ---

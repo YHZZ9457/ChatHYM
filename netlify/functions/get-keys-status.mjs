@@ -1,47 +1,52 @@
-// --- START OF FILE netlify/functions/get-keys-status.mjs (最终正确返回格式版) ---
+// --- START OF FILE netlify/functions/get-keys-status.mjs (动态读取配置版) ---
+
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 
 export async function handler(request, context) {
     try {
-        console.log('[GetKeysStatus] Function execution started.');
+        // ★ 1. 动态读取 providers.json 配置文件
+        const providersFilePath = resolve(process.cwd(), 'public/configs/providers.json');
+        const fileContent = readFileSync(providersFilePath, 'utf8');
+        const providerConfig = JSON.parse(fileContent);
 
-        const providers = [
-            "OpenAI", "Anthropic", "Gemini", "DeepSeek", "Siliconflow", 
-            "Openrouter", "Volcengine", "DashScope", "Ollama", "Suanlema"
-        ];
+        // 检查文件内容是否有效
+        if (!providerConfig || !Array.isArray(providerConfig.providers)) {
+            throw new Error("Invalid or missing providers.json configuration.");
+        }
 
         const configuredStatus = {};
 
-        console.log('[GetKeysStatus] Starting provider loop to check environment variables.');
-        
-        // 调试日志可以保留或移除，现在我们知道它工作正常了
-        // console.log('[GetKeysStatus] [DEBUG] All available process.env keys:', Object.keys(process.env));
-
-        for (const provider of providers) {
-            const keyEnvVarName = `${provider.toUpperCase()}_API_KEY_SECRET`;
-            const apiKey = process.env[keyEnvVarName];
-
-            configuredStatus[provider.toLowerCase()] = {
-                keyConfigured: apiKey !== undefined && apiKey.trim() !== '',
-            };
+        // ★ 2. 遍历从配置文件中读取的提供商列表
+        for (const provider of providerConfig.providers) {
+            // 从每个提供商对象中获取需要检查的环境变量名，例如 "OPENAI_API_KEY_SECRET"
+            const keyEnvVarName = provider.apiKeyEnv;
+            
+            if (keyEnvVarName) {
+                // 检查该环境变量是否存在且不为空
+                const apiKey = process.env[keyEnvVarName];
+                
+                // 使用提供商的 value (例如 "openai") 作为返回对象的键
+                configuredStatus[provider.value.toLowerCase()] = {
+                    keyConfigured: apiKey !== undefined && apiKey.trim() !== '',
+                };
+            }
         }
         
-        console.log('[GetKeysStatus] Provider loop finished successfully.');
-        console.log('[GetKeysStatus] Final Configured API Status to be sent to frontend:', configuredStatus);
+        console.log('[GetKeysStatus] Final Configured API Status (dynamic):', configuredStatus);
 
-        // ★★★ 核心修复：使用标准的 Netlify Functions 返回对象格式 ★★★
         return {
-            statusCode: 200, // 'S' 和 'C' 必须大写
+            statusCode: 200,
             headers: {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            body: JSON.stringify(configuredStatus) // body 是一个字符串
+            body: JSON.stringify(configuredStatus)
         };
 
     } catch (error) {
         console.error('[GetKeysStatus] FATAL ERROR during function execution:', error);
         
-        // ★★★ 核心修复：错误返回也使用标准格式 ★★★
         return {
             statusCode: 500,
             headers: {
@@ -55,3 +60,5 @@ export async function handler(request, context) {
         };
     }
 }
+// --- END OF FILE netlify/functions/get-keys-status.mjs (动态读取配置版) ---
+

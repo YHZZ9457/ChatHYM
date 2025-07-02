@@ -612,12 +612,6 @@ if (manageProvidersBtn) {
     console.log("[Bind Events Debug] ui.ui.showApiKeyManagementBtn is:", ui.ui.showApiKeyManagementBtn);
 
 
-    if (ui.ui.backToSettingsFromApiKeyBtn) {
-        bindEvent(ui.ui.backToSettingsFromApiKeyBtn, 'click', ui.showSettings);
-    } else {
-        console.warn("[script.js] '返回设置' 按钮 (backToSettingsFromApiKeyBtn) 未找到，请检查 HTML ID。");
-    }
-
 
     // ★★★ 核心修复：使用 'ui.ui' 访问模态框元素 ★★★
     bindEvent(ui.ui.modelFormModal.querySelector('.close-modal-btn'), 'click', ui.closeModelForm); // ★ 访问 ui.ui.modelFormModal, ui.closeModelForm
@@ -627,13 +621,36 @@ if (manageProvidersBtn) {
     
     bindEvent(ui.ui.systemPromptBtn, 'click', ui.toggleSystemPromptEditor); // ★ 访问 ui.ui.systemPromptBtn, ui.toggleSystemPromptEditor
     // --- 侧边栏搜索 (★ 全部修复) ---
-    bindEvent(ui.ui.logoDisplay, 'click', e => { e.stopPropagation(); ui.showSearchView(); }); // ★ 访问 ui.ui.logoDisplay, ui.showSearchView
-    bindEvent(ui.ui.searchInput, 'input', () => ui.renderConversationList(ui.ui.searchInput.value)); // ★ 访问 ui.ui.searchInput, ui.renderConversationList
-    bindEvent(ui.ui.searchInput, 'blur', ui.showLogoView); // ★ 访问 ui.ui.searchInput, ui.showLogoView
-    bindEvent(ui.ui.searchInput, 'keydown', e => { if (e.key === 'Escape') ui.showLogoView(); }); // ★ 访问 ui.ui.searchInput, ui.showLogoView
-    bindEvent(document, 'click', e => {
-        if (ui.ui.searchWrapper && !ui.ui.searchWrapper.contains(e.target) && e.target !== ui.ui.logoDisplay) { // ★ 访问 ui.ui.searchWrapper, ui.ui.logoDisplay
-            ui.showLogoView(); // ★ 访问 ui.showLogoView
+     // 1. 点击 Logo 时，显示搜索框并立即聚焦
+    bindEvent(ui.ui.logoDisplay, 'click', e => {
+        e.stopPropagation(); // 阻止事件冒泡到 body，避免立即关闭
+        ui.showSearchView(); // 调用显示搜索框的函数
+        if (ui.ui.searchInput) {
+            ui.ui.searchInput.focus(); // 自动聚焦到输入框
+        }
+    });
+
+    // 2. 搜索框输入时，实时过滤对话列表
+    bindEvent(ui.ui.searchInput, 'input', () => {
+        ui.renderConversationList(ui.ui.searchInput.value);
+    });
+
+    // 3. ★★★ 核心修复：当搜索框失去焦点时，自动切换回 Logo 视图 ★★★
+    // 'blur' 事件会在用户点击页面其他任何地方时触发
+    bindEvent(ui.ui.searchInput, 'blur', () => {
+        // 加一个小延迟，防止在点击搜索结果前就关闭了
+        setTimeout(() => {
+            // 只有在搜索框内容为空时才切换回去
+            if (ui.ui.searchInput && ui.ui.searchInput.value.trim() === '') {
+                ui.showLogoView();
+            }
+        }, 150); // 150ms 延迟
+    });
+
+    // 4. 按下 Escape 键时，也切换回 Logo 视图
+    bindEvent(ui.ui.searchInput, 'keydown', e => {
+        if (e.key === 'Escape') {
+            ui.showLogoView();
         }
     });
 
@@ -681,11 +698,7 @@ if (manageProvidersBtn) {
         // 如果没有专门的按钮，你可以在设置页面的某个地方添加一个触发器
         // 例如，在 "配置管理" 那一行添加一个 "管理提供商" 按钮
     }
-        if (ui.ui.showProviderManagementBtn) {
-        bindEvent(ui.ui.showProviderManagementBtn, 'click', ui.showProviderManagement);
-    } else {
-        console.warn("[script.js] '管理提供商' 按钮 (showProviderManagementBtn) 未找到，请检查 HTML ID。");
-    }
+
     bindEvent(ui.ui.showModelManagementBtn, 'click', ui.showModelManagement);
     bindEvent(ui.ui.showPresetManagementBtn, 'click', ui.showPresetManagement);
     // ★★★ 新增：为“管理 API 密钥”按钮绑定事件 ★★★
@@ -727,13 +740,6 @@ if (manageProvidersBtn) {
         });
     } else {
         console.warn("[script.js] '保存更改' 按钮 (saveProvidersToFileBtnHeader) 未找到。");
-    }
-
-    // ★★★ 确保返回聊天按钮的绑定是正确的 ID，并调用 showChatArea ★★★
-    if (ui.ui.backToChatFromProviderManagementBtn) {
-        bindEvent(ui.ui.backToChatFromProviderManagementBtn, 'click', ui.showChatArea); // 返回聊天
-    } else {
-        console.warn("[script.js] '返回聊天' 按钮 (backToChatFromProviderManagementBtn) 未找到，请检查 HTML ID。");
     }
 
     bindEvent(document.getElementById('provider-form'), 'submit', ui.handleProviderFormSubmit);

@@ -98,6 +98,17 @@
       "streamSupport": true,
       "isSpecialCase": false,
       "isSelfHosted": false
+    },
+    {
+      "name": "Xai",
+      "value": "xai",
+      "apiKeyEnv": "XAI_API_KEY_SECRET",
+      "defaultEndpoint": "https://api.x.ai/v1/chat/completions",
+      "proxyPath": "/api/openai-compatible-proxy",
+      "mapperType": "standard",
+      "streamSupport": true,
+      "isSpecialCase": false,
+      "isSelfHosted": false
     }
   ]
 }

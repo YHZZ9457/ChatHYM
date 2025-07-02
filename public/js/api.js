@@ -98,30 +98,35 @@ export async function send(messagesHistory, onStreamChunk, signal) {
         // ★★★ 核心修改：根据 providerConfig.mapperType 动态选择消息映射函数 ★★★
         switch (providerConfig.mapperType) {
             case 'gemini':
-                bodyPayload.messages = mapMessagesForGemini(messagesHistory, filesToSend);
+                // Gemini 使用 'contents' 字段
+                bodyPayload.contents = mapMessagesForGemini(messagesHistory, filesToSend);
+                // 确保没有多余的 messages 字段
+                delete bodyPayload.messages; 
                 break;
+
             case 'anthropic':
+                // Anthropic 使用 'messages' 字段，并可能需要顶层的 'system' 字段
                 bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower, filesToSend);
                 const sysMsgAnthropic = messagesHistory.find(m => m.role === 'system');
                 if (sysMsgAnthropic?.content) { bodyPayload.system = sysMsgAnthropic.content; }
-                if (!bodyPayload.max_tokens) { bodyPayload.max_tokens = 4096; } // Anthropic 通常需要更大的默认 max_tokens
+                if (!bodyPayload.max_tokens) { bodyPayload.max_tokens = 4096; }
                 break;
+
             case 'ollama':
+                 // Ollama 使用 'messages' 字段，并可能需要顶层的 'system' 字段
                 bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower, filesToSend);
                 const ollamaSysMsg = messagesHistory.find(m => m.role === 'system');
                 if (ollamaSysMsg?.content) { bodyPayload.system = ollamaSysMsg.content; }
-                // Ollama 额外参数映射示例，如果需要：
-                // if (bodyPayload.temperature !== undefined) bodyPayload.options.temperature = bodyPayload.temperature;
-                // if (bodyPayload.max_tokens !== undefined) bodyPayload.options.num_predict = bodyPayload.max_tokens;
                 break;
-            case 'standard': // 用于 OpenAI、DeepSeek、SiliconFlow、OpenRouter、Volcengine、DashScope、Together、Perplexity、Suanlema
-            default: // 将 standard 作为默认选项
+                
+            case 'standard': // 用于 OpenAI、DeepSeek、SiliconFlow、OpenRouter、Volcengine、DashScope 等所有兼容代理
+            default: // 将 'standard' 作为默认和回退选项
+                // 所有标准 OpenAI 兼容的 API (包括您的 Xai) 都使用 'messages' 字段
                 bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower, filesToSend);
+                // 确保没有多余的 contents 字段
+                delete bodyPayload.contents;
                 break;
         }
-
-        // 删除可能多余的 contents 字段（Gemini 使用 contents，其他使用 messages）
-        delete bodyPayload.contents;
         
         // ★★★ 核心修改：apiUrl 直接从 providerConfig 中获取 ★★★
         apiUrl = providerConfig.proxyPath;

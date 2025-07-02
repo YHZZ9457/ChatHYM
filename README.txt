@@ -1,4 +1,4 @@
-ChatHYM v1.3.10
+ChatHYM v1.3.11
 一个可以运行多种生成式AI的API的小程序，有简单的界面。支持选择多种模型。另外还支持了ollama。
 
 使用前需要在env.exmaple.txt里面自己填入对应版本的API-Keys，然后保存为.env（没有后缀）。

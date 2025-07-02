@@ -318,6 +318,17 @@
       ]
     },
     {
+      "groupLabel": "Xai",
+      "isGroupHidden": false,
+      "options": [
+        {
+          "text": "Grok-3-mini",
+          "value": "xai::grok-3-mini",
+          "isHidden": false
+        }
+      ]
+    },
+    {
       "groupLabel": "算了么 (Suanlema)",
       "isGroupHidden": false,
       "options": [

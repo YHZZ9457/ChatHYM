@@ -93,6 +93,11 @@
           "text": "OR Minimax-M1",
           "value": "openrouter::minimax/minimax-m1",
           "isHidden": true
+        },
+        {
+          "text": "OR Cypher Alpha",
+          "value": "openrouter::openrouter/cypher-alpha:free",
+          "isHidden": false
         }
       ]
     },
@@ -272,7 +277,7 @@
         {
           "text": "Claude 3.7 Sonnet",
           "value": "anthropic::claude-3-7-sonnet-20250219",
-          "isHidden": false
+          "isHidden": true
         },
         {
           "text": "Claude 3.5 Haiku",
@@ -322,9 +327,14 @@
       "isGroupHidden": false,
       "options": [
         {
-          "text": "Grok-3-mini",
+          "text": "Grok 3 mini",
           "value": "xai::grok-3-mini",
           "isHidden": false
+        },
+        {
+          "text": "Grok 4",
+          "value": "xai::grok-4-0629",
+          "isHidden": true
         }
       ]
     },
@@ -350,7 +360,7 @@
         {
           "text": "Slm QwQ-32B",
           "value": "suanlema::QwQ-32B",
-          "isHidden": false
+          "isHidden": true
         }
       ]
     },

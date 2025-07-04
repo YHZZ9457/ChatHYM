@@ -1111,7 +1111,7 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
         messageDiv.appendChild(reasoningBlockDiv);
     }
     
-    // 5. 处理核心消息内容 (Markdown)
+// 5. 处理核心消息内容 (根据角色决定是否使用 Markdown)
     const contentDiv = document.createElement('div');
     contentDiv.className = 'text';
     const markdownContainer = document.createElement('span');
@@ -1119,34 +1119,39 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     
     markdownContainer.dataset.fullRawContent = ''; 
 
-    let finalMarkdown = "";
+    let rawText = "";
     if (typeof messageContent === 'string') {
-        finalMarkdown = messageContent;
+        rawText = messageContent;
     } else if (messageContent?.text !== undefined) {
-        finalMarkdown = messageContent.text || "";
+        rawText = messageContent.text || "";
     }
     
-    if (finalMarkdown.trim()) {
-        markdownContainer.dataset.fullRawContent = finalMarkdown;
-        markdownContainer.innerHTML = marked.parse(finalMarkdown);
+    if (rawText.trim()) {
+        markdownContainer.dataset.fullRawContent = rawText; // 始终保存原始文本
 
-        // ★★★ 核心修复：处理代码块开头的多余空行和空白符 ★★★
-        markdownContainer.querySelectorAll('pre').forEach(preElement => {
-            const codeElement = preElement.querySelector('code');
-            const targetElement = codeElement || preElement; // 如果有 code 标签则处理 code，否则处理 pre
+        // ★★★ 核心修复：根据角色应用不同渲染方式 ★★★
+        if (role === 'user') {
+            // 对于用户消息，将其作为纯文本处理，并保留换行符
+            markdownContainer.innerHTML = utils.escapeHtml(rawText).replace(/\n/g, '<br>');
+        } else { // 对于 assistant 或 model 消息
+            // 应用 Markdown 渲染
+            markdownContainer.innerHTML = marked.parse(rawText);
 
-            let text = targetElement.textContent; // 获取当前文本内容
-
-            // 使用正则表达式移除开头的所有空白字符（包括空格、制表符等）和换行符
-            // 这将确保代码内容从第一行开始，没有任何多余的空行或空格
-            text = text.replace(/^[\s\n]+/, ''); // 匹配开头的一个或多个空白字符或换行符
-
-            // 更新元素的文本内容
-            targetElement.textContent = text;
-        });
-        // ★★★ 修复结束 ★★★
-
-        utils.pruneEmptyNodes(markdownContainer); // 对 markdownContainer 进行清理 (处理空<p>和空文本节点)
+            // 对渲染后的 HTML 进行后处理
+            markdownContainer.querySelectorAll('pre').forEach(preElement => {
+                const codeElement = preElement.querySelector('code');
+                const targetElement = codeElement || preElement; 
+                let text = targetElement.textContent; 
+                text = text.replace(/^[\s\n]+/, ''); 
+                targetElement.textContent = text;
+            });
+            
+            // 为代码块添加复制/下载按钮
+            processPreBlocksForCopyButtons(markdownContainer);
+        }
+        
+        // 统一进行空节点清理
+        utils.pruneEmptyNodes(markdownContainer);
         contentDiv.appendChild(markdownContainer);
         messageDiv.appendChild(contentDiv);
         
@@ -1324,9 +1329,24 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     // 9. 后续处理
     ui.messagesContainer.scrollTop = ui.messagesContainer.scrollHeight;
     if (window.MathJax?.typesetPromise) {
-        const elementsToTypeset = [contentDiv];
-        if (reasoningDivElement?.textContent.trim()) elementsToTypeset.push(reasoningDivElement);
-        if (elementsToTypeset.length > 0) window.MathJax.typesetPromise(elementsToTypeset).catch(err => console.error("MathJax typesetting failed:", err));
+        const elementsToTypeset = [];
+
+        // ★★★ 核心修复：将 typeset 的目标从 contentDiv 精准地改为 markdownContainer ★★★
+        // 只有当 markdownContainer 实际被添加到 DOM 后，才对其进行排版
+        if (contentDiv.contains(markdownContainer)) {
+            elementsToTypeset.push(markdownContainer);
+        }
+
+        // 如果思考过程区域有内容，也加入排版队列
+        if (reasoningDivElement?.textContent.trim()) {
+            elementsToTypeset.push(reasoningDivElement);
+        }
+
+        // 只有当有需要排版的元素时，才调用 MathJax
+        if (elementsToTypeset.length > 0) {
+            window.MathJax.typesetPromise(elementsToTypeset)
+                .catch(err => console.error("MathJax typesetting failed:", err));
+        }
     }
     return messageWrapperDiv;
 }

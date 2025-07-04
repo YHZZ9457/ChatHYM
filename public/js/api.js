@@ -80,14 +80,20 @@ export async function send(messagesHistory, onStreamChunk, signal) {
         const modelNameLower = modelNameForAPI.toLowerCase();
         
         // Temperature
-        // 排除某些模型，如 GPT-4o Mini，它们通常有固定的温度
+        // 排除某些模型，如 o4-Mini，它们通常有固定的温度
         if (!modelNameLower.includes('o4-mini','o3')) { // 确保是小写匹配
             bodyPayload.temperature = parseFloat(localStorage.getItem('model-temperature')) || 0.7;
         }
 
-        // Max Tokens
+         // Max Tokens (★ 核心修复：根据模型名称动态选择参数)
         if (state.currentMaxTokens) {
-            bodyPayload.max_tokens = state.currentMaxTokens;
+            if (modelNameLower.includes('o4-mini') || modelNameLower.includes('o3')) {
+                // 对于这些特殊模型，使用 'max_completion_tokens'
+                bodyPayload.max_completion_tokens = state.currentMaxTokens;
+            } else {
+                // 对于所有其他模型，使用标准的 'max_tokens'
+                bodyPayload.max_tokens = state.currentMaxTokens;
+            }
         }
     
      
@@ -99,14 +105,15 @@ export async function send(messagesHistory, onStreamChunk, signal) {
         switch (providerConfig.mapperType) {
             case 'gemini':
                 // Gemini 使用 'contents' 字段
-                bodyPayload.contents = mapMessagesForGemini(messagesHistory, filesToSend);
-                // 确保没有多余的 messages 字段
-                delete bodyPayload.messages; 
-                break;
+            // 新的映射器不再需要第二个参数
+            bodyPayload.contents = mapMessagesForGemini(messagesHistory);
+            // 确保没有多余的 messages 字段
+            delete bodyPayload.messages; 
+            break;
 
             case 'anthropic':
                 // Anthropic 使用 'messages' 字段，并可能需要顶层的 'system' 字段
-                bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower, filesToSend);
+                bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower); // <--- 移除 filesToSend
                 const sysMsgAnthropic = messagesHistory.find(m => m.role === 'system');
                 if (sysMsgAnthropic?.content) { bodyPayload.system = sysMsgAnthropic.content; }
                 if (!bodyPayload.max_tokens) { bodyPayload.max_tokens = 4096; }
@@ -114,7 +121,7 @@ export async function send(messagesHistory, onStreamChunk, signal) {
 
             case 'ollama':
                  // Ollama 使用 'messages' 字段，并可能需要顶层的 'system' 字段
-                bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower, filesToSend);
+                bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower); // <--- 移除 filesToSend
                 const ollamaSysMsg = messagesHistory.find(m => m.role === 'system');
                 if (ollamaSysMsg?.content) { bodyPayload.system = ollamaSysMsg.content; }
                 break;
@@ -122,7 +129,7 @@ export async function send(messagesHistory, onStreamChunk, signal) {
             case 'standard': // 用于 OpenAI、DeepSeek、SiliconFlow、OpenRouter、Volcengine、DashScope 等所有兼容代理
             default: // 将 'standard' 作为默认和回退选项
                 // 所有标准 OpenAI 兼容的 API (包括您的 Xai) 都使用 'messages' 字段
-                bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower, filesToSend);
+                bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower); // <--- 移除 filesToSend
                 // 确保没有多余的 contents 字段
                 delete bodyPayload.contents;
                 break;

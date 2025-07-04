@@ -361,7 +361,17 @@ function bindEventListeners() {
 
     // --- 核心交互 (★ 全部修复) ---
     bindEvent(ui.ui.submitActionBtn, 'click', () => handleSubmitActionClick(false)); // ★ 访问 ui.ui.submitActionBtn
-    bindEvent(ui.ui.promptInput, 'keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmitActionClick(false); } }); // ★ 访问 ui.ui.promptInput
+    bindEvent(ui.ui.promptInput, 'keydown', e => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault(); // 始终阻止默认的回车换行行为
+    
+            const currentConv = state.getCurrentConversation();
+            // ★★★ 核心修复：只有在非生成状态下，回车才触发送信 ★★★
+            if (currentConv && !state.isConversationGenerating(currentConv.id)) {
+                handleSubmitActionClick();
+            }
+        }
+    }); // ★ 访问 ui.ui.promptInput
     bindEvent(ui.ui.promptInput, 'input', () => {
         ui.autoResizePromptInput(); // 自动调整大小
         // 只有当当前对话不在生成响应时，才根据输入内容更新按钮状态

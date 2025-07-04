@@ -222,3 +222,56 @@ export function applyUiScale(scale, optionsContainer) {
     }
 }
 
+/**
+ * 将文件（以 Base64 形式）保存到 IndexedDB。
+ * @param {string} fileId - 文件的唯一ID。
+ * @param {string} base64Content - 文件的完整 Base64 Data URL。
+ * @returns {Promise<void>}
+ */
+export async function saveFileToDB(fileId, base64Content) {
+    if (typeof idbKeyval === 'undefined') {
+        console.error("idb-keyval library is not loaded.");
+        return;
+    }
+    try {
+        await idbKeyval.set(fileId, base64Content);
+    } catch (error) {
+        console.error(`Failed to save file ${fileId} to IndexedDB:`, error);
+    }
+}
+
+/**
+ * 从 IndexedDB 读取文件。
+ * @param {string} fileId - 文件的唯一ID。
+ * @returns {Promise<string|undefined>} - 返回文件的 Base64 Data URL，如果找不到则返回 undefined。
+ */
+export async function getFileFromDB(fileId) {
+    if (typeof idbKeyval === 'undefined') {
+        console.error("idb-keyval library is not loaded.");
+        return undefined;
+    }
+    try {
+        return await idbKeyval.get(fileId);
+    } catch (error) {
+        console.error(`Failed to get file ${fileId} from IndexedDB:`, error);
+        return undefined;
+    }
+}
+
+/**
+ * 从 IndexedDB 中删除一个或多个文件。
+ * @param {Array<string>} fileIds - 要删除的文件ID数组。
+ */
+export async function deleteFilesFromDB(fileIds) {
+    if (typeof idbKeyval === 'undefined' || !Array.isArray(fileIds)) {
+        return;
+    }
+    try {
+        // idb-keyval 的 delMany 在某些版本可用，但单个删除更可靠
+        for (const fileId of fileIds) {
+            await idbKeyval.del(fileId);
+        }
+    } catch (error) {
+        console.error(`Failed to delete files from IndexedDB:`, error);
+    }
+}

@@ -200,6 +200,11 @@
           "text": "SF ERNIE-4.5-300B-A47B",
           "value": "siliconflow::baidu/ERNIE-4.5-300B-A47B",
           "isHidden": false
+        },
+        {
+          "text": "SF GLM-4.1V 9B",
+          "value": "siliconflow::Pro/THUDM/GLM-4.1V-9B-Thinking",
+          "isHidden": false
         }
       ]
     },

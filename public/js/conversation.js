@@ -12,31 +12,13 @@ import * as utils from './utils.js';
  */
 export function saveConversations() {
   try {
-    const conversationsForStorage = state.conversations.map(conv => {
-        const convCopy = { ...conv };
-        // 确保 messages 数组存在
-        if (convCopy.messages) {
-            convCopy.messages = conv.messages.map(msg => {
-                if (msg.role === 'user' && msg.content && typeof msg.content === 'object' && msg.content.files) {
-                    const msgCopy = { ...msg };
-                    const safeContent = { ...msgCopy.content };
-                    // 只保存文件的元信息，不保存base64数据
-                    safeContent.files = safeContent.files.map(file => ({ name: file.name, type: file.type }));
-                    msgCopy.content = safeContent;
-                    return msgCopy;
-                }
-                return msg;
-            });
-        }
-        return convCopy;
-    });
-    localStorage.setItem('conversations', JSON.stringify(conversationsForStorage));
+    // 现在 state.conversations 中已经不包含 Base64 数据，可以直接保存
+    localStorage.setItem('conversations', JSON.stringify(state.conversations));
   } catch (error) {
-    console.error("[saveConversations] CRITICAL ERROR while preparing or saving conversations:", error);
+    console.error("[saveConversations] CRITICAL ERROR while saving conversations:", error);
     utils.showToast("保存对话失败！请检查控制台获取详细信息。", "error");
   }
 }
-
 /**
  * 从 Local Storage 加载对话列表到 state。
  */
@@ -206,7 +188,6 @@ export function addMessageToConversation(targetConv, role, content, metadata = {
         return null;
     }
 
-    // ★★★ 核心修复：防御性检查和初始化 targetConv.messages ★★★
     if (!Array.isArray(targetConv.messages)) {
         console.warn(`Conversation ${targetConv.id} messages array was not initialized or corrupted. Initializing to empty array.`);
         targetConv.messages = [];
@@ -216,18 +197,17 @@ export function addMessageToConversation(targetConv, role, content, metadata = {
         id: utils.generateSimpleId(),
         parentId: targetConv.activeMessageId, 
         role,
-        content,
+        content, // content 现在应该已经包含了正确的 files 数组（只有ID，没有Base64）
         ...metadata,
     };
 
-    // 将新消息添加到 targetConv 的 "大数组" 中
-    targetConv.messages.push(newMessage); // 这一行现在更安全了
-    
+    targetConv.messages.push(newMessage);
     targetConv.activeMessageId = newMessage.id; 
+    saveConversations(); // 保存到 localStorage (只含ID)
     
-    saveConversations(); 
-    return newMessage;
+    return newMessage; // 返回新创建的消息对象
 }
+
 
 /**
  * 根据 ID 获取对话对象。
@@ -262,10 +242,38 @@ export function deleteConversation(id) {
     utils.showToast('无法删除：对话未找到。', 'error');
     return { nextIdToLoad: null };
   }
+
   const deletedTitle = state.conversations[idx].title; 
   const wasCurrent = state.conversations[idx].id === state.currentConversationId;
-  state.conversations.splice(idx, 1);
-  saveConversations();
+  
+  // ★★★ 核心修复：在删除对话之前，先提取并清理 IndexedDB 中关联的文件 ★★★
+  const convToDelete = state.conversations[idx]; // 确保在这里，idx 已经被定义和使用
+  const fileIdsToDelete = [];
+  
+  // 遍历对话中的所有消息，收集文件ID
+  if (convToDelete?.messages) { // 增加一个安全检查，确保 messages 数组存在
+      convToDelete.messages.forEach(msg => {
+          if (msg.content?.files && Array.isArray(msg.content.files)) {
+              msg.content.files.forEach(file => {
+                  if (file.id) { // 确保文件有 ID
+                      fileIdsToDelete.push(file.id);
+                  }
+              });
+          }
+      });
+  }
+
+  // 异步删除 IndexedDB 中的文件，不等待结果，因为即使失败也不影响对话删除
+  if (fileIdsToDelete.length > 0) {
+      utils.deleteFilesFromDB(fileIdsToDelete)
+          .then(() => console.log(`[Conversation] Successfully deleted ${fileIdsToDelete.length} files from IndexedDB.`))
+          .catch(error => console.error("[Conversation] Failed to delete files from IndexedDB:", error));
+  }
+  // ★★★ 文件清理逻辑结束 ★★★
+
+
+  state.conversations.splice(idx, 1); // 从 conversations 数组中移除对话
+  saveConversations(); // 保存更新后的对话列表到 localStorage
   utils.showToast(`对话「${deletedTitle}」已删除。`, 'success');
 
   if (wasCurrent) {
@@ -286,18 +294,36 @@ export function renameConversationTitle(id, newTitle) {
   }
 }
 
-/**
- * 清空当前活动对话的所有消息。
- * @returns {string|null} 返回当前对话的ID，如果操作失败则返回null。
- */
 export function clearCurrentConversation() {
   const conv = state.getCurrentConversation();
   if (!conv) {
     utils.showToast('没有活动的对话可供清空。', 'warning');
     return null;
   }
+
+  // ★★★ 新增：清理关联文件 ★★★
+  const fileIdsToDelete = [];
+  if (conv.messages) {
+      conv.messages.forEach(msg => {
+          if (msg.content?.files && Array.isArray(msg.content.files)) {
+              msg.content.files.forEach(file => {
+                  if (file.id) {
+                      fileIdsToDelete.push(file.id);
+                  }
+              });
+          }
+      });
+  }
+  if (fileIdsToDelete.length > 0) {
+      utils.deleteFilesFromDB(fileIdsToDelete)
+          .then(() => console.log(`[Conversation] Successfully deleted ${fileIdsToDelete.length} files from IndexedDB for cleared conversation.`))
+          .catch(error => console.error("[Conversation] Failed to delete files from IndexedDB for cleared conversation:", error));
+  }
+  // ★★★ 清理文件逻辑结束 ★★★
+
   const systemPrompt = conv.messages.find(m => m.role === 'system');
   conv.messages = systemPrompt ? [systemPrompt] : []; // 保留系统指令
+  conv.activeMessageId = systemPrompt?.id || null; // 清空后，重置 activeMessageId
   saveConversations();
   utils.showToast(`对话「${conv.title}」已清空。`, 'success');
   return conv.id;

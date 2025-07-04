@@ -980,6 +980,42 @@ function createSystemPromptElement(content, startInEditMode = false) {
 }
 
 /**
+ * 预处理AI回复文本，将非标准的公式分隔符 (...) 和 [...] 
+ * 转换为 MathJax 标准的 \[...\] 分隔符，但前提是括号内包含LaTeX命令。
+ * @param {string} text - 原始文本.
+ * @returns {string} - 预处理后的文本.
+ */
+function preprocessLatex(text) {
+    if (!text) return '';
+
+    // ★★★ 核心修复：更严格的正则表达式，只匹配明确的数学公式模式 ★★★
+    // 这个正则尝试匹配：
+    // 1. 以 `(` 或 `[` 开头
+    // 2. 紧接着内容，内容必须包含以下任意一种：
+    //    a. `\` 后跟一个字母（常见的LaTeX命令，如 `\alpha`）
+    //    b. `\frac`, `\lim`, `\int`, `\sum`, `\sqrt`, `\text{` （更具体的数学环境）
+    // 3. 然后是任意非贪婪匹配的内容
+    // 4. 以 `)` 或 `]` 结尾
+    // 注意：`\\.` 匹配任何反斜杠后跟的字符，增加了匹配可能性
+    const strictLatexRegex = /(\(|\[)((?:.*?)(\\(?:[a-zA-Z]+|[^\sa-zA-Z])|\\frac|\\lim|\\int|\\sum|\\sqrt|\\text\{.*?\}|\\begin\{.*?\})(?:.*?))(\)|\])/g;
+
+    return text.replace(strictLatexRegex, (match, openParen, contentWithCommands, commandMatch, closeParen) => {
+        const isMatchingPair = 
+            (openParen === '(' && closeParen === ')') || 
+            (openParen === '[' && closeParen === ']');
+        
+        // 只有当括号匹配，并且正则成功匹配到内部的LaTeX命令时才进行转换
+        // contentWithCommands 是匹配到的整个括号内的内容，包括命令
+        if (isMatchingPair) {
+            // 这里我们只需要返回 MathJax 期望的格式
+            return `\\[${contentWithCommands}\\]`;
+        } else {
+            return match; // 不匹配则原样返回
+        }
+    });
+}
+
+/**
  * 将一个 system-prompt-display 元素转换为编辑模式
  * @param {HTMLElement} systemDiv - 目标 div
  * @param {string} currentContent - 当前的指令内容
@@ -1048,15 +1084,15 @@ export function renderSystemPromptDisplay(content) {
 
 /**
  * 创建并向聊天区域追加一条新消息的 DOM 元素。
- * (最终整合版，支持附件、思考过程、分支指示器和元信息)
+ * (最终修复版，解决了图片显示的作用域问题)
  * @param {'user' | 'assistant' | 'model'} role - 消息的角色。
- * @param {object|string} messageContent - 消息内容，可以是字符串或包含 text 和 files 的对象。
- * @param {string} modelForNote - 用于显示在元信息中的模型名称。
+ * @param {object|string} messageContent - 消息内容。
+ * @param {string} modelForNote - 模型的名称。
  * @param {string} reasoningText - AI 的思考过程文本。
- * @param {string} conversationId - 消息所属的对话ID。
- * @param {number} messageIndex - 消息在对话 messages 数组中的索引 (-1 表示临时消息)。
- * @param {object} usage - Token 使用情况对象。
- * @returns {HTMLElement|null} 创建的消息包装器元素，或在失败时返回 null。
+ * @param {string} conversationId - 对话ID。
+ * @param {number} messageIndex - 消息在数组中的索引。
+ * @param {object} usage - Token 使用情况。
+ * @returns {HTMLElement|null} 创建的消息包装器元素。
  */
 export function appendMessage(role, messageContent, modelForNote, reasoningText, conversationId, messageIndex, usage) {
     if (!ui.messagesContainer) return null;
@@ -1076,11 +1112,55 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     if (role === 'user' && messageContent?.files?.length > 0) {
         const attachmentsContainer = document.createElement('div');
         attachmentsContainer.className = 'user-attachments-container';
+        
         messageContent.files.forEach(file => {
-            const attachmentItem = document.createElement('div');
-            attachmentItem.className = 'attachment-item';
-            attachmentItem.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-paperclip" viewBox="0 0 16 16"><path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v8.5a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v8.5a3.5 3.5 0 1 1-7 0V3z"/></svg><span>${utils.escapeHtml(file.name)}</span>`;
-            attachmentsContainer.appendChild(attachmentItem);
+            const isImage = file.type?.startsWith('image/');
+
+            // =====================================================================
+            // ★★★ 核心修复：将所有与图片相关的逻辑严格控制在 if (isImage) 块内 ★★★
+            // =====================================================================
+            if (isImage) {
+                const imageWrapper = document.createElement('div');
+                imageWrapper.className = 'attachment-item image-attachment';
+                
+                // 1. 声明和初始化 imgElement
+                const imgElement = document.createElement('img');
+                imgElement.alt = utils.escapeHtml(file.name);
+                imgElement.title = `点击放大 - ${utils.escapeHtml(file.name)}`;
+                imgElement.classList.add('user-sent-image');
+                
+                // 2. 为它绑定点击事件
+                imgElement.addEventListener('click', () => {
+                    const imageModal = document.getElementById('image-modal');
+                    const modalImage = document.getElementById('modal-image-content');
+                    if (imageModal && modalImage && imgElement.src) { // 确保图片已加载
+                        modalImage.src = imgElement.src;
+                        imageModal.style.display = 'flex';
+                    }
+                });
+                
+                imageWrapper.appendChild(imgElement);
+                attachmentsContainer.appendChild(imageWrapper);
+
+                // 3. 异步加载图片数据的函数也必须在这个作用域内
+                (async () => {
+                    const base64Content = await utils.getFileFromDB(file.id);
+                    if (base64Content) {
+                        // 在这里设置 src，imgElement 变量在此处是可访问的
+                        imgElement.src = base64Content;
+                    } else {
+                        console.warn(`无法从 IndexedDB 加载图片数据，文件 ID: ${file.id}`);
+                        imgElement.alt = `${file.name} (加载失败)`;
+                    }
+                })();
+
+            } else {
+                // 如果不是图片，则按原方式处理
+                const attachmentItem = document.createElement('div');
+                attachmentItem.className = 'attachment-item';
+                attachmentItem.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-paperclip" viewBox="0 0 16 16"><path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v8.5a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v8.5a3.5 3.5 0 1 1-7 0V3z"/></svg><span>${utils.escapeHtml(file.name)}</span>`;
+                attachmentsContainer.appendChild(attachmentItem);
+            }
         });
         messageDiv.appendChild(attachmentsContainer);
     }
@@ -1130,10 +1210,10 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
         markdownContainer.dataset.fullRawContent = rawText; // 始终保存原始文本
 
         // ★★★ 核心修复：根据角色应用不同渲染方式 ★★★
-        if (role === 'user') {
-            // 对于用户消息，将其作为纯文本处理，并保留换行符
+        if (role === 'user' || messageWrapperDiv.dataset.isApiError === 'true') {
             markdownContainer.innerHTML = utils.escapeHtml(rawText).replace(/\n/g, '<br>');
         } else { // 对于 assistant 或 model 消息
+            const processedText = preprocessLatex(rawText);
             // 应用 Markdown 渲染
             markdownContainer.innerHTML = marked.parse(rawText);
 
@@ -1350,6 +1430,7 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     }
     return messageWrapperDiv;
 }
+
 
 
 // ui.js 中的 processPreBlocksForCopyButtons 函数

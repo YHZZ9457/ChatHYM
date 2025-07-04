@@ -504,19 +504,32 @@
     <!-- Third-party Libraries -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/umd.js"></script>
     
     <!-- MathJax -->
     <script>
-        window.MathJax = {
-            tex: {
-                inlineMath: [['$', '$'], ['\\(', '\\)']],
-                displayMath: [['$$','$$'], ['\\[','\\]']]
-            }
-        };
-    </script>
+  window.MathJax = {
+    tex: {
+      inlineMath: [['\\(', '\\)']],
+      // ★★★ 核心修复：在 displayMath 数组中再次添加新的分隔符对 ['[', ']'] ★★★
+      displayMath: [['$$', '$$'], ['\\[', '\\]'],['$', '$'],['\[', '\]']],
+    },
+    svg: {
+      fontCache: 'global'
+    }
+  };
+</script>
     <script defer id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
     <!-- Main Application Entry Point -->
     <script type="module" src="./js/script.js"></script>
+
+    <script type="module" src="./js/script.js"></script>
+
+    <!-- ===== 新增：图片放大模态框 ===== -->
+    <div id="image-modal" class="image-modal" style="display: none;">
+        <span id="close-modal-btn" class="close-image-modal">×</span>
+        <img id="modal-image-content" src="" alt="Full-size view">
+    </div>
 </body>
 </html>

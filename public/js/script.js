@@ -14,9 +14,6 @@ import * as ui from './ui.js'; // ★ 统一使用 'ui' 作为模块别名
 // ========================================================================
 
 
-// script.js
-// --- START OF FILE js/script.js (processApiRequest - Final Fixes) ---
-
 /**
  * 通用的API请求与处理函数
  * @param {object} targetConv - 当前对话对象。
@@ -129,12 +126,48 @@ async function processApiRequest(targetConv) {
     };
 
     let finalResultFromApi = null;
-    try {
-        const historyForApi = conversation.getCurrentBranchMessages(targetConv);
-        const abortController = new AbortController();
-        state.setConversationAbortController(convId, abortController);
+     try {
+        // ★★★ 核心改造：运行时重构历史记录 ★★★
+        let historyForApi = conversation.getCurrentBranchMessages(targetConv);
+        
+        // 检查历史中是否有文件需要从DB加载
+        const needsReconstruction = historyForApi.some(msg => msg.content?.files?.length > 0);
 
+        if (needsReconstruction) {
+    // 创建历史的深拷贝，避免污染原始 state
+    const reconstructedHistory = JSON.parse(JSON.stringify(historyForApi));
+    
+    // 使用 Promise.all 并行加载所有文件
+    await Promise.all(reconstructedHistory.map(async (msg) => {
+        if (msg.content?.files?.length > 0) {
+            // 再次使用 Promise.all 加载单个消息内的所有文件
+            const loadedFiles = await Promise.all(msg.content.files.map(async (fileMeta) => {
+                const base64Content = await utils.getFileFromDB(fileMeta.id);
+                if (base64Content) {
+                    // ★★★ 核心修复：返回原始 fileMeta，并添加 base64 属性 ★★★
+                    // 这一步是关键！它将从 IndexedDB 读取的 Base64 字符串
+                    // 重新附加到文件对象上，形成一个完整的、可供 mappers 使用的对象。
+                    return { ...fileMeta, base64: base64Content };
+                }
+                // 如果找不到文件，返回原始元数据，避免程序崩溃
+                return fileMeta; 
+            }));
+            // 用重构后的、包含 Base64 的文件数组替换掉原来的“瘦身版”数组
+            msg.content.files = loadedFiles;
+        }
+    }));
+    
+    // 使用重构后的历史记录进行API调用
+    historyForApi = reconstructedHistory;
+}
+        // ★★★ 重构结束 ★★★
+
+        const abortController = new AbortController();
+        state.setConversationAbortController(targetConv.id, abortController);
+
+        // ★ 将重构后的 historyForApi 传递给 api.send
         finalResultFromApi = await api.send(historyForApi, handleStreamChunk, abortController.signal);
+
         
         // ... (后续的非流式处理和错误处理逻辑不变) ...
         let finalAssistantReply = finalResultFromApi.reply;
@@ -241,93 +274,121 @@ function loadConversationFlow(conversationId) {
 
 
 
-// handleSubmitActionClick 函数
-async function handleSubmitActionClick() {
-    const currentConv = state.getCurrentConversation(); // 获取当前对话对象
-
-    // 1. 前置检查（无内容时阻止发送，如果正在生成则中止）
-    const originalPromptText = ui.ui.promptInput.value.trim(); 
-    const hasInputContent = originalPromptText.length > 0 || state.uploadedFilesData.length > 0;
-
-    // 如果当前对话正在生成，则点击按钮是“停止”
-    if (state.isConversationGenerating(currentConv.id)) { // ★ 核心：检查当前对话是否正在生成
-        const abortController = state.getConversationAbortController(currentConv.id);
-        if (abortController) {
-            abortController.abort(); // 中止当前对话的请求
-            utils.showToast("请求已中止。", "info");
-        }
-        return; 
-    }
-    
-    // 如果没有内容，显示 Toast 并阻止发送
-    if (!currentConv || !hasInputContent) {
-        utils.showToast("请输入问题或上传文件。", 'warning');
-        return; 
-    }
-
-    // 2. 准备用户消息
-    const filesToProcess = [...state.uploadedFilesData];
-    const finalFilesForNewMessage = filesToProcess.map(fileData => {
-        if (fileData.previewUrl) URL.revokeObjectURL(fileData.previewUrl);
-        return { name: fileData.name, type: fileData.type, base64: fileData.base64 };
-    });
-
-    const userMessageContent = { text: originalPromptText, files: finalFilesForNewMessage };
-    
-    // 3. 添加用户消息并更新UI
-    conversation.addMessageToConversation(currentConv, 'user', userMessageContent, { model: currentConv.model });
-    ui.ui.promptInput.value = ''; 
-    ui.autoResizePromptInput(); 
-    state.setUploadedFiles([]); 
-    ui.renderFilePreview(); 
-
-    // UI 刷新，显示用户消息
-    ui.loadAndRenderConversationUI(currentConv); 
-
-    // 4. 调用通用的API处理函数
-    await processApiRequest(currentConv); // ★ 核心：传入 currentConv 对象
-}
-
-
 
 /**
- * 协调文件选择流程 (最终正确版本)
+ * 协调文件选择流程 (确保 fileObject 被存储)
  */
 async function handleFileSelection(event) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
 
-    // --- 检查文件数量 ---
     const MAX_FILES = 5;
-    // 在追加前，检查总数是否会超限
     if (state.uploadedFilesData.length + files.length > MAX_FILES) {
         utils.showToast(`一次最多只能上传 ${MAX_FILES} 个文件。`, 'warning');
         return;
     }
 
-    // --- 遍历并处理新选择的文件 ---
     for (const file of files) {
-        // 检查单个文件大小
         if (file.size > 10 * 1024 * 1024) { // 10MB
             utils.showToast(`文件 "${file.name}" 过大 (超过 10MB)。`, 'warning');
-            continue; // 跳过这个文件，继续处理下一个
+            continue; 
         }
         
-        // ★ 核心逻辑：只执行一次 push，只存储预览所需的信息 ★
         const objectURL = URL.createObjectURL(file);
+        
+        // ★★★ 关键：确保原始的 file 对象被存储在 fileObject 属性中 ★★★
         state.uploadedFilesData.push({ 
             name: file.name, 
             type: file.type, 
-            fileObject: file,      // 存储原始文件对象，用于未来发送
+            fileObject: file,      // 存储原始文件对象，用于在提交时读取
             previewUrl: objectURL  // 存储临时URL，用于UI预览
         });
     }
 
-    // --- 更新UI并清空input ---
-    ui.renderFilePreview(); // ★ 访问 ui.renderFilePreview
-    event.target.value = null; // 清空<input>的值，以便可以再次选择同一个文件
+    ui.renderFilePreview();
+    event.target.value = null; 
 }
 
+/**
+ * 处理发送/停止按钮的点击事件 (最终修复版)
+ * 确保在保存到 IndexedDB 之前，正确地将 File 对象读取为 Base64。
+ */
+async function handleSubmitActionClick() {
+    const currentConv = state.getCurrentConversation();
+    if (!currentConv) {
+        utils.showToast("没有活动的对话。", 'warning');
+        return;
+    }
+
+    // 1. 前置检查：如果正在生成，则中止
+    if (state.isConversationGenerating(currentConv.id)) {
+        const abortController = state.getConversationAbortController(currentConv.id);
+        if (abortController) {
+            abortController.abort();
+            utils.showToast("请求已中止。", "info");
+        }
+        return;
+    }
+
+    const originalPromptText = ui.ui.promptInput.value.trim();
+    const hasInputContent = originalPromptText.length > 0 || state.uploadedFilesData.length > 0;
+
+    if (!hasInputContent) {
+        utils.showToast("请输入问题或上传文件。", 'warning');
+        return;
+    }
+
+    try {
+        // 1.1 准备文件数据：将 Base64 存入 IndexedDB，并获取文件元信息+ID
+        const filesToSave = [...state.uploadedFilesData];
+        
+        const savedFilesMeta = await Promise.all(
+            filesToSave.map(async (fileData) => {
+                const fileId = `file_${utils.generateSimpleId()}`;
+
+                // =====================================================================
+                // ★★★ 核心修复：在这里，我们从 fileData.fileObject (原始File对象) 中异步读取 Base64 内容 ★★★
+                const base64String = await utils.readFileAsBase64(fileData.fileObject);
+                // =====================================================================
+                
+                // ★★★ 核心修复：使用新读取到的 base64String 进行保存 ★★★
+                await utils.saveFileToDB(fileId, base64String);
+                
+                // 释放预览URL内存
+                if (fileData.previewUrl) {
+                    URL.revokeObjectURL(fileData.previewUrl);
+                }
+                
+                // 返回只包含元信息和ID的对象
+                return { id: fileId, name: fileData.name, type: fileData.type };
+            })
+        );
+
+        // 1.2 构造用户消息内容
+        const userMessageContent = { 
+            text: originalPromptText, 
+            files: savedFilesMeta
+        };
+
+        // 1.3 将用户消息添加到对话历史
+        conversation.addMessageToConversation(currentConv, 'user', userMessageContent, { model: currentConv.model });
+
+        // 1.4 清理并更新 UI
+        ui.ui.promptInput.value = '';
+        ui.autoResizePromptInput();
+        state.setUploadedFiles([]);
+        ui.renderFilePreview();
+        ui.loadAndRenderConversationUI(currentConv); 
+
+        // 1.6 调用 API 处理函数
+        await processApiRequest(currentConv);
+
+    } catch (error) {
+        console.error("Error during message sending process:", error);
+        utils.showToast("发送消息时出错，请查看控制台。", "error");
+        utils.updateSubmitButtonState(false, ui.ui.submitActionBtn);
+    }
+}
 
 
 // ========================================================================
@@ -821,6 +882,27 @@ if (manageProvidersBtn) {
                 break;
         }
     });
+    const imageModal = document.getElementById('image-modal');
+    const modalImage = document.getElementById('modal-image-content');
+    const closeModalBtn = document.getElementById('close-modal-btn');
+
+    if (imageModal && modalImage && closeModalBtn) {
+        const closeImageModal = () => {
+            imageModal.style.display = 'none';
+            modalImage.src = ''; // 清空src，防止旧图片闪现并节省内存
+        };
+
+        // 点击背景关闭
+        imageModal.addEventListener('click', closeImageModal);
+        
+        // 点击关闭按钮关闭
+        closeModalBtn.addEventListener('click', closeImageModal);
+
+        // ★ 关键：点击图片本身时，阻止事件冒泡，防止关闭模态框
+        modalImage.addEventListener('click', (e) => {
+            e.stopPropagation();
+        });
+    }
 
     eventListenersBound = true;
     console.log("Event listeners have been bound successfully.");

@@ -107,7 +107,7 @@ export function mapMessagesForGemini(messagesHistory) {
 
 /**
  * 将内部对话历史映射为 OpenAI, Anthropic, Ollama 等 API 所需的 `messages` 格式。
- * (重构版：统一处理逻辑，正确处理历史文件，移除冗余参数)
+ * (重构版 V2：默认使用 OpenAI 附件格式，仅对特例进行处理，增强可扩展性)
  * @param {Array} messagesHistory - 内部对话历史数组
  * @param {string} provider - API 提供商 ('openai', 'anthropic', 'ollama', etc.)
  * @returns {Array} - 符合 API规范的 messages 数组
@@ -116,17 +116,13 @@ export function mapMessagesForStandardOrClaude(messagesHistory, provider) {
     // 1. 直接遍历历史记录，一次性、完整地构建 API 所需的 messages 数组
     const mappedApiMessages = messagesHistory.map(msg => {
         // --- 1a. 处理 System 消息 ---
-        // Anthropic 和 Ollama 的 system prompt 在顶层单独处理，这里返回 null 会被过滤掉
         if (msg.role === 'system') {
-            if (provider === 'anthropic' || provider === 'ollama') {
-                return null;
-            }
+            if (provider === 'anthropic' || provider === 'ollama') return null;
             return { role: 'system', content: msg.content };
         }
 
         // --- 1b. 处理 Assistant 消息 ---
         if (msg.role === 'assistant' || msg.role === 'model') {
-            // 确保内容是字符串
             const assistantContent = (typeof msg.content === 'string') ? msg.content : (msg.content?.text || JSON.stringify(msg.content));
             return { role: 'assistant', content: assistantContent };
         }
@@ -135,6 +131,8 @@ export function mapMessagesForStandardOrClaude(messagesHistory, provider) {
         if (msg.role === 'user') {
             const contentParts = [];
             let mainText = '';
+            // ★ 新增：用于 Ollama 的图片数组
+            const ollamaImages = [];
 
             // 提取文本内容
             if (typeof msg.content === 'string') {
@@ -142,22 +140,27 @@ export function mapMessagesForStandardOrClaude(messagesHistory, provider) {
             } else if (msg.content && typeof msg.content.text === 'string') {
                 mainText = msg.content.text;
             }
-
-            // 对于支持多模态的 provider，将文本作为第一个 part
-            if (provider !== 'ollama') {
-                // 即使文本为空，也添加一个，以满足某些模型的格式要求
+            
+            // 对于非 Ollama 的 provider，总是先添加文本部分
+            // 注意：Ollama的图片是独立字段，不通过contentParts
+            if (provider !== 'ollama' && (mainText.trim() || contentParts.length === 0)) { // 确保文本部分不为空，或无其他内容时作为占位符
                 contentParts.push({ type: 'text', text: mainText.trim() || ' ' });
             }
-            
-            // 提取并处理所有文件（无论是历史文件还是新上传的文件）
+
+
+            // ★★★ 核心修复：重构文件处理逻辑为 "默认 + 特例" 模式 ★★★
             const files = msg.content?.files || [];
             if (files.length > 0) {
                 files.forEach(fileData => {
-                    // 对于 Ollama，将文件信息文本化
+                    const isImage = fileData.type?.startsWith('image/');
+                    
+                    // --- 特例1：Ollama ---
+                    // 对于 Ollama，图片添加到 ollamaImages 数组，其他文件文本化
                     if (provider === 'ollama') {
-                        if (fileData.type?.startsWith('image/')) {
-                            mainText += `\n(附带图片: ${fileData.name})`;
-                        } else if (fileData.base64) { // 假设非图片文件有 base64 内容
+                        if (isImage) {
+                            // Ollama 通常期望纯 base64 字符串，不带 data URL 前缀
+                            ollamaImages.push(fileData.base64.split(',')[1]); 
+                        } else if (fileData.base64) { 
                             try {
                                 const decodedContent = atob(fileData.base64.split(',')[1]);
                                 mainText += `\n\n--- 附件内容 (${fileData.name}): ---\n${decodedContent}\n--- 附件内容结束 ---`;
@@ -165,34 +168,40 @@ export function mapMessagesForStandardOrClaude(messagesHistory, provider) {
                                 mainText += `\n(无法解析附件: ${fileData.name})`;
                             }
                         }
-                    } else { // 对于其他多模态 provider
-                        if (fileData.type?.startsWith('image/')) {
-                            if (['openai', 'deepseek', 'openrouter', 'together', 'perplexity', 'volcengine', 'dashscope'].includes(provider)) {
-                                contentParts.push({
-                                    type: "image_url",
-                                    image_url: { url: fileData.base64 } // 发送 base64 Data URL
-                                });
-                            } else if (provider === 'anthropic') {
-                                contentParts.push({
-                                    type: "image",
-                                    source: {
-                                        type: "base64",
-                                        media_type: fileData.type,
-                                        data: fileData.base64.split(',')[1]
-                                    }
-                                });
+                    } 
+                    // --- 特例2：Anthropic ---
+                    // 对图片使用其专有格式
+                    else if (provider === 'anthropic' && isImage) {
+                        contentParts.push({
+                            type: "image",
+                            source: {
+                                type: "base64",
+                                media_type: fileData.type,
+                                data: fileData.base64.split(',')[1]
                             }
-                        } else if (fileData.base64) { // 将非图片文件内容作为文本 part 添加
-                             try {
+                        });
+                    } 
+                    // --- 默认行为 (适用于 OpenAI, Siliconflow, Deepseek, OpenRouter 等所有其他 provider) ---
+                    else {
+                        // 如果是图片，使用 OpenAI 的 image_url 格式
+                        if (isImage) {
+                            contentParts.push({
+                                type: "image_url",
+                                image_url: { url: fileData.base64 } // 发送 base64 Data URL
+                            });
+                        } 
+                        // 如果是其他文件（非图片），将其内容作为文本 part 添加
+                        else if (fileData.base64) {
+                            try {
                                 const decodedContent = atob(fileData.base64.split(',')[1]);
-                                contentParts.push({ 
-                                    type: 'text', 
-                                    text: `\n\n--- 附件内容 (${fileData.name}): ---\n${decodedContent}\n--- 附件内容结束 ---` 
+                                contentParts.push({
+                                    type: 'text',
+                                    text: `\n\n--- 附件内容 (${fileData.name}): ---\n${decodedContent}\n--- 附件内容结束 ---`
                                 });
                             } catch (e) {
-                                 contentParts.push({ 
-                                    type: 'text', 
-                                    text: `\n\n--- 附件 (无法解析): ${fileData.name} ---` 
+                                contentParts.push({
+                                    type: 'text',
+                                    text: `\n\n--- 附件 (无法解析): ${fileData.name} ---`
                                 });
                             }
                         }
@@ -202,7 +211,12 @@ export function mapMessagesForStandardOrClaude(messagesHistory, provider) {
 
             // 返回最终构件好的消息对象
             if (provider === 'ollama') {
-                return { role: 'user', content: mainText.trim() || ' ' };
+                const ollamaMessage = { role: 'user', content: mainText.trim() || ' ' };
+                // ★ 核心修复：只有当有图片时才添加 images 字段
+                if (ollamaImages.length > 0) {
+                    ollamaMessage.images = ollamaImages;
+                }
+                return ollamaMessage;
             } else {
                  // 如果 contentParts 为空（例如只发了一个不支持的文件），确保至少有一个文本 part
                 if (contentParts.length === 0) {

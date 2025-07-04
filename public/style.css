@@ -4073,6 +4073,65 @@ body.light-theme .message code {
     padding-top: 0;
 }
 
+/* --- 样式：限制聊天中图片的初始大小 --- */
+.user-sent-image {
+    max-width: 250px;  /* 限制图片最大宽度 */
+    max-height: 200px; /* 限制图片最大高度 */
+    border-radius: 8px; /* 给图片也加上圆角，更美观 */
+    cursor: zoom-in;      /* 鼠标悬停时显示放大光标 */
+    transition: transform 0.2s ease-in-out;
+    object-fit: cover; /* 保证图片不变形地填满容器 */
+}
+
+.user-sent-image:hover {
+    transform: scale(1.05); /* 悬停时轻微放大，增加交互感 */
+}
+
+/* --- 样式：图片附件容器 --- */
+.image-attachment {
+    padding: 0; /* 移除默认的附件内边距，让图片填充 */
+    background-color: transparent; /* 背景透明 */
+}
+
+/* --- 样式：图片放大模态框（灯箱效果） --- */
+.image-modal {
+    position: fixed; /* 固定定位，覆盖整个视口 */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.85); /* 半透明黑色背景 */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000; /* 确保在最顶层 */
+    cursor: zoom-out; /* 提示用户点击背景可以关闭 */
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.image-modal img {
+    max-width: 95vw;  /* 放大后图片的最大宽度不超过视口宽度的95% */
+    max-height: 95vh; /* 放大后图片的最大高度不超过视口高度的95% */
+    object-fit: contain; /* 完整显示图片，不变形 */
+    cursor: default;  /* 在图片上恢复默认光标 */
+    border-radius: 4px;
+}
+
+.close-image-modal {
+    position: absolute;
+    top: 15px;
+    right: 35px;
+    color: #fff;
+    font-size: 40px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: color 0.3s;
+}
+
+.close-image-modal:hover {
+    color: #bbb;
+}
 
 
 /* --- END OF FILE style.css (Provider Management Button Styling - Ultra Precision) --- */

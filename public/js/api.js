@@ -15,14 +15,10 @@ import { mapMessagesForGemini, mapMessagesForStandardOrClaude } from './message_
 // ========================================================================
 
 
-// ========================================================================
-// 2. API 交互函数
-// ========================================================================
-
 /**
  * 发送消息到后端 API。
  * @param {Array} messagesHistory - 经过过滤的、要发送给API的线性消息历史（不包含兄弟分支）。
- * @param {function} onStreamChunk - 处理流式数据块的回调函数。
+ * @param {function} onStreamChunk - 处理流式数据块的回调函数 (现在它将接收增量的reply和reasoning)。
  * @param {AbortSignal} signal - AbortSignal 对象，用于中止请求。
  * @returns {Promise<object>} 一个 Promise，解析为一个包含最终结果的对象。
  */
@@ -31,23 +27,18 @@ export async function send(messagesHistory, onStreamChunk, signal) {
     const headers = { 'Content-Type': 'application/json' };
     let bodyPayload = {};
     let response;
-    let accumulatedAssistantReply = "";     // 累积所有回复内容（包括嵌入式思考标签）
-    let accumulatedThinkingForDisplay = ""; // 累积来自独立 reasoning 字段的思考过程
+    let accumulatedAssistantReply = "";     // 累积所有回复内容（包括嵌入式思考标签），用于最终返回
+    let accumulatedThinkingForDisplay = ""; // 累积来自独立 reasoning 字段的思考过程，用于最终返回
     let usageData = null;
 
     const conversation = state.getCurrentConversation(); // 用于获取模型信息等
-    let effectiveModelString = conversation?.model; // 尝试获取 model 属性
+    let effectiveModelString = conversation?.model;
     if (!effectiveModelString || typeof effectiveModelString !== 'string' || effectiveModelString.trim() === '') {
-        // 如果 model 不存在、不是字符串或为空，则使用一个明确的默认值
         effectiveModelString = 'default::default-model'; 
         console.warn(`[API Send] Conversation model is invalid or missing. Using default: ${effectiveModelString}`);
     }
 
-    // 确保 model 字符串有 '::'，如果没有则添加一个默认提供商
     const fullModelString = effectiveModelString.includes('::') ? effectiveModelString : `unknown::${effectiveModelString}`;
-    
-    // 从 fullModelString 中解析出 provider 和 modelNameForAPI
-    // 例如 "openai::gpt-4o" -> providerToUse = "openai", modelNameForAPI = "gpt-4o"
     const [providerToUse, modelNameForAPI] = fullModelString.split('::');
     const providerLower = providerToUse.toLowerCase();
     
@@ -55,7 +46,6 @@ export async function send(messagesHistory, onStreamChunk, signal) {
         return { success: false, reply: "致命错误：找不到当前对话。", aborted: false };
     }
     
-    // ★★★ 核心修改：动态获取提供商配置 ★★★
     const providerConfig = state.getProviderConfig(providerLower);
 
     if (!providerConfig) {
@@ -65,113 +55,80 @@ export async function send(messagesHistory, onStreamChunk, signal) {
     }
 
     try {
-        // --- 1. 构建请求体 (Payload) ---
-        // 判断是否支持流式输出
         const shouldUseStreaming = providerConfig.streamSupport && state.isStreamingEnabled;
 
-        // bodyPayload 的 model 字段始终发送完整的 fullModelString
-        // 这样后端代理可以根据 provider::name 解析出正确的提供商和模型
         bodyPayload = {
             model: fullModelString, 
             stream: shouldUseStreaming,
         };
         
-        // --- 动态添加参数 ---
         const modelNameLower = modelNameForAPI.toLowerCase();
         
-        // Temperature
-        // 排除某些模型，如 o4-Mini，它们通常有固定的温度
-        if (!modelNameLower.includes('o4-mini','o3')) { // 确保是小写匹配
+        if (!modelNameLower.includes('o4-mini') && !modelNameLower.includes('o3')) {
             bodyPayload.temperature = parseFloat(localStorage.getItem('model-temperature')) || 0.7;
         }
 
-         // Max Tokens (★ 核心修复：根据模型名称动态选择参数)
         if (state.currentMaxTokens) {
             if (modelNameLower.includes('o4-mini') || modelNameLower.includes('o3')) {
-                // 对于这些特殊模型，使用 'max_completion_tokens'
                 bodyPayload.max_completion_tokens = state.currentMaxTokens;
             } else {
-                // 对于所有其他模型，使用标准的 'max_tokens'
                 bodyPayload.max_tokens = state.currentMaxTokens;
             }
         }
     
-     
-        // --- 2. 准备 Messages/Contents 并根据提供商路由到不同的代理 ---
-        const lastUserMessage = messagesHistory[messagesHistory.length - 1]; 
-        const filesToSend = lastUserMessage?.content?.files || []; 
-
-        // ★★★ 核心修改：根据 providerConfig.mapperType 动态选择消息映射函数 ★★★
         switch (providerConfig.mapperType) {
             case 'gemini':
-                // Gemini 使用 'contents' 字段
-            // 新的映射器不再需要第二个参数
-            bodyPayload.contents = mapMessagesForGemini(messagesHistory);
-            // 确保没有多余的 messages 字段
-            delete bodyPayload.messages; 
-            break;
+                bodyPayload.contents = mapMessagesForGemini(messagesHistory);
+                delete bodyPayload.messages; 
+                break;
 
             case 'anthropic':
-                // Anthropic 使用 'messages' 字段，并可能需要顶层的 'system' 字段
-                bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower); // <--- 移除 filesToSend
+                bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower);
                 const sysMsgAnthropic = messagesHistory.find(m => m.role === 'system');
                 if (sysMsgAnthropic?.content) { bodyPayload.system = sysMsgAnthropic.content; }
                 if (!bodyPayload.max_tokens) { bodyPayload.max_tokens = 4096; }
                 break;
 
             case 'ollama':
-                 // Ollama 使用 'messages' 字段，并可能需要顶层的 'system' 字段
-                bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower); // <--- 移除 filesToSend
+                bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower);
                 const ollamaSysMsg = messagesHistory.find(m => m.role === 'system');
                 if (ollamaSysMsg?.content) { bodyPayload.system = ollamaSysMsg.content; }
                 break;
                 
-            case 'standard': // 用于 OpenAI、DeepSeek、SiliconFlow、OpenRouter、Volcengine、DashScope 等所有兼容代理
-            default: // 将 'standard' 作为默认和回退选项
-                // 所有标准 OpenAI 兼容的 API (包括您的 Xai) 都使用 'messages' 字段
-                bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower); // <--- 移除 filesToSend
-                // 确保没有多余的 contents 字段
+            case 'standard':
+            default:
+                bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower);
                 delete bodyPayload.contents;
                 break;
         }
         
-        // ★★★ 核心修改：apiUrl 直接从 providerConfig 中获取 ★★★
         apiUrl = providerConfig.proxyPath;
 
-        console.log(`[API Send] Sending request to ${apiUrl} for model ${fullModelString}. Stream: ${shouldUseStreaming}`); // ★ 新增调试日志
-        console.log("[API Send] Payload:", JSON.stringify(bodyPayload, null, 2)); // ★ 新增调试日志
+        console.log(`[API Send] Sending request to ${apiUrl} for model ${fullModelString}. Stream: ${shouldUseStreaming}`);
+        console.log("[API Send] Payload:", JSON.stringify(bodyPayload, null, 2));
 
-        // --- 3. 发送请求 ---
-        // signal 参数由调用者（processApiRequest）传入并在此处使用
         response = await fetch(apiUrl, { method: 'POST', headers, body: JSON.stringify(bodyPayload), signal });
 
-        // ★★★ 核心修复：这里处理所有非 OK 的响应 ★★★
         if (!response.ok) {
             const errorBody = await response.text();
-            console.error(`[API Send] API Error (${response.status} - ${providerLower}):`, errorBody); // ★ 改进错误日志
+            console.error(`[API Send] API Error (${response.status} - ${providerLower}):`, errorBody);
             try {
                 const errorJson = JSON.parse(errorBody);
-                // 抛出更具体的错误消息
                 throw new Error(errorJson.error?.message || JSON.stringify(errorJson));
             } catch (e) {
-                // 如果解析 JSON 失败，则返回原始文本错误
                 throw new Error(`API Error (${response.status}): ${errorBody}`);
             }
         }
         
         const responseContentType = response.headers.get('content-type') || '';
-        // 包含 application/json for Gemini stream，因为它实际返回的是 application/json 类型的 JSON 流
-        const isActuallyStreaming = shouldUseStreaming && response.body && (responseContentType.includes('text/event-stream') || responseContentType.includes('application/x-ndjson') || responseContentType.includes('application/json')); // ★★★ 核心修复 1: 包含 application/json for Gemini stream ★★★
+        const isActuallyStreaming = shouldUseStreaming && response.body && (responseContentType.includes('text/event-stream') || responseContentType.includes('application/x-ndjson') || responseContentType.includes('application/json'));
 
-        // --- 4. 处理响应 ---
         if (isActuallyStreaming) {
             console.log("[API Stream] Backend confirmed streaming response. Starting parsing.");
             const stream = response.body.pipeThrough(new TextDecoderStream());
             let buffer = '';
 
-            // ★★★ 核心修复：为 Gemini 和其他提供商提供不同的解析策略 ★★★
             if (providerLower === 'gemini') {
-                // --- 解析策略 1: 针对 Gemini 的鲁棒 JSON 对象解析器 ---
                 for await (const chunk of stream) {
                     buffer += chunk;
                     let processedLength = 0;
@@ -179,7 +136,6 @@ export async function send(messagesHistory, onStreamChunk, signal) {
                     while (true) {
                         let jsonStart = -1, jsonEnd = -1, curlyBracketCount = 0, inString = false, escaped = false;
                         
-                        // 从已处理的位置开始扫描，寻找一个完整的 JSON 对象
                         for (let i = processedLength; i < buffer.length; i++) {
                             const char = buffer[i];
                             if (inString) {
@@ -222,15 +178,19 @@ export async function send(messagesHistory, onStreamChunk, signal) {
                                 }
 
                                 if (replyDelta || usageForUnit) {
-                                    // ... (usageData 累积和 onStreamChunk 调用逻辑与下面共享) ...
                                     if (replyDelta) accumulatedAssistantReply += replyDelta;
+                                    // Gemini 不提供独立思考过程流
                                     if (usageForUnit) {
                                         if (!usageData) usageData = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
                                         usageData.prompt_tokens = Math.max(usageData.prompt_tokens, usageForUnit.prompt_tokens || 0);
                                         usageData.completion_tokens = usageForUnit.completion_tokens; // Gemini's is cumulative
                                         usageData.total_tokens = usageData.prompt_tokens + usageData.completion_tokens;
                                     }
-                                    onStreamChunk({ reply: replyDelta, reasoning: '', usage: usageData });
+                                    onStreamChunk({
+        reply: accumulatedAssistantReply,     // <-- 修改这里
+        reasoning: accumulatedThinkingForDisplay, // <-- 修改这里
+        usage: usageForUnit                   // 这个保持不变
+    });
                                 }
                             } catch (e) {
                                 console.warn('[API Stream Error - Gemini] Failed to parse JSON chunk:', e, `Raw: "${jsonDataString}"`);
@@ -242,7 +202,6 @@ export async function send(messagesHistory, onStreamChunk, signal) {
                     buffer = buffer.substring(processedLength);
                 }
             } else {
-                // --- 解析策略 2: 针对 SSE 和纯 JSON 行的按行解析器 (Anthropic, Ollama, OpenAI) ---
                 const lineSeparator = '\n';
                 for await (const chunk of stream) {
                     buffer += chunk;
@@ -260,7 +219,6 @@ export async function send(messagesHistory, onStreamChunk, signal) {
                         } else if (line.startsWith('data:')) {
                             jsonDataString = line.substring(5).trim();
                         } else {
-                            // 忽略 SSE 的 event: 行或注释行
                             continue;
                         }
 
@@ -294,19 +252,22 @@ export async function send(messagesHistory, onStreamChunk, signal) {
                                     }
                                     break;
                                 default: // Default OpenAI compatible SSE
-                                    const delta = chunkObj.choices?.[0]?.delta;
-                                    if (delta) {
-                                        replyDelta = delta.content || '';
-                                        reasoningDelta = delta.reasoning || delta.reasoning_content || '';
-                                    }
-                                    if (chunkObj.usage) {
-                                        usageForUnit = chunkObj.usage;
-                                    }
-                                    break;
+    const delta = chunkObj.choices?.[0]?.delta;
+    if (delta) {
+        // highlight-start
+        // ★★★ 核心修复：明确提取 content 和 reasoning_content ★★★
+        replyDelta = delta.content || '';
+        // 兼容 'reasoning_content' 和 'reasoning' 两种可能的字段名
+        reasoningDelta = delta.reasoning_content || delta.reasoning || '';
+        // highlight-end
+    }
+    if (chunkObj.usage) {
+        usageForUnit = chunkObj.usage;
+    }
+    break;
                             }
 
                             if (replyDelta || reasoningDelta || usageForUnit) {
-                                // ... (usageData 累积和 onStreamChunk 调用逻辑与上面共享) ...
                                 if (replyDelta) accumulatedAssistantReply += replyDelta;
                                 if (reasoningDelta) accumulatedThinkingForDisplay += reasoningDelta;
 
@@ -324,10 +285,10 @@ export async function send(messagesHistory, onStreamChunk, signal) {
                                 }
 
                                 onStreamChunk({
-                                    reply: replyDelta,
-                                    reasoning: reasoningDelta,
-                                    usage: usageData
-                                });
+        reply: accumulatedAssistantReply, // 正确：传递累积后的完整回复
+        reasoning: accumulatedThinkingForDisplay,
+        usage: usageForUnit
+    });
                             }
                         } catch (e) {
                             console.warn('[API Stream Error - SSE/Line] Failed to parse JSON chunk:', e, `Raw: "${jsonDataString}"`);
@@ -336,7 +297,7 @@ export async function send(messagesHistory, onStreamChunk, signal) {
                 }
             }
         } else {
-            console.log("[API Send] Response is NOT streaming (or not detected as such). Processing as full JSON response."); // ★ 改进日志
+            console.log("[API Send] Response is NOT streaming (or not detected as such). Processing as full JSON response.");
             const responseData = await response.json();
             if (!response.ok) throw new Error(responseData.error?.message || JSON.stringify(responseData));
             
@@ -376,17 +337,8 @@ export async function send(messagesHistory, onStreamChunk, signal) {
                     break;
             }
 
-            if (finalReasoning) {
-                accumulatedThinkingForDisplay = finalReasoning;
-                accumulatedAssistantReply = finalReply;
-            }
-            else if (finalReply.includes('<think>') && finalReply.includes('</think>')) {
-                const extraction = utils.extractThinkingAndReply(finalReply, '<think>', '</think>');
-                accumulatedAssistantReply = extraction.replyText.trim();
-                accumulatedThinkingForDisplay = extraction.thinkingText.trim();
-            } else {
-                accumulatedAssistantReply = finalReply;
-            }
+            accumulatedAssistantReply = finalReply;
+            accumulatedThinkingForDisplay = finalReasoning;
         }
 
         // 最终返回前统一处理 accumulatedAssistantReply 和 accumulatedThinkingForDisplay
@@ -435,9 +387,6 @@ export async function send(messagesHistory, onStreamChunk, signal) {
         return { success: false, reply: `错误: ${error.message}`, aborted: false };
     }
 }
-
-// --- END OF FILE js/api.js (send Function - COMPLETE & FINAL Streaming Fixes) ---
-// --- END OF FILE js/api.js (send Function - Final Fixes) ---
 
 
 // ========================================================================
@@ -723,4 +672,50 @@ export async function loadProvidersConfig() { // ★★★ 核心修复：确保
   }
 }
 
+/**
+ * 将联网搜索配置（API URL 和 Key）保存到后端的 .env 文件。
+ * @param {string} apiUrl - 搜索服务的 URL.
+ * @param {string} apiKey - 搜索服务的 API 密钥.
+ * @returns {Promise<boolean>} - 保存是否成功。
+ */
+export async function saveWebSearchConfig(apiUrl, apiKey) {
+    try {
+        const response = await fetch('/.netlify/functions/save-web-search-config', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ apiUrl, apiKey }),
+        });
+
+        const result = await response.json();
+        if (!response.ok) {
+            throw new Error(result.message || `保存失败，状态码: ${response.status}`);
+        }
+
+        utils.showToast(result.message, 'success');
+        return true;
+
+    } catch (error) {
+        console.error("保存联网搜索配置失败:", error);
+        utils.showToast(`保存失败：${error.message}`, 'error');
+        return false;
+    }
+}
+
+/**
+ * 从后端获取联网搜索配置的状态。
+ * @returns {Promise<object>} - 返回一个包含 { urlConfigured: boolean, keyConfigured: boolean } 的对象。
+ */
+export async function getWebSearchStatus() {
+    try {
+        const response = await fetch('/.netlify/functions/get-web-search-status');
+        if (!response.ok) {
+            throw new Error('无法获取联网搜索配置状态。');
+        }
+        return await response.json();
+    } catch (error) {
+        console.error("Error in getWebSearchStatus:", error);
+        // 出错时返回默认的未配置状态，避免UI崩溃
+        return { urlConfigured: false, keyConfigured: false };
+    }
+}
 // --- END OF FILE js/api.js (Corrected) ---

@@ -10,13 +10,13 @@
 <body>
 
     <!-- ===== Main Layout Container ===== -->
-    <!-- 这个 div 是整个布局的核心，它将侧边栏和主内容区并排排列 -->
     <div class="container">
         <button id="sidebar-toggle-btn" class="sidebar-toggle-btn" title="收起/展开侧边栏">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="15 18 9 12 15 6"></polyline>
             </svg>
         </button>
+        
         <!-- ===== Sidebar ===== -->
         <aside class="sidebar">
             <div class="sidebar-header" id="sidebar-header">
@@ -42,6 +42,7 @@
                 <button id="show-settings-btn" class="settings-btn">⚙️ 设置</button>
             </div>
         </aside>
+
         <!-- ===== Main Content Area ===== -->
         <main class="main-area">
             
@@ -58,7 +59,6 @@
                         <span>系统指令</span>
                     </button>
                     <div class="header-actions">
-                        <!-- 分裂按钮容器，它现在只包含两个按钮 -->
                         <div class="split-button-container">
                             <button id="export-default-btn" class="split-button-action" title="导出为 Markdown">导出</button>
                             <button id="export-options-btn" class="split-button-dropdown" title="更多导出选项">
@@ -67,7 +67,6 @@
                                 </svg>
                             </button>
                         </div>
-                        <!-- 其他按钮作为 .header-actions 的直接子元素 -->
                         <button id="archive-current-btn" title="归档当前会话">归档</button>
                         <button id="clear-current-btn" class="warning" title="清空当前对话">清空</button>
                         <button id="delete-current-btn" title="删除当前会话">删除</button>
@@ -99,9 +98,10 @@
                                 </button>
                                 <div id="inline-chat-settings-panel" class="inline-chat-settings-panel" style="display: none;">
                                     <h4 class="inline-settings-title">聊天参数</h4>
+                                    <!-- ★★★ 核心修复：这个温度计输入框应该是 number 类型 ★★★ -->
                                     <div class="setting-item inline-setting-item">
                                         <label for="temperature-input-inline">Temperature (<span id="temperature-value-inline">0.70</span>):</label>
-                                        <input type="number" id="temperature-input-inline" name="temperature" min="0" max="2" step="0.01" value="0.70">
+                                        <input type="range" id="temperature-input-inline" name="temperature" min="0" max="2" step="0.01" value="0.70">
                                     </div>
                                     <div class="setting-item inline-setting-item">
                                         <label for="max-tokens-input-inline">单次最大 Tokens:</label>
@@ -110,6 +110,13 @@
                                     <div class="setting-item inline-setting-item">
                                         <label for="think-mode-toggle">模型思考模式:</label>
                                         <label class="switch"><input type="checkbox" id="think-mode-toggle"><span class="slider round"></span></label>
+                                    </div>
+                                    <div class="setting-item inline-setting-item">
+                                        <label for="web-search-toggle">联网搜索:</label>
+                                        <label class="switch" title="开启后，将在发送前先搜索网络，并将结果提供给AI">
+                                            <input type="checkbox" id="web-search-toggle">
+                                            <span class="slider round"></span>
+                                        </label>
                                     </div>
                                 </div>
                             </div>
@@ -170,11 +177,11 @@
                         </div>
                     </div>
                     <div class="setting-item">
-                        <label for="streaming-toggle" title="...">流式输出 (打字机效果)</label>
+                        <label for="streaming-toggle" title="开启后，AI的回复会像打字一样逐字显示。">流式输出 (打字机效果)</label>
                         <div class="controls-group"><label class="switch"><input type="checkbox" id="streaming-toggle"><span class="slider round"></span></label></div>
                     </div>
                     <div class="setting-item">
-                        <label for="auto-think-mode-toggle" title="...">自动判断思考模式</label>
+                        <label for="auto-think-mode-toggle" title="开启后，将由AI自行判断是否需要在回复前进行思考。">自动判断思考模式</label>
                         <div class="controls-group"><label class="switch"><input type="checkbox" id="auto-think-mode-toggle"><span class="slider round"></span></label></div>
                     </div>
                 </div>
@@ -187,53 +194,65 @@
                         </div>
                     </div>
                 </div>
-                <!-- ★★★ 用这个新的 setting-group 替换掉旧的 "API 管理" 卡片 ★★★ -->
-<div class="setting-group">
-    <!-- 这个 setting-item 作为新卡片的标题行 -->
-    <div class="setting-item">
-        <label>API 密钥管理</label>
-        <div class="controls-group">
-            <!-- 这个描述文字现在放在右侧 -->
-            <p style="margin: 0; font-size: 0.9em; color: var(--text-secondary);">
-                在此处保存您的 API 密钥，它将被写入本地 .env 文件。
-            </p>
-        </div>
-    </div>
-
-    <!-- 下面的 setting-item 包含具体的输入控件 -->
-    <div class="setting-item">
-        <label for="api-provider-select">选择提供商</label>
-        <div class="controls-group">
-            <select id="api-provider-select">
-                <!-- JS 会动态填充这里 -->
-            </select>
-        </div>
-    </div>
-    <div class="setting-item">
-        <label for="api-key-input">输入 API Key</label>
-        <div class="controls-group">
-            <input type="password" id="api-key-input" placeholder="粘贴您的 API Key">
-        </div>
-    </div>
-
-    <!-- ★ API 接口输入框已按要求删除 ★ -->
-
-    <!-- 新的按钮行 -->
-    <div class="setting-item">
-        <label></label> <!-- 左侧留空，使按钮组靠右对齐 -->
-        <div class="controls-group">
-            <!-- ★ 新增的管理提供商按钮，在左侧 -->
-            <button id="manage-providers-from-settings-btn" class="action-btn">管理提供商</button>
-            <!-- 保存按钮在右侧，作为主操作 -->
-            <button id="save-api-key-btn" class="action-btn primary-action">保存 API Key</button>
-        </div>
-    </div>
-</div>
-<!-- ★★★ 替换结束 ★★★ -->
-
+                <div class="setting-group">
+                    <div class="setting-item">
+                        <label>API 密钥管理</label>
+                        <div class="controls-group">
+                            <p style="margin: 0; font-size: 0.9em; color: var(--text-secondary);">在此处保存您的 API 密钥，它将被写入本地 .env 文件。</p>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <label for="api-provider-select">选择提供商</label>
+                        <div class="controls-group">
+                            <select id="api-provider-select"></select>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <label for="api-key-input">输入 API Key</label>
+                        <div class="controls-group">
+                            <input type="password" id="api-key-input" placeholder="粘贴您的 API Key">
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <label></label>
+                        <div class="controls-group">
+                            <button id="manage-providers-from-settings-btn" class="action-btn">管理提供商</button>
+                            <button id="save-api-key-btn" class="action-btn primary-action">保存 API Key</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- highlight-start -->
+                <!-- ★★★ 核心修复：联网搜索配置应该在这里，作为设置页面的一部分 ★★★ -->
+                <div class="setting-group">
+                    <div class="setting-item">
+                        <label>联网搜索配置</label>
+                        <div class="controls-group">
+                            <p style="margin: 0; font-size: 0.9em; color: var(--text-secondary);">配置您的联网搜索服务。</p>
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <label for="web-search-api-url">搜索服务 URL</label>
+                        <div class="controls-group">
+                            <input type="text" id="web-search-api-url" placeholder="例如：https://api.search-provider.com/v1/search">
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <label for="web-search-api-key">搜索服务 API Key</label>
+                        <div class="controls-group">
+                            <input type="password" id="web-search-api-key" placeholder="粘贴您的搜索服务 API Key">
+                        </div>
+                    </div>
+                    <div class="setting-item">
+                        <label></label>
+                        <div class="controls-group">
+                             <button id="save-web-search-config-btn" class="action-btn primary-action">保存联网搜索配置</button>
+                        </div>
+                    </div>
+                </div>
+                <!-- highlight-end -->
 
                 <div class="collapsible-info-section">
-                    <!-- 第一个可折叠项：关于 & 联系 -->
                     <div class="collapsible-item">
                         <button type="button" class="collapsible-trigger">
                             <span>关于 & 联系</span>
@@ -247,8 +266,6 @@
                             </ul>
                         </div>
                     </div>
-
-                    <!-- 第二个可折叠项：版本信息 -->
                     <div class="collapsible-item">
                         <button type="button" class="collapsible-trigger">
                             <span>版本信息</span>
@@ -287,34 +304,27 @@
                 <div id="preset-list-editor" class="preset-list-editor"></div>
             </section>
 
-            
- <section id="provider-management-area" class="settings-area" style="display: none;">
-                <!-- ★★★ 核心修复：添加回这个头部容器 ★★★ -->
+            <!-- highlight-start -->
+            <!-- ★★★ 核心修复：Provider Management Area 应该在 <main> 内部 ★★★ -->
+            <section id="provider-management-area" class="settings-area" style="display: none;">
                 <div class="settings-header-container">
                     <h2>API 提供商管理</h2>
-                    <!-- ★★★ 将按钮组移到 header-controls 内部 ★★★ -->
                     <div class="header-controls">
-                        <!-- '添加新提供商' 按钮 -->
                         <button id="add-new-provider-btn-header" class="action-btn">＋ 添加新提供商</button>
-                        <!-- '保存更改' 按钮 -->
                         <button id="save-providers-to-file-btn-header" class="action-btn primary-action">保存更改</button>
-                        <!-- '返回聊天' 按钮 -->
                         <button id="back-to-chat-from-provider-management-btn" class="action-btn">返回聊天</button>
                     </div>
                 </div>
-
-                <!-- ★★★ 原有的 management-controls 已经移动到 header 中，这里不再需要 ★★★ -->
-
                 <div id="provider-list-editor" class="model-list-editor">
                     <!-- JS 会在这里动态填充提供商列表 -->
                 </div>
             </section>
+            <!-- highlight-end -->
 
         </main>
     </div> <!-- End of .container -->
 
     <!-- ===== Floating Modals & Menus ===== -->
-    <!-- 这些元素不参与主布局，因此放在 .container 外部，且相互之间应是同级 -->
     
     <!-- Model Form Modal -->
     <div id="model-form-modal" class="modal" style="display: none;">
@@ -398,14 +408,13 @@
         </div>
     </div>
     
-    <!-- ★★★ 提供商编辑模态框 (Provider Form Modal) - 务必完整复制此段 ★★★ -->
+    <!-- Provider Form Modal -->
     <div id="provider-form-modal" class="modal" style="display: none;">
         <div class="modal-content">
             <span class="close-modal-btn">×</span>
             <h3 id="provider-form-title">添加新提供商</h3>
             <form id="provider-form">
                 <input type="hidden" id="edit-provider-index">
-
                 <div class="form-group">
                     <label for="provider-name">显示名称</label>
                     <div class="form-control-wrapper">
@@ -413,7 +422,6 @@
                         <small>在UI中显示的名称。</small>
                     </div>
                 </div>
-
                 <div class="form-group">
                     <label for="provider-value">内部值 (ID)</label>
                     <div class="form-control-wrapper">
@@ -421,7 +429,6 @@
                         <small>用于内部识别，必须唯一，建议全小写。</small>
                     </div>
                 </div>
-
                 <div class="form-group">
                     <label for="provider-api-key-env">API Key 变量</label>
                     <div class="form-control-wrapper">
@@ -429,7 +436,6 @@
                         <small>在 .env 文件中对应的 API Key 环境变量名。</small>
                     </div>
                 </div>
-                
                 <div class="form-group">
                     <label for="provider-default-endpoint">默认 Endpoint</label>
                     <div class="form-control-wrapper">
@@ -437,15 +443,13 @@
                         <small>该提供商的默认 API 接口地址。</small>
                     </div>
                 </div>
-
                 <div class="form-group">
                     <label for="provider-proxy-path">后端代理路径</label>
                     <div class="form-control-wrapper">
                         <input type="text" id="provider-proxy-path" required value="/api/openai-compatible-proxy">
-                        <small>请求将发送到哪个后端代理函数。对于大多数兼容API，使用通用代理。</small>
+                        <small>请求将发送到哪个后端代理函数。</small>
                     </div>
                 </div>
-
                 <div class="form-group">
                     <label for="provider-mapper-type">消息映射类型</label>
                     <div class="form-control-wrapper">
@@ -458,29 +462,30 @@
                         <small>前端如何格式化发送给API的消息。</small>
                     </div>
                 </div>
-
                 <div class="form-group">
-    <label>其他选项</label>
-    <div class="form-control-wrapper">
-        <label class="switch-like-label">
-            <input type="checkbox" id="provider-stream-support">
-            <span>支持流式输出</span>
-        </label>
-        <label class="switch-like-label">
-            <input type="checkbox" id="provider-is-special-case">
-            <span>是特殊用例</span>
-        </label>
-        <label class="switch-like-label">
-            <input type="checkbox" id="provider-is-self-hosted">
-            <span>是自托管</span>
-        </label>
-    </div>
-</div>
-
-                <div class="form-actions">
-                    <button type="button" id="cancel-provider-detail-btn" class="secondary">取消</button>
-                    <button type="submit" >保存提供商</button>
+                    <label>其他选项</label>
+                    <div class="form-control-wrapper">
+                        <label class="switch-like-label">
+                            <input type="checkbox" id="provider-stream-support">
+                            <span>支持流式输出</span>
+                        </label>
+                        <label class="switch-like-label">
+                            <input type="checkbox" id="provider-is-special-case">
+                            <span>是特殊用例</span>
+                        </label>
+                        <label class="switch-like-label">
+                            <input type="checkbox" id="provider-is-self-hosted">
+                            <span>是自托管</span>
+                        </label>
+                    </div>
                 </div>
+                <!-- highlight-start -->
+                <!-- ★★★ 核心修复：将按钮统一放在 form-actions 中 ★★★ -->
+                <div class="form-actions">
+                    <button type="button" id="cancel-provider-detail-btn" class="action-btn secondary">取消</button>
+                    <button type="submit" class="action-btn">保存提供商</button>
+                </div>
+                <!-- highlight-end -->
             </form>
         </div>
     </div>
@@ -488,48 +493,37 @@
     <!-- Other Floating Elements -->
     <div id="global-actions-menu" class="actions-dropdown-menu"></div>
     <div id="secret-menu" class="secret-menu" style="display: none;">
-        <div class="secret-menu-header">
-            <h4>你好！这是一个彩蛋</h4>
-            <button>×</button>
-        </div>
-        <div class="secret-menu-content">
-            <p>恭喜你发现了彩蛋！</p>
-            <button id="secret-btn-1">ごあいさつ</button>
-            <button id="secret-btn-2">（）</button>
-            <button id="secret-btn-3">切换主题</button>
-        </div>
+        <!-- Secret menu content -->
     </div>
 
-    <!-- ===== Scripts ===== -->
-    <!-- Third-party Libraries -->
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/umd.js"></script>
-    
-    <!-- MathJax -->
-    <script>
-  window.MathJax = {
-    tex: {
-      inlineMath: [['\\(', '\\)']],
-      // ★★★ 核心修复：在 displayMath 数组中再次添加新的分隔符对 ['[', ']'] ★★★
-      displayMath: [['$$', '$$'], ['\\[', '\\]'],['$', '$'],['\[', '\]']],
-    },
-    svg: {
-      fontCache: 'global'
-    }
-  };
-</script>
-    <script defer id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-
-    <!-- Main Application Entry Point -->
-    <script type="module" src="./js/script.js"></script>
-
-    <script type="module" src="./js/script.js"></script>
-
-    <!-- ===== 新增：图片放大模态框 ===== -->
+    <!-- Image Modal -->
     <div id="image-modal" class="image-modal" style="display: none;">
         <span id="close-modal-btn" class="close-image-modal">×</span>
         <img id="modal-image-content" src="" alt="Full-size view">
     </div>
+
+    <!-- ===== Scripts ===== -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/umd.js"></script>
+    
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+            },
+            svg: {
+                fontCache: 'global'
+            }
+        };
+    </script>
+    <script defer id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+    <!-- highlight-start -->
+    <!-- ★★★ 核心修复：确保只有一个 script.js 引用 ★★★ -->
+    <script type="module" src="./js/script.js"></script>
+    <!-- highlight-end -->
+
 </body>
 </html>

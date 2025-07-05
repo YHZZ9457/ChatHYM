@@ -72,6 +72,7 @@ export function initializeUI() {
         showPresetPromptsBtn: document.getElementById('show-preset-prompts-btn'),
         presetPromptsListPanel: document.getElementById('preset-prompts-list-panel'),
         presetPromptsUl: document.getElementById('preset-prompts-ul'),
+        webSearchToggle: document.getElementById('web-search-toggle'), // 新增
 
         // --- Settings Area ---
         settingsArea: document.getElementById('settings-area'),
@@ -82,6 +83,9 @@ export function initializeUI() {
         autoThinkModeToggle: document.getElementById('auto-think-mode-toggle'),
         showModelManagementBtn: document.getElementById('show-model-management-btn'),
         showPresetManagementBtn: document.getElementById('show-preset-management-btn'),
+        webSearchApiUrlInput: document.getElementById('web-search-api-url'),
+        webSearchApiKeyInput: document.getElementById('web-search-api-key'),
+        saveWebSearchConfigBtn: document.getElementById('save-web-search-config-btn'),
         
         // ★★★ 核心修复：确保这些 API 配置元素在这里被正确获取 ★★★
         backToSettingsFromApiKeyBtn: document.getElementById('back-to-settings-from-api-key-btn'), // 这个是API管理区域的返回按钮
@@ -448,27 +452,26 @@ export function createTemporaryMessageElement(role) {
 }
 
 
-// ui.js (appendLoading 函数)
-// 这个函数现在将变得非常简单，它只用于创建一个最基础的“对方正在输入”消息，
-// 主要是为了在没有实际流式回复时（例如等待第一个数据块）提供一个提示。
-// 它的生命周期由 processApiRequest 严格管理。
 export function appendLoading() {
     if (!ui.messagesContainer) return null;
     if (ui.emptyChatPlaceholder) ui.emptyChatPlaceholder.style.display = 'none';
 
     const loadingWrapper = document.createElement('div');
-    // 添加一个特定类名，以便 processApiRequest 在收到流时可以识别并移除它
-    loadingWrapper.className = 'message-wrapper assistant-message-wrapper temporary-initial-loading-message'; 
-    
+    loadingWrapper.className = 'message-wrapper assistant-message-wrapper temporary-initial-loading-message';
+
     const messageDiv = document.createElement('div');
-    messageDiv.className = 'message assistant';
+    // highlight-start
+    // 移除 'message' 和 'assistant' 类，改为只用 'loading-message'
+    messageDiv.className = 'loading-message'; // 新增一个专用类
+    // highlight-end
     messageDiv.innerHTML = `<div class="loading-indicator-bubble"><span>对方正在输入…</span></div>`;
-    
+
     loadingWrapper.appendChild(messageDiv);
     ui.messagesContainer.appendChild(loadingWrapper);
     ui.messagesContainer.scrollTop = ui.messagesContainer.scrollHeight;
     return loadingWrapper;
 }
+
 
 
 export function enableConversationDrag(listElement) { // ★ 接收一个元素作为参数
@@ -1080,7 +1083,68 @@ export function renderSystemPromptDisplay(content) {
     }
 }
 
+/**
+ * 渲染消息内容，处理 Markdown、LaTeX 和来源链接。
+ * @param {'user' | 'assistant' | 'model'} role - 消息角色。
+ * @param {string} text - 消息的纯文本内容。
+ * @param {boolean} isApiError - 是否为API错误消息。
+ * @returns {string} 渲染后的 HTML 字符串。
+ */
+export function renderMessageContent(role, text, isApiError = false) {
+    if (!text || typeof text !== 'string') return '';
 
+    let renderedHtml = '';
+
+    if (role === 'user' || isApiError) {
+        // 用户消息或API错误消息，只进行HTML转义和换行符处理
+        renderedHtml = utils.escapeHtml(text).replace(/\n/g, '<br>');
+    } else {
+        // 助手或模型消息：先处理LaTeX，再处理来源链接，最后Markdown
+        let processedText = preprocessLatex(text);
+
+        // ★★★ 核心修复：在 marked.parse() 之前，先替换来源链接 ★★★
+        // 这样 marked.js 就不会误处理 [Source: ...]
+        processedText = processedText.replace(
+            /\[Source:\s*(https?:\/\/[^\]\s]+)\]/g, // 更宽松地匹配 URL，允许空格
+            (match, url) => {
+                try {
+                    // 尝试解码 URL，处理中文编码，但要小心特殊字符
+                    // encodeURI 是更好的选择，但这里是解码
+                    const decodedUrl = decodeURIComponent(url);
+                    const domain = new URL(decodedUrl).hostname;
+                    return `<a href="${decodedUrl}" target="_blank" rel="noopener noreferrer" class="source-link" title="${decodedUrl}">[${domain.replace('www.', '')}]</a>`; // 只显示域名
+                } catch (e) {
+                    console.warn("Invalid URL or decoding failed for source tag:", url, e);
+                    // 如果解析失败，返回一个带提示的特殊 span
+                    return `<span class="invalid-source-link" title="无法解析的链接: ${utils.escapeHtml(url)}">[来源链接]</span>`; 
+                }
+            }
+        );
+
+        // 进行 Markdown 渲染
+        renderedHtml = marked.parse(processedText);
+
+        // 后处理：移除代码块的额外空白行
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = renderedHtml;
+        tempDiv.querySelectorAll('pre').forEach(preElement => {
+            const codeElement = preElement.querySelector('code');
+            const targetElement = codeElement || preElement; 
+            let codeText = targetElement.textContent; 
+            // 移除开头和结尾的空白字符，包括换行
+            codeText = codeText.replace(/^[\s\n]+/, '').replace(/[\s\n]+$/, ''); 
+            targetElement.textContent = codeText;
+        });
+        renderedHtml = tempDiv.innerHTML;
+    }
+    return renderedHtml;
+}
+
+
+
+// js/ui.js
+
+// ... (顶部模块导入和 renderMessageContent 等辅助函数保持不变) ...
 
 /**
  * 创建并向聊天区域追加一条新消息的 DOM 元素。
@@ -1098,15 +1162,16 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     if (!ui.messagesContainer) return null;
     if (ui.emptyChatPlaceholder) ui.emptyChatPlaceholder.style.display = 'none';
 
-    // 1. 创建最外层的包装器
     const messageWrapperDiv = document.createElement('div');
     messageWrapperDiv.className = `message-wrapper ${role === 'user' ? 'user-message-wrapper' : 'assistant-message-wrapper'}`;
     messageWrapperDiv.dataset.conversationId = conversationId;
     messageWrapperDiv.dataset.messageIndex = messageIndex;
 
-    // 2. 创建消息气泡本身
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role === 'assistant' || role === 'model' ? 'assistant' : 'user'}`;
+
+    const actionsContainer = document.createElement('div');
+    actionsContainer.className = 'message-actions-container';
 
     // 3. 处理用户消息的附件 (如果存在)
     if (role === 'user' && messageContent?.files?.length > 0) {
@@ -1116,24 +1181,19 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
         messageContent.files.forEach(file => {
             const isImage = file.type?.startsWith('image/');
 
-            // =====================================================================
-            // ★★★ 核心修复：将所有与图片相关的逻辑严格控制在 if (isImage) 块内 ★★★
-            // =====================================================================
             if (isImage) {
                 const imageWrapper = document.createElement('div');
                 imageWrapper.className = 'attachment-item image-attachment';
                 
-                // 1. 声明和初始化 imgElement
                 const imgElement = document.createElement('img');
                 imgElement.alt = utils.escapeHtml(file.name);
                 imgElement.title = `点击放大 - ${utils.escapeHtml(file.name)}`;
                 imgElement.classList.add('user-sent-image');
                 
-                // 2. 为它绑定点击事件
                 imgElement.addEventListener('click', () => {
                     const imageModal = document.getElementById('image-modal');
                     const modalImage = document.getElementById('modal-image-content');
-                    if (imageModal && modalImage && imgElement.src) { // 确保图片已加载
+                    if (imageModal && modalImage && imgElement.src) {
                         modalImage.src = imgElement.src;
                         imageModal.style.display = 'flex';
                     }
@@ -1142,11 +1202,9 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
                 imageWrapper.appendChild(imgElement);
                 attachmentsContainer.appendChild(imageWrapper);
 
-                // 3. 异步加载图片数据的函数也必须在这个作用域内
                 (async () => {
                     const base64Content = await utils.getFileFromDB(file.id);
                     if (base64Content) {
-                        // 在这里设置 src，imgElement 变量在此处是可访问的
                         imgElement.src = base64Content;
                     } else {
                         console.warn(`无法从 IndexedDB 加载图片数据，文件 ID: ${file.id}`);
@@ -1155,7 +1213,6 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
                 })();
 
             } else {
-                // 如果不是图片，则按原方式处理
                 const attachmentItem = document.createElement('div');
                 attachmentItem.className = 'attachment-item';
                 attachmentItem.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-paperclip" viewBox="0 0 16 16"><path d="M4.5 3a2.5 2.5 0 0 1 5 0v9a1.5 1.5 0 0 1-3 0V5a.5.5 0 0 1 1 0v8.5a.5.5 0 0 0 1 0V3a1.5 1.5 0 1 0-3 0v9a2.5 2.5 0 0 0 5 0V5a.5.5 0 0 1 1 0v8.5a3.5 3.5 0 1 1-7 0V3z"/></svg><span>${utils.escapeHtml(file.name)}</span>`;
@@ -1165,33 +1222,32 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
         messageDiv.appendChild(attachmentsContainer);
     }
 
-    // ★★★ 核心修复：始终创建思考过程的 DOM 元素，通过 display 属性控制其可见性 ★★★
-    let reasoningDivElement = null; // 声明在外部以便后续引用
+    // 4. 处理思考过程区 (默认隐藏，直到有内容)
+    let reasoningDivElement = null;
 
     if (role === 'assistant' || role === 'model') {
         const reasoningBlockDiv = document.createElement('div');
         reasoningBlockDiv.className = 'reasoning-block';
-        // 初始隐藏，除非 reasoningText 存在
         reasoningBlockDiv.style.display = (reasoningText?.trim() || '').length > 0 ? 'block' : 'none'; 
         reasoningBlockDiv.innerHTML = `<div class="reasoning-label"><span>思考过程:</span><button type="button" class="copy-reasoning-btn">复制</button></div><div class="reasoning-content"></div>`;
         
-        reasoningDivElement = reasoningBlockDiv.querySelector('.reasoning-content'); // 赋值给外部变量
-        if (reasoningDivElement) { // 确保元素存在
-            reasoningDivElement.textContent = reasoningText?.trim() || ''; // 初始填充内容
+        reasoningDivElement = reasoningBlockDiv.querySelector('.reasoning-content');
+        if (reasoningDivElement) { 
+            reasoningDivElement.textContent = reasoningText?.trim() || ''; // 思考过程始终只用 textContent
         }
 
         reasoningBlockDiv.querySelector('.copy-reasoning-btn').addEventListener('click', e => {
             e.stopPropagation();
             navigator.clipboard.writeText(reasoningText).then(() => {
                 e.target.textContent = '已复制!';
-                utils.showToast('思考过程已复制', 'success'); // 添加 toast
+                utils.showToast('思考过程已复制', 'success');
                 setTimeout(() => { e.target.textContent = '复制'; }, 2000);
-            }).catch(() => utils.showToast('自动复制失败。', 'error')); // 添加 toast
+            }).catch(() => utils.showToast('自动复制失败。', 'error'));
         });
         messageDiv.appendChild(reasoningBlockDiv);
     }
     
-// 5. 处理核心消息内容 (根据角色决定是否使用 Markdown)
+    // 5. 处理核心消息内容 (根据角色决定是否使用 Markdown)
     const contentDiv = document.createElement('div');
     contentDiv.className = 'text';
     const markdownContainer = document.createElement('span');
@@ -1206,42 +1262,45 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
         rawText = messageContent.text || "";
     }
     
-    if (rawText.trim()) {
+    // highlight-start
+    // ★★★ 核心修复：用户消息如果包含 webSearchResults，则只显示原始问题部分 ★★★
+    let displayText = rawText;
+    if (role === 'user' && messageContent?.webSearchResults) {
+        // 查找 "--- 用户原问题 ---" 标记
+        const userQuestionStart = rawText.indexOf('--- 用户原问题 ---');
+        if (userQuestionStart !== -1) {
+            // 提取用户原问题部分
+            displayText = rawText.substring(userQuestionStart + '--- 用户原问题 ---'.length).trim();
+        } else {
+            // 如果没有找到标记，但有 webSearchResults，作为 fallback 仍然只显示原始问题
+            // 假设原始问题总是最后一部分，或者直接使用 messageContent.text（如果它只保存原始问题的话）
+            // 这里我们依赖于 script.js 中 addMessageToConversation 传入的 messageContent.text 已经是纯粹的 originalPromptText
+            // 但为了健壮性，如果 messageContent.webSearchResults 存在，即使原始文本被污染，我们仍然尝试清理
+            // 实际上，上一个修复点已经确保了 messageContent.text 存储的是 originalPromptText，所以这里可以直接用 rawText
+             displayText = rawText; // 此时 rawText 应该就是 originalPromptText
+        }
+    }
+    // highlight-end
+
+    if (rawText.trim()) { // 使用 rawText 判断是否为空，但渲染用 displayText
         markdownContainer.dataset.fullRawContent = rawText; // 始终保存原始文本
 
-        // ★★★ 核心修复：根据角色应用不同渲染方式 ★★★
-        if (role === 'user' || messageWrapperDiv.dataset.isApiError === 'true') {
-            markdownContainer.innerHTML = utils.escapeHtml(rawText).replace(/\n/g, '<br>');
-        } else { // 对于 assistant 或 model 消息
-            const processedText = preprocessLatex(rawText);
-            // 应用 Markdown 渲染
-            markdownContainer.innerHTML = marked.parse(rawText);
-
-            // 对渲染后的 HTML 进行后处理
-            markdownContainer.querySelectorAll('pre').forEach(preElement => {
-                const codeElement = preElement.querySelector('code');
-                const targetElement = codeElement || preElement; 
-                let text = targetElement.textContent; 
-                text = text.replace(/^[\s\n]+/, ''); 
-                targetElement.textContent = text;
-            });
-            
-            // 为代码块添加复制/下载按钮
-            processPreBlocksForCopyButtons(markdownContainer);
-        }
+        // 调用新的渲染函数来获取 HTML 内容，统一处理 Markdown、LaTeX 和来源链接
+        // highlight-start
+        markdownContainer.innerHTML = renderMessageContent(role, displayText, messageWrapperDiv.dataset.isApiError === 'true');
+        // highlight-end
         
         // 统一进行空节点清理
         utils.pruneEmptyNodes(markdownContainer);
         contentDiv.appendChild(markdownContainer);
         messageDiv.appendChild(contentDiv);
         
-        // ★ 核心修复：确保 processPreBlocksForCopyButtons 作用于 markdownContainer
-        // 因为 pre 标签是 marked.parse 在 markdownContainer 内部生成的
+        // 为代码块添加复制/下载按钮
         processPreBlocksForCopyButtons(markdownContainer); 
     }
     messageWrapperDiv.contentSpan = markdownContainer; // 暴露给流式更新
 
- // 6. ★★★ 统一处理所有元信息 (Meta Info) - 重构版 ★★★
+    // 6. 统一处理所有元信息 (Meta Info)
     if (role === 'assistant' || role === 'model') {
         const metaInfoDiv = document.createElement('div');
         metaInfoDiv.className = 'message-meta-info';
@@ -1249,10 +1308,9 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
 
         // --- 6a. 创建左侧信息组 (模型 & Token) ---
         const leftMetaGroup = document.createElement('div');
-        // 为这个组添加一些样式，使其内部元素能良好排列
         leftMetaGroup.style.display = 'flex';
         leftMetaGroup.style.alignItems = 'center';
-        leftMetaGroup.style.gap = '16px'; // 组内元素间距
+        leftMetaGroup.style.gap = '16px';
 
         // 添加模型名称到左侧组
         if (modelForNote) {
@@ -1346,25 +1404,20 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
         }
     }
 
-    // 7. 创建并添加操作按钮容器
-    const actionsContainer = document.createElement('div');
-    actionsContainer.className = 'message-actions-container';
-    
-     // 7a. 复制按钮 (所有消息都有)
+    // 7. 创建并添加操作按钮容器 (actionsContainer 已在顶部声明)
     const copyMessageBtn = document.createElement('button');
     copyMessageBtn.className = 'message-action-btn copy-message-btn';
     copyMessageBtn.title = '复制消息内容';
     copyMessageBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-copy" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/></svg>`;
     copyMessageBtn.addEventListener('click', () => { 
-        // ★★★ 将 finalMarkdown 替换为 rawText ★★★
+        // 复制时，我们复制原始的、完整的 Prompt (rawText)
         navigator.clipboard.writeText(rawText.trim()).then(() => {
             utils.showToast('消息内容已复制', 'success');
         }).catch(() => utils.showToast('复制失败。', 'error'));
     });
     actionsContainer.appendChild(copyMessageBtn);
 
-
-     // 7b. ★ 核心修改：根据角色渲染不同的按钮 ★
+    // 7b. 根据角色渲染不同的按钮
     if (role === 'user') {
         const editBtn = document.createElement('button');
         editBtn.className = 'message-action-btn edit-message-btn';
@@ -1375,8 +1428,8 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
         
         const deleteMsgBtn = document.createElement('button');
         deleteMsgBtn.className = 'message-action-btn delete-message-btn';
-        deleteMsgBtn.title = '删除此消息'; // ★ 修改提示文本
-        deleteMsgBtn.dataset.action = 'delete_single'; // ★ 核心修改：将其设置为 'delete_single'
+        deleteMsgBtn.title = '删除此消息';
+        deleteMsgBtn.dataset.action = 'delete_single';
         deleteMsgBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-trash3" viewBox="0 0 16 16"><path d="M6.5 1h3a.5.5 0 0 1 .5.5v1H6v-1a.5.5 0 0 1 .5-.5M11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3A1.5 1.5 0 0 0 5 1.5v1H1.5a.5.5 0 0 0 0 1h.538l.853 10.66A2 2 0 0 0 4.885 16h6.23a2 2 0 0 0 1.994-1.84l.853-10.66h.538a.5.5 0 0 0 0-1zm-9.955 1H14.5a.5.5 0 0 1 0 1H1.455a.5.5 0 0 1 0-1Z"/></svg>`;
         actionsContainer.appendChild(deleteMsgBtn);
 
@@ -1410,29 +1463,13 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     
     // 9. 后续处理
     ui.messagesContainer.scrollTop = ui.messagesContainer.scrollHeight;
+    // MathJax 渲染：只对内容进行排版，不涉及思考过程
     if (window.MathJax?.typesetPromise) {
-        const elementsToTypeset = [];
-
-        // ★★★ 核心修复：将 typeset 的目标从 contentDiv 精准地改为 markdownContainer ★★★
-        // 只有当 markdownContainer 实际被添加到 DOM 后，才对其进行排版
-        if (contentDiv.contains(markdownContainer)) {
-            elementsToTypeset.push(markdownContainer);
-        }
-
-        // 如果思考过程区域有内容，也加入排版队列
-        if (reasoningDivElement?.textContent.trim()) {
-            elementsToTypeset.push(reasoningDivElement);
-        }
-
-        // 只有当有需要排版的元素时，才调用 MathJax
-        if (elementsToTypeset.length > 0) {
-            window.MathJax.typesetPromise(elementsToTypeset)
-                .catch(err => console.error("MathJax typesetting failed:", err));
-        }
+        window.MathJax.typesetPromise([markdownContainer]) // 只对 markdownContainer 进行排版
+            .catch(err => console.error("MathJax typesetting failed:", err));
     }
     return messageWrapperDiv;
 }
-
 
 
 // ui.js 中的 processPreBlocksForCopyButtons 函数
@@ -1790,7 +1827,28 @@ export function loadAndRenderConversationUI(convToLoad) {
     enableInlineTitleEdit();
 }
 
-
+/**
+ * 根据后端返回的联网搜索配置状态更新UI。
+ * @param {object} status - 包含 { urlConfigured: boolean, keyConfigured: boolean } 的状态对象。
+ */
+export function updateWebSearchStatusUI(status) {
+    if (ui.webSearchApiUrlInput) {
+        if (status.urlConfigured) {
+            ui.webSearchApiUrlInput.placeholder = '已配置，如需修改请直接输入';
+            ui.webSearchApiUrlInput.value = '';
+        } else {
+            ui.webSearchApiUrlInput.placeholder = '例如：https://api.search-provider.com/v1/search';
+        }
+    }
+    if (ui.webSearchApiKeyInput) {
+        if (status.keyConfigured) {
+            ui.webSearchApiKeyInput.placeholder = '························ (已配置)';
+            ui.webSearchApiKeyInput.value = '';
+        } else {
+            ui.webSearchApiKeyInput.placeholder = '粘贴您的搜索服务 API Key';
+        }
+    }
+}
 
 
 export function updateChatTitle(newTitle) {

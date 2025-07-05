@@ -20,6 +20,7 @@ export let modelConfigData = null;       // 原始模型配置
 export let editableModelConfig = null;   // 可编辑的模型配置
 export let loadedPresetPrompts = [];     // 预设模板
 export let providersConfig = [];   
+export let isWebSearchEnabled = false;
 
 // --- 用户设置 (会被保存到LocalStorage) ---
 export let isStreamingEnabled = true;
@@ -39,6 +40,7 @@ export const STREAMING_ENABLED_STORAGE_KEY = 'chat-streaming-enabled';
 export const MAX_TOKENS_STORAGE_KEY = 'chat-max-tokens';
 export const QWEN_THINK_MODE_STORAGE_KEY = 'qwen-think-mode-enabled';
 export const DEFAULT_MAX_TOKENS_PLACEHOLDER = 4096;
+export const WEB_SEARCH_ENABLED_STORAGE_KEY = 'chat-web-search-enabled';
 
 
 // ========================================================================
@@ -46,27 +48,13 @@ export const DEFAULT_MAX_TOKENS_PLACEHOLDER = 4096;
 //    提供安全、统一的方式来读取和修改状态。
 // ========================================================================
 
-/*
-  新的对话 (Conversation) 对象结构:
-  {
-    id: string,
-    title: string,
-    model: string,
-    // ★ messages 现在是一个包含所有分支消息的扁平数组
-    messages: [
-      {
-        id: string,       // 每条消息的唯一ID
-        parentId: string | null, // 父消息的ID，根消息为 null
-        role: 'user' | 'assistant' | 'system',
-        content: any,
-        // ... 其他元数据
-      }
-    ],
-    // ★ 新增：追踪当前分支的最后一条消息的ID
-    activeMessageId: string | null,
-    // ... 其他对话属性，如 archived, isPinned
-  }
-*/
+/**
+ * 设置是否启用联网搜索。
+ * @param {boolean} value
+ */
+export function setIsWebSearchEnabled(value) {
+    isWebSearchEnabled = value;
+}
 
 // ★ 新增：按对话ID设置生成状态
 export function setConversationGeneratingStatus(convId, status) {

@@ -1449,11 +1449,11 @@ body.light-theme .message.assistant.loading {
 }
 
 body.light-theme .message.user .text a {
-  color: rgba(255, 255, 255, 0.9) !important;
+  color: rgba(255, 255, 255, 0.8) !important;
 }
 
 .message .text a:hover {
-  color: rgba(var(--primary-rgb), 0.8) !important;
+  color: rgba(var(--primary-rgb), 0.6) !important;
 }
 
 body.light-theme .message.user .text a:hover {
@@ -2757,6 +2757,22 @@ body.dark-theme .toast.toast-error {
 .attachment-item svg {
   flex-shrink: 0;
 }
+/* 新增：专门用于加载消息的容器样式 */
+.loading-message {
+    display: flex; /* 让内部的 bubble 居中 */
+    justify-content: flex-start; /* 默认靠左 */
+    align-items: center;
+    padding: 0; /* 移除气泡内边距 */
+    background: transparent; /* 移除气泡背景 */
+    box-shadow: none; /* 移除气泡阴影 */
+    border-radius: 0; /* 移除气泡圆角 */
+}
+
+/* 确保助手加载消息靠左 */
+.assistant-message-wrapper .loading-message {
+    justify-content: flex-start;
+}
+
 
 .loading-indicator-wrapper {
   display: flex;
@@ -3474,8 +3490,8 @@ body.light-theme .message code {
 }
 
 .image-modal img {
-    max-width: 90vw;
-    max-height: 90vh;
+    max-width: 80vw;
+    max-height: 80vh;
     object-fit: contain;
     cursor: default;
     border-radius: 4px;
@@ -3494,59 +3510,44 @@ body.light-theme .message code {
 
 .close-image-modal:hover {
     color: #bbb;
-    size: 0.9em;
 }
 
-.tool-message-wrapper {
-    display: flex;
-    justify-content: center; /* 居中显示 */
-    margin: 8px 0;
-    padding: 0 16px;
+/* 联网搜索来源链接的样式 */
+.source-link {
+    color: var(--primary); /* 使用主题的主色 */
+    text-decoration: none;
+    font-size: 0.8em;
+    margin-left: 6px; /* 与前面内容的间距 */
+    vertical-align: middle; /* 垂直居中 */
+    border: 1px solid var(--border-color);
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap; /* 防止链接文本换行 */
+    transition: all 0.2s ease;
+    display: inline-block; /* 确保 padding 和 border 正确应用 */
+    max-width: 150px; /* 限制宽度，防止过长的域名撑开 */
+    overflow: hidden;
+    text-overflow: ellipsis; /* 超出显示省略号 */
+    line-height: 1.2; /* 调整行高，防止垂直对齐问题 */
 }
 
-.tool-message-content {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    border-radius: 8px;
-    background-color: var(--background-modifier-accent); /* 使用一个中立的颜色 */
-    color: var(--text-muted); /* 字体颜色也更柔和 */
-    font-size: 0.85em;
-    border: 1px solid var(--background-modifier-border);
+.source-link:hover {
+    /* highlight-start */
+    /* 使用 rgba() 格式，并设置透明度，例如 0.6 或 0.7 */
+    background-color: rgba(var(--primary-rgb), 0.6); /* 将透明度设置为 0.7 */
+    /* highlight-end */
+    color: #fff; /* 文字颜色保持白色 */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
-
-.tool-message-content svg {
-    flex-shrink: 0; /* 防止图标被压缩 */
+/* 针对无法解析的链接的特殊样式 */
+.invalid-source-link {
+    color: var(--text-secondary);
+    font-size: 0.8em;
+    margin-left: 6px;
+    vertical-align: middle;
+    border: 1px dashed var(--border-color); /* 虚线边框表示异常 */
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+    opacity: 0.7;
 }
-
-/* 
-  这个规则选择同时拥有 .assistant-message-wrapper 和 .tool-result-message 的元素。
-  它将整个消息包装器居中。
-*/
-.assistant-message-wrapper.tool-result-message {
-    display: flex;
-    justify-content: center;
-}
-
-/* 
-  这个规则选择它内部的 .message.assistant 气泡，并改变其外观。
-*/
-.tool-result-message .message.assistant {
-    width: auto;                  /* 宽度由内容决定 */
-    max-width: fit-content;       /* 宽度不超过内容所需 */
-    background-color: var(--background-modifier-accent); /* 使用一个中立的颜色 */
-    color: var(--text-muted);     /* 字体颜色也更柔和 */
-    border: 1px solid var(--background-modifier-border);
-    padding: 6px 12px;
-    font-size: 0.85em;
-}
-
-/* 确保图标和文本对齐 */
-.tool-result-message .message.assistant .text {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-/* --- END OF FILE style.css (Provider Management Button Styling - Ultra Precision) --- */

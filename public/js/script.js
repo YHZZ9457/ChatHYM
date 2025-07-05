@@ -17,10 +17,13 @@ import * as ui from './ui.js'; // ★ 统一使用 'ui' 作为模块别名
 /**
  * 通用的API请求与处理函数
  * @param {object} targetConv - 当前对话对象。
+ * @param {Array|null} apiHistory - (可选) 专门为API准备的消息历史，如果为null，则从targetConv自动获取。
+ *                                  这用于在用户消息中附加后台搜索结果等情况。
  */
-async function processApiRequest(targetConv) {
+async function processApiRequest(targetConv, apiHistory = null) {
     const convId = targetConv.id;
 
+    // 1. 设置对话生成状态和UI按钮
     state.setConversationGeneratingStatus(convId, true);
     if (state.currentConversationId === convId) {
         utils.updateSubmitButtonState(true, ui.ui.submitActionBtn);
@@ -36,11 +39,14 @@ async function processApiRequest(targetConv) {
         console.log(`[Stream Debug] Initiating background request for conv ${convId}.`);
     }
 
-    let accumulatedReply = '';
-    let accumulatedReasoningForStream = '';
-    let usageData = null;
+    // 这些变量现在由 api.send 内部累积，并通过 handleStreamChunk 的 result 参数传递
+    // let accumulatedAssistantReply = "";     
+    // let accumulatedThinkingForDisplay = ""; 
+    let usageData = null; // usageData 仍然在这里累积，因为它是最终结果的一部分
     const responseRole = targetConv.model.startsWith('gemini::') ? 'model' : 'assistant';
 
+    // 2. 处理流式数据块的回调函数 (现在接收 api.send 传递的累积值)
+   
     const handleStreamChunk = (result) => {
         // 如果用户切换到其他对话，则停止更新 UI 元素
         if (state.currentConversationId !== convId) {
@@ -48,19 +54,21 @@ async function processApiRequest(targetConv) {
             return;
         }
         
-        console.log("[Stream Debug] Received stream chunk:", result); // ★ 新增调试日志：每次收到数据块都打印
+        console.log("[Stream Debug] RECEIVED CHUNK - result:", result);
+        
+        console.log("[Stream Debug] Received stream chunk:", result); // 每次收到数据块都打印
 
         // 核心：在收到第一个流式数据块时，移除初始的“对方正在输入”占位符
         if (initialLoadingIndicator && initialLoadingIndicator.parentNode) {
             initialLoadingIndicator.remove();
             initialLoadingIndicator = null;
-            console.log("[Stream Debug] Removed initial loading indicator."); // ★ 新增调试日志
+            console.log("[Stream Debug] Removed initial loading indicator.");
         }
         // 移除 loadConversationFlow 可能添加的占位符（如果它属于这个对话）
         const existingPlaceholderFromLoad = ui.ui.messagesContainer.querySelector(`.loading-indicator-wrapper[data-conv-id="${convId}"]`);
         if (existingPlaceholderFromLoad) {
             existingPlaceholderFromLoad.remove();
-            console.log("[Stream Debug] Removed existing placeholder from loadConversationFlow."); // ★ 新增调试日志
+            console.log("[Stream Debug] Removed existing placeholder from loadConversationFlow.");
         }
 
         // 核心：如果 tempMessageWrapper 尚未创建，现在就创建它
@@ -68,9 +76,8 @@ async function processApiRequest(targetConv) {
             tempMessageWrapper = ui.createTemporaryMessageElement(responseRole);
             if (ui.ui.messagesContainer) {
                 ui.ui.messagesContainer.appendChild(tempMessageWrapper);
-                // 确保滚动，但只在创建时滚动一次，或者在后面统一滚动
                 ui.ui.messagesContainer.scrollTop = ui.ui.messagesContainer.scrollHeight;
-                console.log("[Stream Debug] Created temporary message wrapper."); // ★ 新增调试日志
+                console.log("[Stream Debug] Created temporary message wrapper.");
             }
         }
         
@@ -78,39 +85,60 @@ async function processApiRequest(targetConv) {
         if (tempMessageWrapper.inlineLoader) {
             tempMessageWrapper.inlineLoader.remove();
             tempMessageWrapper.inlineLoader = null;
-            console.log("[Stream Debug] Removed inline loader from temporary message."); // ★ 新增调试日志
+            console.log("[Stream Debug] Removed inline loader from temporary message.");
         }
 
-        if (result.reply) accumulatedReply += result.reply;
-        if (result.reasoning) accumulatedReasoningForStream += result.reasoning;
-        if (result.usage) usageData = { ...usageData, ...result.usage };
+        // highlight-start
+        // 从 result 中获取累积的回复和思考过程
+        const currentAccumulatedReply = result.reply;
+        const currentAccumulatedReasoning = result.reasoning;
+        if (result.usage) usageData = { ...usageData, ...result.usage }; // 累积 usageData
+        // highlight-end
 
-        let currentThinkingText = '';
-        let currentReplyText = '';
+        // ★★★ 用以下新逻辑替换旧的 if/else 块 ★★★
+let currentThinkingText = '';
+let currentReplyText = '';
 
-        if (accumulatedReasoningForStream.trim().length > 0) {
-            currentThinkingText = accumulatedReasoningForStream;
-            currentReplyText = accumulatedReply;
-        } else {
-            const extraction = utils.extractThinkingAndReply(accumulatedReply, '<think>', '</think>');
-            currentThinkingText = extraction.thinkingText;
-            currentReplyText = extraction.replyText;
+// 1. 优先处理独立的 reasoning 字段（如果存在）
+if (currentAccumulatedReasoning && currentAccumulatedReasoning.trim().length > 0) {
+    // 如果有独立的思考过程流，直接使用
+    currentThinkingText = currentAccumulatedReasoning;
+    // 主回复就是完整的主回复
+    currentReplyText = currentAccumulatedReply;
+} else {
+    // 2. 如果没有独立 reasoning，则从主回复中提取 <think> 标签内容
+    // 这个函数需要能处理流式（未闭合标签）的情况
+    const extraction = utils.extractThinkingAndReply(currentAccumulatedReply, '<think>', '</think>');
+    currentThinkingText = extraction.thinkingText;
+    currentReplyText = extraction.replyText;
+}
+        
+         if (tempMessageWrapper.contentSpan) {
+            tempMessageWrapper.contentSpan.textContent = currentReplyText;
+            tempMessageWrapper.contentSpan.dataset.fullRawContent = currentAccumulatedReply;
+            console.log("[Stream Debug] Updated temporary message content.");
         }
         
-        // 核心：更新临时消息元素的 DOM 内容
-        if (tempMessageWrapper.contentSpan) {
-            tempMessageWrapper.contentSpan.dataset.fullRawContent = accumulatedReply;
-            tempMessageWrapper.contentSpan.innerHTML = marked.parse(currentReplyText);
-            ui.processPreBlocksForCopyButtons(tempMessageWrapper.contentSpan);
-            utils.pruneEmptyNodes(tempMessageWrapper.contentSpan);
-            console.log("[Stream Debug] Updated temporary message content."); // ★ 新增调试日志
-        }
-        
+        // highlight-start
+        // ★★★ 新增：处理思考过程的流式渲染 ★★★
         if (tempMessageWrapper.reasoningContentEl) {
-            tempMessageWrapper.reasoningContentEl.textContent = currentThinkingText;
+            // 1. 更新思考过程的文本内容
+            tempMessageWrapper.reasoningContentEl.textContent = currentThinkingText; // 思考过程直接赋值 textContent
+
+            // 2. 根据是否有内容，控制整个思考块的显示/隐藏
             if (tempMessageWrapper.reasoningBlockEl) {
                 tempMessageWrapper.reasoningBlockEl.style.display = currentThinkingText.trim().length > 0 ? 'block' : 'none';
-                console.log("[Stream Debug] Updated reasoning content display."); // ★ 新增调试日志
+                console.log("[Stream Debug] Updated reasoning content display.");
+            }
+        }
+
+        if (tempMessageWrapper.reasoningContentEl) {
+            // highlight-start
+            tempMessageWrapper.reasoningContentEl.textContent = currentThinkingText; // 思考过程直接赋值 textContent
+            // highlight-end
+            if (tempMessageWrapper.reasoningBlockEl) {
+                tempMessageWrapper.reasoningBlockEl.style.display = currentThinkingText.trim().length > 0 ? 'block' : 'none';
+                console.log("[Stream Debug] Updated reasoning content display.");
             }
         }
         
@@ -127,57 +155,58 @@ async function processApiRequest(targetConv) {
 
     let finalResultFromApi = null;
      try {
-        // ★★★ 核心改造：运行时重构历史记录 ★★★
-        let historyForApi = conversation.getCurrentBranchMessages(targetConv);
+        // 3. 准备要发送给 API 的消息历史
+        // 如果 `apiHistory` 被传入，则使用它（例如，它可能包含了搜索结果）
+        // 否则，从当前对话中获取分支历史
+        let historyForApi = apiHistory || conversation.getCurrentBranchMessages(targetConv);
         
-        // 检查历史中是否有文件需要从DB加载
+        // 检查历史中是否有文件需要从DB加载（Base64数据）
         const needsReconstruction = historyForApi.some(msg => msg.content?.files?.length > 0);
 
         if (needsReconstruction) {
-    // 创建历史的深拷贝，避免污染原始 state
-    const reconstructedHistory = JSON.parse(JSON.stringify(historyForApi));
-    
-    // 使用 Promise.all 并行加载所有文件
-    await Promise.all(reconstructedHistory.map(async (msg) => {
-        if (msg.content?.files?.length > 0) {
-            // 再次使用 Promise.all 加载单个消息内的所有文件
-            const loadedFiles = await Promise.all(msg.content.files.map(async (fileMeta) => {
-                const base64Content = await utils.getFileFromDB(fileMeta.id);
-                if (base64Content) {
-                    // ★★★ 核心修复：返回原始 fileMeta，并添加 base64 属性 ★★★
-                    // 这一步是关键！它将从 IndexedDB 读取的 Base64 字符串
-                    // 重新附加到文件对象上，形成一个完整的、可供 mappers 使用的对象。
-                    return { ...fileMeta, base64: base64Content };
+            // 对 historyForApi 进行深拷贝，避免修改原始对象
+            const reconstructedHistory = JSON.parse(JSON.stringify(historyForApi));
+            
+            // 使用 Promise.all 并行加载所有文件
+            await Promise.all(reconstructedHistory.map(async (msg) => {
+                if (msg.content?.files?.length > 0) {
+                    const loadedFiles = await Promise.all(msg.content.files.map(async (fileMeta) => {
+                        const base64Content = await utils.getFileFromDB(fileMeta.id);
+                        if (base64Content) {
+                            return { ...fileMeta, base64: base64Content };
+                        }
+                        // 如果找不到文件，返回原始元数据，避免程序崩溃
+                        return fileMeta; 
+                    }));
+                    // 用重构后的、包含 Base64 的文件数组替换掉原来的“瘦身版”数组
+                    msg.content.files = loadedFiles;
                 }
-                // 如果找不到文件，返回原始元数据，避免程序崩溃
-                return fileMeta; 
             }));
-            // 用重构后的、包含 Base64 的文件数组替换掉原来的“瘦身版”数组
-            msg.content.files = loadedFiles;
+            // 使用重构后的历史记录进行API调用
+            historyForApi = reconstructedHistory;
         }
-    }));
-    
-    // 使用重构后的历史记录进行API调用
-    historyForApi = reconstructedHistory;
-}
-        // ★★★ 重构结束 ★★★
 
+        // 4. 设置 AbortController
         const abortController = new AbortController();
         state.setConversationAbortController(targetConv.id, abortController);
 
-        // ★ 将重构后的 historyForApi 传递给 api.send
+        // 5. 调用 API
+        console.log(`[API Send] Sending request to API for model ${targetConv.model}. Stream: ${state.isStreamingEnabled}`);
+        console.log("[API Send] History sent to API:", JSON.stringify(historyForApi, null, 2));
+
         finalResultFromApi = await api.send(historyForApi, handleStreamChunk, abortController.signal);
 
-        
-        // ... (后续的非流式处理和错误处理逻辑不变) ...
+        // 6. 处理 API 最终结果 (非流式或流式结束后的汇总)
         let finalAssistantReply = finalResultFromApi.reply;
         let finalAssistantReasoning = finalResultFromApi.reasoning;
 
+        // 如果不是用户中止的请求，且对话标题为“新对话”，尝试根据AI回复更新标题
         if (!finalResultFromApi.aborted && targetConv.title === '新对话') {
             const newTitle = utils.stripMarkdown(finalAssistantReply).substring(0, 20).trim();
             if (newTitle) targetConv.title = newTitle;
         }
 
+        // 将最终的AI回复添加到对话历史
         conversation.addMessageToConversation(targetConv, responseRole, finalAssistantReply, {
             model: targetConv.model,
             reasoning_content: finalAssistantReasoning,
@@ -185,52 +214,68 @@ async function processApiRequest(targetConv) {
         });
 
     } catch (error) {
+        // 7. 错误处理
         if (error.name === 'AbortError') {
-            let abortedReply = finalResultFromApi?.reply || (accumulatedReply.trim() || "");
-            let abortedReasoning = finalResultFromApi?.reasoning || (accumulatedReasoningForStream.trim() || null);
+            // 如果是用户中止，将已累积的内容和中止信息添加到对话
+            // 从 finalResultFromApi 获取已累积的回复和思考过程
+            let abortedReply = finalResultFromApi?.reply || "";
+            let abortedReasoning = finalResultFromApi?.reasoning || null;
 
-            conversation.addMessageToConversation(targetConv, responseRole, abortedReply + "\n（用户已中止）", {
+            // 再次检查并提取思考过程，以防最后阶段有新的标签
+            if (!(abortedReasoning?.trim()) && abortedReply.includes('<think>') && abortedReply.includes('</think>')) {
+                const extraction = utils.extractThinkingAndReply(abortedReply, '<think>', '</think>');
+                abortedReply = extraction.replyText.trim();
+                abortedReasoning = extraction.thinkingText.trim();
+            } else {
+                abortedReply = abortedReply.trim();
+                abortedReasoning = abortedReasoning?.trim() || null;
+            }
+
+            conversation.addMessageToConversation(targetConv, responseRole, (abortedReply || "") + "\n（用户已中止）", {
                 model: targetConv.model,
                 reasoning_content: abortedReasoning,
                 usage: finalResultFromApi?.usage || usageData,
             });
-            console.warn("[Stream Debug] Request aborted by user."); // ★ 新增调试日志
+            console.warn("[Process API Request] Request aborted by user.");
         } else {
-            console.error(`[Stream Debug] API Request Failed:`, error); // ★ 修改日志级别和信息
+            // 其他 API 错误
+            console.error(`[Process API Request] API Request Failed:`, error);
             conversation.addMessageToConversation(targetConv, responseRole, `错误: ${error.message || "请求失败"}`, { model: targetConv.model });
         }
     } finally {
+        // 8. 请求完成后的清理和UI更新
         state.setConversationGeneratingStatus(convId, false);
         state.setConversationAbortController(convId, null);
 
         // 核心修复：在 finally 块中统一移除所有临时 UI 元素
         if (tempMessageWrapper && tempMessageWrapper.parentNode) {
             tempMessageWrapper.remove();
-            console.log("[Stream Debug] Removed final temporary message wrapper."); // ★ 新增调试日志
+            console.log("[Process API Request] Removed final temporary message wrapper.");
         }
         if (initialLoadingIndicator && initialLoadingIndicator.parentNode) {
             initialLoadingIndicator.remove();
-            console.log("[Stream Debug] Removed initial loading indicator in finally."); // ★ 新增调试日志
+            console.log("[Process API Request] Removed initial loading indicator in finally.");
         }
+        // 确保移除所有可能存在的占位符
         const currentPlaceholder = ui.ui.messagesContainer.querySelector(`.loading-indicator-wrapper[data-conv-id="${convId}"]`);
         if (currentPlaceholder) {
             currentPlaceholder.remove();
-            console.log("[Stream Debug] Removed lingering placeholder in finally."); // ★ 新增调试日志
+            console.log("[Process API Request] Removed lingering placeholder in finally.");
         }
         
+        // 仅当当前对话与处理的对话相同时，才刷新主聊天区域UI
         if (state.currentConversationId === convId) {
-            utils.updateSubmitButtonState(false, ui.ui.submitActionBtn);
+            utils.updateSubmitButtonState(false, ui.ui.submitActionBtn); // 更新按钮状态为“发送”
             ui.loadAndRenderConversationUI(targetConv); // 重新渲染最终消息和分支
-            ui.renderConversationList(); // 刷新侧边栏标题等
-            console.log("[Stream Debug] Final UI update for current conversation."); // ★ 新增调试日志
+            console.log("[Process API Request] Final UI update for current conversation.");
         } else {
-            console.log(`[Stream Debug] Request for conversation ${convId} finished, but active conversation is ${state.currentConversationId}. Skipping immediate UI render.`);
-            ui.renderConversationList(); // 刷新侧边栏标题等
+            console.log(`[Process API Request] Request for conversation ${convId} finished, but active conversation is ${state.currentConversationId}. Skipping immediate main UI render.`);
         }
+        // 无论如何，都刷新侧边栏列表，因为标题可能已更新
+        ui.renderConversationList();
     }
 }
 
-// --- END OF FILE js/script.js (processApiRequest - Final Fixes) ---
 
 
 
@@ -339,49 +384,101 @@ async function handleSubmitActionClick() {
     }
 
     try {
-        // 1.1 准备文件数据：将 Base64 存入 IndexedDB，并获取文件元信息+ID
+        // highlight-start
+        // 1. ★★★ 核心修改：将用户消息的添加和渲染提前 ★★★
+
+        // 1.1 准备文件数据
         const filesToSave = [...state.uploadedFilesData];
-        
         const savedFilesMeta = await Promise.all(
             filesToSave.map(async (fileData) => {
                 const fileId = `file_${utils.generateSimpleId()}`;
-
-                // =====================================================================
-                // ★★★ 核心修复：在这里，我们从 fileData.fileObject (原始File对象) 中异步读取 Base64 内容 ★★★
                 const base64String = await utils.readFileAsBase64(fileData.fileObject);
-                // =====================================================================
-                
-                // ★★★ 核心修复：使用新读取到的 base64String 进行保存 ★★★
                 await utils.saveFileToDB(fileId, base64String);
                 
-                // 释放预览URL内存
                 if (fileData.previewUrl) {
                     URL.revokeObjectURL(fileData.previewUrl);
                 }
-                
-                // 返回只包含元信息和ID的对象
                 return { id: fileId, name: fileData.name, type: fileData.type };
             })
         );
 
-        // 1.2 构造用户消息内容
+        // 1.2 构造【不含】搜索结果的初始用户消息
         const userMessageContent = { 
-            text: originalPromptText, 
+            text: originalPromptText,
             files: savedFilesMeta
         };
 
-        // 1.3 将用户消息添加到对话历史
+        // 1.3 立即将用户消息添加到对话历史
         conversation.addMessageToConversation(currentConv, 'user', userMessageContent, { model: currentConv.model });
 
-        // 1.4 清理并更新 UI
+        // 1.4 立即渲染UI，让用户看到自己的消息
+        ui.loadAndRenderConversationUI(currentConv); 
+        
+        // 1.5 清理输入框和文件预览
         ui.ui.promptInput.value = '';
         ui.autoResizePromptInput();
         state.setUploadedFiles([]);
         ui.renderFilePreview();
-        ui.loadAndRenderConversationUI(currentConv); 
+        
+        // highlight-end
 
-        // 1.6 调用 API 处理函数
-        await processApiRequest(currentConv);
+        // --- 联网搜索逻辑 (现在在UI渲染之后执行) ---
+        let webSearchResultsContent = null;
+        const isWebSearchEnabled = ui.ui.webSearchToggle.checked;
+
+        if (isWebSearchEnabled && originalPromptText) {
+            const searchStatusMessage = ui.appendLoading();
+            if (searchStatusMessage) {
+                const bubble = searchStatusMessage.querySelector('.loading-indicator-bubble span');
+                if (bubble) bubble.textContent = '正在搜索网络...';
+            }
+
+            try {
+                const searchResponse = await fetch('/.netlify/functions/web-search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: originalPromptText })
+                });
+
+                if (!searchResponse.ok) {
+                    const errorData = await searchResponse.json();
+                    throw new Error(errorData.error || '网络搜索失败。');
+                }
+
+                const searchData = await searchResponse.json();
+                if (searchData.results) {
+                    webSearchResultsContent = searchData.results;
+                } else {
+                    utils.showToast("未找到相关网络搜索结果。", "info");
+                }
+
+                if (searchStatusMessage) searchStatusMessage.remove();
+
+            } catch (error) {
+                console.error("Web Search Error:", error);
+                utils.showToast(`网络搜索失败: ${error.message}`, 'error');
+                if (searchStatusMessage) searchStatusMessage.remove();
+            }
+        }
+        
+        // --- 准备API请求 ---
+        const historyForApi = conversation.getCurrentBranchMessages(currentConv);
+        const lastMessageForApi = historyForApi[historyForApi.length - 1];
+        
+        // highlight-start
+        // ★★★ 核心修改：如果搜索成功，将结果“注入”到已存在的消息中 ★★★
+        if (lastMessageForApi && lastMessageForApi.role === 'user' && webSearchResultsContent) {
+            // 直接修改 state 中的消息对象，为其添加 webSearchResults 字段
+            // 注意：我们之前保存的 message content 是一个对象，所以可以直接添加属性
+            lastMessageForApi.content.webSearchResults = webSearchResultsContent;
+            
+            // 构造发给AI的、包含搜索结果的特殊Prompt
+            lastMessageForApi.content.text = `请根据以下最新的网络搜索结果，回答用户的问题。如果信息来自某个来源，请在句末使用 [Source: URL] 格式进行标注。你的回答应该简洁、准确，并以清晰的方式呈现。\n\n--- 搜索结果开始 ---\n${webSearchResultsContent}\n--- 搜索结果结束 ---\n\n--- 用户原问题 ---\n${originalPromptText}`;
+        }
+        // highlight-end
+
+        // 调用 API 处理函数
+        await processApiRequest(currentConv, historyForApi); 
 
     } catch (error) {
         console.error("Error during message sending process:", error);
@@ -389,6 +486,7 @@ async function handleSubmitActionClick() {
         utils.updateSubmitButtonState(false, ui.ui.submitActionBtn);
     }
 }
+
 
 
 // ========================================================================
@@ -456,6 +554,29 @@ function bindEventListeners() {
                 utils.updateSubmitButtonState(false, ui.ui.submitActionBtn); // 按钮始终启用
             }
         }
+    });
+
+    bindEvent(ui.ui.saveWebSearchConfigBtn, 'click', async () => {
+        const apiUrl = ui.ui.webSearchApiUrlInput.value.trim();
+        const apiKey = ui.ui.webSearchApiKeyInput.value.trim();
+
+        // 至少要有一项被输入，或者用户就是想清空它们
+        // 后端会处理完全为空的情况，所以前端可以简化检查
+        
+        const success = await api.saveWebSearchConfig(apiUrl, apiKey);
+        if (success) {
+            // 保存成功后，重新获取状态并更新UI
+            const newStatus = await api.getWebSearchStatus();
+            ui.updateWebSearchStatusUI(newStatus);
+        }
+    });
+
+    bindEvent(ui.ui.webSearchToggle, 'change', function() {
+        state.setIsWebSearchEnabled(this.checked);
+        // highlight-start
+        // ★★★ 新增：将联网搜索开关的状态保存到 localStorage ★★★
+        localStorage.setItem(state.WEB_SEARCH_ENABLED_STORAGE_KEY, this.checked.toString());
+        // highlight-end
     });
 
 
@@ -678,10 +799,6 @@ if (manageProvidersBtn) {
     bindEvent(ui.ui.addNewPresetBtn, 'click', () => ui.openPresetFormForEdit()); // ★ 访问 ui.ui.addNewPresetBtn, ui.openPresetFormForEdit
     bindEvent(ui.ui.savePresetsToFileBtn, 'click', () => api.savePresetsToFile(true).then(ui.populatePresetPromptsList)); // ★ 访问 ui.ui.savePresetsToFileBtn, ui.populatePresetPromptsList
     bindEvent(ui.ui.presetForm, 'submit', ui.handlePresetFormSubmit); // ★ 访问 ui.ui.presetForm, ui.handlePresetFormSubmit
-    
-    console.log("[Bind Events Debug] Attempting to bind showApiKeyManagementBtn.");
-    console.log("[Bind Events Debug] ui.ui.showApiKeyManagementBtn is:", ui.ui.showApiKeyManagementBtn);
-
 
 
     // ★★★ 核心修复：使用 'ui.ui' 访问模态框元素 ★★★
@@ -773,7 +890,7 @@ if (manageProvidersBtn) {
     bindEvent(ui.ui.showModelManagementBtn, 'click', ui.showModelManagement);
     bindEvent(ui.ui.showPresetManagementBtn, 'click', ui.showPresetManagement);
     // ★★★ 新增：为“管理 API 密钥”按钮绑定事件 ★★★
-    bindEvent(ui.ui.showApiKeyManagementBtn, 'click', ui.showApiKeyManagement);
+
     bindEvent(ui.ui.backToSettingsFromProviderManagementBtn, 'click', ui.showSettings); 
 
     // ★★★ 新增：为 API 密钥管理页的“返回设置”按钮绑定事件 ★★★
@@ -924,9 +1041,15 @@ async function initializeApp() {
             }
         }
     }
+    await Promise.all([
+        api.loadModelsFromConfig(),
+        api.loadPresetsFromConfig(),
+        api.loadProvidersConfig()
+    ]);
 
     const sidebarCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
     ui.applyInitialSidebarState(sidebarCollapsed); // ★ 访问 ui.applyInitialSidebarState
+
     
     // 应用保存的设置
     utils.applyTheme(localStorage.getItem('theme') || 'dark');
@@ -939,6 +1062,13 @@ async function initializeApp() {
     state.setIsManualThinkModeEnabled(localStorage.getItem(state.THINK_MODE_STORAGE_KEY) === 'true');
     if (ui.ui.thinkModeToggle) ui.ui.thinkModeToggle.checked = state.isManualThinkModeEnabled; // ★ 访问 ui.ui.thinkModeToggle
     ui.updateManualThinkModeState(); // ★ 访问 ui.updateManualThinkModeState
+    const savedWebSearchEnabled = localStorage.getItem(state.WEB_SEARCH_ENABLED_STORAGE_KEY);
+    if (savedWebSearchEnabled !== null) { // 检查是否为 null，因为 'false' 也是有效值
+        state.setIsWebSearchEnabled(savedWebSearchEnabled === 'true'); // 将字符串 'true'/'false' 转换为布尔值
+        if (ui.ui.webSearchToggle) {
+            ui.ui.webSearchToggle.checked = state.isWebSearchEnabled;
+        }
+    }
     
 
 
@@ -955,11 +1085,18 @@ async function initializeApp() {
     ui.populateModelDropdown(state.modelConfigData.models); // 再填充模型
     ui.populatePresetPromptsList();
 
-     try {
+    try {
         const configuredProviders = await api.getKeysStatus();
-        ui.updateApiKeyStatusUI(configuredProviders); // ★ 访问 ui.updateApiKeyStatusUI
+        ui.updateApiKeyStatusUI(configuredProviders);
+
+        // highlight-start
+        // ★★★ 新增：获取并更新联网搜索配置状态 ★★★
+        const webSearchStatus = await api.getWebSearchStatus();
+        ui.updateWebSearchStatusUI(webSearchStatus);
+        // highlight-end
+
     } catch (error) {
-        console.error("获取 API Key 状态失败:", error);
+        console.error("获取 API Key 或联网搜索状态失败:", error);
     }
     
     // 加载和渲染对话

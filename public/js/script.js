@@ -693,6 +693,30 @@ bindEvent(document, 'click', () => {
 bindEvent(ui.ui.inlineChatSettingsPanel, 'click', e => e.stopPropagation()); // ★ 访问 ui.ui.inlineChatSettingsPanel
 bindEvent(ui.ui.presetPromptsListPanel, 'click', e => e.stopPropagation()); // ★ 访问 ui.ui.presetPromptsListPanel
 
+bindEvent(ui.ui.temperatureInputInline, 'change', (e) => {
+        const valueStr = e.target.value.trim();
+
+        // 如果用户清空了输入框，则移除本地存储，API 将使用默认值
+        if (valueStr === '') {
+            localStorage.removeItem('model-temperature');
+            // 恢复 placeholder 提示用户默认值
+            e.target.placeholder = '0.7'; 
+            return;
+        }
+
+        const value = parseFloat(valueStr);
+        // 验证输入值是否在有效范围内 (0.0 到 2.0)
+        if (!isNaN(value) && value >= 0 && value <= 2) {
+            localStorage.setItem('model-temperature', value);
+        } else {
+            // 如果值无效，也移除本地存储，并清空输入框，同时给用户提示
+            localStorage.removeItem('model-temperature');
+            e.target.value = '';
+            e.target.placeholder = '0.7';
+            utils.showToast('温度值必须在 0.0 到 2.0 之间。', 'warning');
+        }
+    });
+
 bindEvent(ui.ui.maxTokensInputInline, 'change', (e) => { // ★ 访问 ui.ui.maxTokensInputInline
         const value = parseInt(e.target.value, 10);
         if (!isNaN(value) && value > 0) {
@@ -1069,7 +1093,11 @@ async function initializeApp() {
             ui.ui.webSearchToggle.checked = state.isWebSearchEnabled;
         }
     }
-    
+    const savedTemperature = localStorage.getItem('model-temperature');
+    if (savedTemperature && ui.ui.temperatureInputInline) {
+        // 将保存的值填入输入框
+        ui.ui.temperatureInputInline.value = savedTemperature;
+    }
 
 
     // ★★★ 核心修改：在 Promise.all 中添加 api.loadProvidersConfig() ★★★

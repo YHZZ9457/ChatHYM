@@ -1,4 +1,8 @@
 @echo off
+REM —— 切到脚本所在目录 ——
+cd /d "%~dp0"
+
+REM —— 切到 UTF-8（如果你用的是 ANSI/GBK，就改成 chcp 936 并保存为 ANSI） ——
 chcp 65001 >nul
 
 REM 定义首选端口，方便后续修改
@@ -15,7 +19,7 @@ REM 检查 Ollama 服务是否已运行
 netstat -ano | findstr ":11434" | findstr "LISTENING" >nul
 if %errorlevel% neq 0 (
     echo [Ollama] 未检测到服务，正在后台启动...
-    start "Ollama Serve" /B ollama serve
+    ollama serve >nul 2>&1
     echo [Ollama] 等待服务初始化...
     timeout /t 3 >nul
 ) else (
@@ -25,12 +29,11 @@ if %errorlevel% neq 0 (
 :SKIP_OLLAMA
 
 REM ===== 检查 ChatHYM 首选端口是否已被占用 =====
+echo.
 echo [INFO] 检查首选端口 %PREFERRED_PORT% 是否被占用...
 netstat -ano | findstr ":%PREFERRED_PORT%" | findstr "LISTENING" >nul
 if %errorlevel% equ 0 (
-    echo [WARNING] 首选端口 %PREFERRED_PORT% 已被占用。
-    echo [INFO] Netlify Dev 将自动寻找下一个可用端口。
-    echo.
+    echo [WARNING] 首选端口 %PREFERRED_PORT% 已被占用，Netlify Dev 会自动寻找下一个可用端口。
 )
 
 REM === 检查 Node.js ===
@@ -73,10 +76,13 @@ if %errorlevel% neq 0 (
     echo [INFO] Netlify CLI 已安装。
 )
 
-REM === ★★★ 核心修改：启动 Netlify 本地服务，不再指定端口 ★★★ ===
 echo.
 echo [INFO] 启动 Netlify 本地开发服务器...
-echo [INFO] (它将使用 netlify.toml 中配置的端口 %PREFERRED_PORT%，或在被占用时自动寻找下一个)
+echo [INFO] (它将使用 netlify.toml 中的端口 %PREFERRED_PORT%，或在被占用时自动寻找下一个)
+echo.
+
+REM —— 直接在当前窗口运行 Netlify Dev —— 
 netlify dev
 
+REM —— netlify dev 退出后，按任意键关闭脚本 —— 
 pause

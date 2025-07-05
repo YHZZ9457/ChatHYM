@@ -97,28 +97,43 @@
                                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-settings-2"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
                                 </button>
                                 <div id="inline-chat-settings-panel" class="inline-chat-settings-panel" style="display: none;">
-                                    <h4 class="inline-settings-title">聊天参数</h4>
-                                    <!-- ★★★ 核心修复：这个温度计输入框应该是 number 类型 ★★★ -->
-                                    <div class="setting-item inline-setting-item">
-                                        <label for="temperature-input-inline">Temperature (<span id="temperature-value-inline">0.70</span>):</label>
-                                        <input type="range" id="temperature-input-inline" name="temperature" min="0" max="2" step="0.01" value="0.70">
-                                    </div>
-                                    <div class="setting-item inline-setting-item">
-                                        <label for="max-tokens-input-inline">单次最大 Tokens:</label>
-                                        <input type="number" id="max-tokens-input-inline" name="max_tokens" min="1" step="1" placeholder="4096"> 
-                                    </div>
-                                    <div class="setting-item inline-setting-item">
-                                        <label for="think-mode-toggle">模型思考模式:</label>
-                                        <label class="switch"><input type="checkbox" id="think-mode-toggle"><span class="slider round"></span></label>
-                                    </div>
-                                    <div class="setting-item inline-setting-item">
-                                        <label for="web-search-toggle">联网搜索:</label>
-                                        <label class="switch" title="开启后，将在发送前先搜索网络，并将结果提供给AI">
-                                            <input type="checkbox" id="web-search-toggle">
-                                            <span class="slider round"></span>
-                                        </label>
-                                    </div>
-                                </div>
+    <h4 class="inline-settings-title">聊天参数</h4>
+    
+    <!-- Temperature -->
+    <div class="setting-item inline-setting-item">
+        <label for="temperature-input-inline">Temperature</label>
+        <div class="control-wrapper">
+            <input type="number" id="temperature-input-inline" name="temperature" min="0" max="2" step="0.01" placeholder="0.70">
+        </div>
+    </div>
+    
+    <!-- Max Tokens -->
+    <div class="setting-item inline-setting-item">
+        <label for="max-tokens-input-inline">单次最大 Tokens</label>
+        <div class="control-wrapper">
+            <input type="number" id="max-tokens-input-inline" name="max_tokens" min="1" step="1" placeholder="4096"> 
+        </div>
+    </div>
+    
+    <!-- Think Mode -->
+    <div class="setting-item inline-setting-item">
+        <label for="think-mode-toggle">模型思考模式</label>
+        <div class="control-wrapper">
+            <label class="switch"><input type="checkbox" id="think-mode-toggle"><span class="slider round"></span></label>
+        </div>
+    </div>
+
+    <!-- Web Search -->
+    <div class="setting-item inline-setting-item">
+        <label for="web-search-toggle">联网搜索</label>
+        <div class="control-wrapper">
+            <label class="switch" title="开启后，将在发送前先搜索网络，并将结果提供给AI">
+                <input type="checkbox" id="web-search-toggle">
+                <span class="slider round"></span>
+            </label>
+        </div>
+    </div>
+</div>
                             </div>
                             <div class="preset-prompts-container">
                                 <button id="show-preset-prompts-btn" title="选择预设提示" class="input-action-btn">
@@ -153,7 +168,7 @@
                         <label>清除所有历史</label>
                         <div class="controls-group"><button id="clear-all-history-btn" class="danger">清除</button></div>
                     </div>
-                    <div class="setting-item">
+                    <div class="setting-item"><input type="range" id="temperature-input-inline" name="temperature" min="0" max="2" step="0.01" value="0.70">
                         <label>聊天记录管理</label>
                         <div class="controls-group">
                             <button id="export-history-btn" class="action-btn">导出全部</button>

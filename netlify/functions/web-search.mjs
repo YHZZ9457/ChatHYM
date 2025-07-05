@@ -1,8 +1,6 @@
-// netlify/functions/web-search.mjs
+// --- netlify/functions/web-search.mjs (动态配置版) ---
 
-// 导出处理函数，使用 ESM 语法
 export const handler = async (event) => {
-  // 只允许 POST 请求
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
@@ -11,15 +9,21 @@ export const handler = async (event) => {
   }
 
   try {
-    const { query } = JSON.parse(event.body);
-    const apiKey = process.env.TAVILY_API_KEY; // 从环境变量获取 API Key
+    // highlight-start
+    // ★ 1. 从环境变量中动态读取 API URL 和 Key ★
+    const apiUrl = process.env.WEB_SEARCH_API_URL;
+    const apiKey = process.env.WEB_SEARCH_API_KEY_SECRET;
 
-    if (!apiKey) {
+    // ★ 2. 检查配置是否存在 ★
+    if (!apiUrl || !apiKey) {
       return {
         statusCode: 500,
-        body: JSON.stringify({ error: 'Tavily API key is not configured on the server.' })
+        body: JSON.stringify({ error: 'Web search service is not configured on the server. Please set it up in the settings page.' })
       };
     }
+    // highlight-end
+
+    const { query } = JSON.parse(event.body);
     if (!query) {
       return {
         statusCode: 400,
@@ -27,35 +31,43 @@ export const handler = async (event) => {
       };
     }
 
-    // 直接调用全局 fetch（Node 18+ 原生支持）
-    const response = await fetch('https://api.tavily.com/search', {
+    // highlight-start
+    // ★ 3. 使用动态读取的 apiUrl 进行 fetch ★
+    const response = await fetch(apiUrl, {
+    // highlight-end
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
+        // highlight-start
+        // ★ 4. 使用动态读取的 apiKey ★
         api_key: apiKey,
+        // highlight-end
         query,
-        search_depth: "basic",   // 可以选 "basic" 或 "advanced"
-        include_answer: false,   // 只取结果，让 LLM 自己总结
-        max_results: 5,          // 最多获取 5 条结果
-        include_domains: [],     // 可选：指定包含的域名
-        exclude_domains: [],     // 可选：指定排除的域名
+        search_depth: "basic",
+        include_answer: false,
+        max_results: 5,
+        include_domains: [],
+        exclude_domains: [],
       }),
     });
 
     if (!response.ok) {
       const errorData = await response.json();
-      console.error('Tavily API Error:', response.status, errorData);
+      // highlight-start
+      // ★ 5. 优化错误信息 ★
+      console.error('Web Search API Error:', response.status, errorData);
       return {
         statusCode: response.status,
-        body: JSON.stringify({ error: errorData.error || 'Tavily API request failed.' })
+        body: JSON.stringify({ error: errorData.error || 'Web search API request failed.' })
       };
+      // highlight-end
     }
 
     const data = await response.json();
 
-    // 格式化搜索结果，使其更易于 LLM 理解和引用
+    // 格式化搜索结果的逻辑保持不变
     const formattedResults = data.results.map(res => {
       const url = res.url || '未知来源';
       const content = res.content || '无内容摘要';

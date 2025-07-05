@@ -67,6 +67,7 @@ export function initializeUI() {
         fileInputInline: document.getElementById('file-input-inline'),
         chatSettingsBtnInline: document.getElementById('chat-settings-btn-inline'),
         inlineChatSettingsPanel: document.getElementById('inline-chat-settings-panel'),
+        temperatureInputInline: document.getElementById('temperature-input-inline'), 
         maxTokensInputInline: document.getElementById('max-tokens-input-inline'),
         thinkModeToggle: document.getElementById('think-mode-toggle'),
         showPresetPromptsBtn: document.getElementById('show-preset-prompts-btn'),

@@ -3551,3 +3551,51 @@ body.light-theme .message code {
     white-space: nowrap;
     opacity: 0.7;
 }
+
+/* 1. 为每个设置项应用 Flexbox 布局 */
+.inline-setting-item {
+    display: flex;
+    justify-content: space-between; /* 核心：让标签和控件两端对齐 */
+    align-items: center;            /* 垂直居中对齐 */
+    padding: 8px 0;                 /* 增加垂直间距 */
+    gap: 16px;                      /* 在标签和控件之间保留一些最小间距 */
+}
+
+/* 2. 设置标签样式 */
+.inline-setting-item label {
+    flex-shrink: 0; /* 防止标签在空间不足时被压缩 */
+    color: var(--text-secondary); /* 使用次要文本颜色，与标题区分 */
+    font-size: 0.9em;
+}
+
+/* 3. 控件包裹容器 */
+.control-wrapper {
+    display: flex;
+    justify-content: flex-end; /* 确保内部控件靠右对齐 */
+}
+
+/* 4. 优化数字输入框样式 */
+.inline-setting-item input[type="number"] {
+    width: 80px; /* 给输入框一个固定宽度 */
+    padding: 6px 8px;
+    background-color: var(--input-bg);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-medium);
+    color: var(--text-primary);
+    text-align: center; /* 文本居中 */
+    font-size: 0.9em;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+/* 5. 为输入框添加交互反馈 */
+.inline-setting-item input[type="number"]:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px var(--accent-color-faded);
+}
+
+/* 6. 确保 Switch 开关在包裹容器中正确显示 */
+.control-wrapper .switch {
+    /* switch 本身的样式不需要大改，flexbox 会处理好它的位置 */
+    margin: 0; /* 移除可能存在的默认 margin */
+}

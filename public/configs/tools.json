@@ -1,0 +1,21 @@
+{
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "get_current_time",
+        "description": "获取指定时区的当前日期和时间。当用户询问时间、日期，或者在问题中提到了某个具体地点（如城市、国家）时，应使用此工具。如果用户没有提供时区，则会自动获取用户当前IP地址所在地的时区时间。",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "timezone": {
+              "type": "string",
+              "description": "要查询的时区，格式应为 '洲/城市'，例如 'America/New_York' 或 'Asia/Shanghai'。如果用户只提供了城市名，请推断出完整的时区。如果用户没有指定，则留空此参数。"
+            }
+          },
+          "required": []
+        }
+      }
+    }
+  ]
+}

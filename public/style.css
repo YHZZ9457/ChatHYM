@@ -130,7 +130,7 @@ button {
   display: flex;
   height: 100%;
   width: 100%;
-  position: relative; /* ★ 新增：为绝对定位的按钮提供参考系 */
+  position: relative; /* 为绝对定位的按钮提供参考系 */
 }
 
 /* ===== 4. 侧边栏 ===== */
@@ -139,19 +139,15 @@ button {
   min-width: 260px;
   background: var(--sidebar-bg);
   border-right: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
+  display: flex; /* 核心修复：将侧边栏自身也设置为 flex 容器 */
+  flex-direction: column; /* 核心修复：让其子元素垂直排列 */
   padding: 16px 0;
   flex-shrink: 0;
-  position: relative; 
-  display: flex; /* ★ 核心修复：将侧边栏自身也设置为 flex 容器 */
-  flex-direction: column; /* ★ 核心修复：让其子元素垂直排列 */
-  background-color: var(--sidebar-bg);
-  border-right: 1px solid var(--border-color);
+  position: relative;
   transition: width 0.3s ease, min-width 0.3s ease, padding 0.3s ease; /* 增加 padding 过渡 */
 }
-/* --- 2. 创建一个新的、独立的、只负责拖拽的 div (虽然HTML里没有，但CSS里可以先准备好) --- */
-/* 我们将用 JS 创建这个元素，这里先定义样式 */
+
+/* 侧边栏拖拽条 */
 .sidebar-drag-handle {
     position: absolute;
     top: 0;
@@ -159,59 +155,39 @@ button {
     width: 8px; /* 拖拽热区宽度 */
     cursor: ew-resize;
     z-index: 9;
-    /* 通过 JS 计算 left 值 */
 }
 
-
-/* 2. 为侧边栏的直接子元素（头部、导航、脚部）设置 Flex 属性 */
+/* 防止头部和脚部被压缩 */
 .sidebar-header,
 .sidebar-footer {
-  flex-shrink: 0; /* ★ 核心修复：防止头部和脚部被压缩 */
+  flex-shrink: 0;
 }
 
-
-/* --- 3. 修改展开/收起按钮的样式，让它根据侧边栏宽度定位 --- */
-/* style.css (修改后) */
-
-/* ... 找到 .sidebar-toggle-btn 规则 ... */
 .sidebar-toggle-btn {
     position: absolute;
     top: 50%;
-    
-    /* ★ 核心修改 1：改变 left 的计算方式，让按钮更贴合边缘 */
     left: calc(var(--sidebar-width, 260px) - 12px); /* 按钮宽度的一半 */
-    
     transform: translateY(-50%);
     z-index: 10;
-    
-    /* ★ 核心修改 2：改变尺寸和形状 */
     width: 24px;
     height: 48px;
     background-color: var(--sidebar-bg);
     border: 1px solid var(--border-color);
-    border-radius: var(--border-radius-md); /* 使用中等圆角 */
-    
+    border-radius: var(--border-radius-md);
     box-shadow: var(--shadow-md);
     display: flex;
     align-items: center;
     justify-content: center;
     color: var(--text-secondary);
     cursor: pointer;
-    transition: all 0.3s ease; /* 简化过渡 */
+    transition: all 0.3s ease;
 }
 
-/* ★ 核心修改 3：调整收起状态下按钮的位置和样式 */
+/* 侧边栏收起时按钮的位置和样式 */
 .container.sidebar-collapsed .sidebar-toggle-btn {
-  /* 当收起时，按钮移动到最左侧，并旋转图标 */
-  left: 8px; /* 距离左边缘一点距离 */
+  left: -10px; /* 当收起时，按钮固定在左侧边缘 */
   transform: translateY(-50%) rotate(180deg);
 }
-
-.container.sidebar-collapsed .sidebar-toggle-btn:hover {
-    /* 悬浮时稍微变大一点点 */
-    transform: translateY(-50%) rotate(180deg) scale(1.05);
-}
-
 
 .sidebar-toggle-btn:hover {
     background-color: var(--primary);
@@ -222,28 +198,13 @@ button {
     transition: transform 0.3s ease;
 }
 
-/* --- 4. 修改侧边栏收起时的按钮样式 --- */
-.container.sidebar-collapsed .sidebar-toggle-btn {
-  /* 当收起时，按钮固定在左侧边缘 */
-  left: -10px; 
-  transform: translateY(-50%) rotate(180deg);
-}
-
 .container.sidebar-collapsed .sidebar-toggle-btn:hover {
-    transform: translateY(-50%) rotate(180deg) scale(1.05);
-}
-
-.container.sidebar-collapsed .sidebar-toggle-btn:hover {
-    /* 保持翻转状态并放大 */
-    transform: translateY(-50%) rotate(180deg) scale(1.05);
+    transform: translateY(-50%) rotate(180deg) scale(1.05); /* 保持翻转状态并放大 */
 }
 
 body.is-resizing .sidebar {
   border-right-color: var(--primary);
 }
-
-
-
 
 .sidebar-header {
   padding: 0 16px;
@@ -251,7 +212,8 @@ body.is-resizing .sidebar {
   display: flex;
   align-items: center;
   margin-bottom: 5px;
-  overflow: hidden; 
+  overflow: hidden;
+  position: relative; /* 为内部绝对定位元素提供参考 */
 }
 
 .logo,
@@ -272,8 +234,6 @@ body.is-resizing .sidebar {
   background-clip: text;
   cursor: pointer;
   user-select: none;
-    margin-top: 0;
-  margin-bottom: 0.2em;
 }
 
 .search-wrapper {
@@ -421,16 +381,7 @@ body.dark-theme .conversation-item:not(.active):hover .more-options-btn:hover {
   color: var(--primary);
 }
 
-/* 1. 设置组（卡片）的基础样式 */
-.setting-group {
-    background-color: var(--bg-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius-lg);
-    padding: 8px 20px; /* 上下内边距小，左右大 */
-    margin-bottom: 16px; /* 组与组之间的间距 */
-}
-
-/* --- 1. 组（卡片）的基础样式 --- */
+/* 设置组（卡片）的基础样式 */
 .setting-group {
     background-color: var(--bg-secondary);
     border: 1px solid var(--border-color);
@@ -439,7 +390,7 @@ body.dark-theme .conversation-item:not(.active):hover .more-options-btn:hover {
     margin-bottom: 15px;
 }
 
-/* --- 2. 组内的行（setting-item）布局 --- */
+/* 组内的行（setting-item）布局 */
 .setting-group .setting-item {
     display: grid;
     grid-template-columns: 200px 1fr;
@@ -453,7 +404,7 @@ body.dark-theme .conversation-item:not(.active):hover .more-options-btn:hover {
     border-bottom: none;
 }
 
-/* --- 3. 标签（label）样式 --- */
+/* 标签（label）样式 */
 .setting-group .setting-item > label {
     justify-self: end;
     text-align: right;
@@ -461,110 +412,24 @@ body.dark-theme .conversation-item:not(.active):hover .more-options-btn:hover {
     color: var(--text-secondary);
 }
 
-/* --- 4. 控件容器（controls-group）样式 --- */
+/* 控件容器（controls-group）样式 */
 .setting-group .setting-item > .controls-group {
-    /* ★ 核心修改 1: 默认让所有控件组都靠右对齐 ★ */
-    justify-content: flex-end; 
-    
+    justify-content: flex-end; /* 默认让所有控件组都靠右对齐 */
     display: flex;
     gap: 10px;
     align-items: center;
     width: 100%; /* 占满第二列 */
 }
 
-/* ★ 核心修改 2: 创建一个特例，只让包含输入框或下拉菜单的组靠左 ★ */
+/* 只有包含输入框或下拉菜单的组靠左 */
 .setting-group .setting-item > .controls-group:has(input[type="password"]),
 .setting-group .setting-item > .controls-group:has(input[type="text"]),
 .setting-group .setting-item > .controls-group:has(select) {
-    justify-content: flex-start; /* 只有这些组才靠左 */
-    flex-wrap: wrap; /* ★★★ 新增此行 ★★★ */
+    justify-content: flex-start;
+    flex-wrap: wrap;
 }
 
-
-/* ======================================= */
-/*  控件具体样式 (整合自您的残留样式)
-/* ======================================= */
-
-/* --- 5. 通用按钮样式 --- */
-
-
-/* --- 6. 界面缩放按钮组（.scale-options）样式 (最终分段控件版) --- */
-
-/* 1. 容器（.scale-options）样式 */
-.controls-group .scale-options {
-    display: inline-flex; /* 依然使用 flex 布局 */
-    height: 36px;
-    
-    /* ★ 核心：容器只负责提供一个外边框和圆角 */
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius-md); /* 您可以根据喜好调整圆角大小 */
-    overflow: hidden; /* 隐藏内部按钮超出的边角 */
-}
-
-/* 1. 容器（.scale-options）负责外框和布局 */
-.setting-item .controls-group .scale-options {
-    display: inline-flex;
-    height: 36px;
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius-md);
-    overflow: hidden;
-}
-
-/* 2. 内部按钮的样式 */
-/* ★★★ 使用非常高的特异性，确保覆盖所有全局样式 ★★★ */
-.setting-item .controls-group .scale-options button {
-    /* --- 重置所有可能继承的样式 --- */
-    margin: 0 !important;
-    padding: 0 16px !important;
-    border: none !important;
-    border-radius: 0 !important;
-    background: transparent !important; /* 默认透明 */
-
-    /* --- 设置我们期望的样式 --- */
-    height: 100%;
-    line-height: 36px; /* 确保垂直居中 */
-    color: var(--text-color);
-    font-size: 0.9rem;
-    font-weight: 500;
-    cursor: pointer;
-    transition: background-color 0.2s ease, color 0.2s ease;
-    
-    /* 用右边框创建分隔线 */
-    border-right: 1px solid var(--border-color) !important;
-}
-
-/* 3. 最后一个按钮不需要右边框 */
-.setting-item .controls-group .scale-options button:last-child {
-    border-right: none !important;
-}
-
-/* 4. 活动状态的按钮 */
-.setting-item .controls-group .scale-options button.active {
-    background-color: var(--primary) !important;
-    color: #fff !important;
-}
-
-/* 5. 鼠标悬浮在非活动按钮上 */
-.setting-item .controls-group .scale-options button:not(.active):hover {
-    background-color: rgba(var(--primary-rgb), 0.1) !important;
-}
-
-
-
-/* --- 7. 开关（Switch）样式 --- */
-.controls-group .switch {
-    /* 开关的高度是由 width 和 height 决定的，但我们可以通过 align-self 确保它在 flex 容器中居中 */
-    /* 我们在 .setting-item 中已经设置了 align-items: center，所以这里通常无需额外设置 */
-    /* 确保它的尺寸与按钮高度协调 */
-    width: 44px;  /* 稍微加宽一点，更协调 */
-    height: 24px; /* 高度可以适当增加 */
-    flex-shrink: 0;
-    
-    position: relative;
-    display: inline-block;
-}
-
-/* --- 5. 通用按钮样式 --- */
+/* 通用按钮样式 */
 .controls-group button:not(.scale-options button) {
     padding: 0 20px;
     height: 36px;
@@ -588,40 +453,6 @@ body.dark-theme .conversation-item:not(.active):hover .more-options-btn:hover {
 .controls-group button.action-btn:hover,
 .controls-group button:not(.danger):not(.scale-options button):hover {
     background-color: rgba(var(--primary-rgb), 0.85);
-    /* ★★★ 确保这一行是正确的 ★★★ */
-    border-color: rgba(var(--primary-rgb), 0.85); 
-}
-
-/* 红色危险按钮 */
-.controls-group button.danger {
-    background-color: #e53e3e;
-    color: #fff;
-}
-.controls-group button.danger:hover {
-    background-color: #c53030;
-}
-
-.controls-group .slider:before {
-    height: 18px; /* 滑块变大一点 */
-    width: 18px;
-    left: 3px;
-    bottom: 3px;
-}
-
-.controls-group input:checked + .slider:before {
-    transform: translateX(20px);
-}
-
-/* 默认蓝色按钮 (action-btn) */
-.controls-group button.action-btn,
-.controls-group button:not(.danger) {
-    background-color: var(--primary);
-    color: #fff;
-    border-color: var(--primary);
-}
-.controls-group button.action-btn:hover,
-.controls-group button:not(.danger):hover {
-    background-color: rgba(var(--primary-rgb), 0.85);
     border-color: rgba(var(--primary-rgb), 0.85);
 }
 
@@ -634,8 +465,45 @@ body.dark-theme .conversation-item:not(.active):hover .more-options-btn:hover {
     background-color: #c53030;
 }
 
+/* 界面缩放按钮组（.scale-options）样式 */
+.controls-group .scale-options {
+    display: inline-flex;
+    height: 36px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    overflow: hidden;
+}
 
-/* --- 6. 输入框和下拉菜单样式 (最终尝试 - 包含 position 和 z-index) --- */
+.setting-item .controls-group .scale-options button {
+    margin: 0 !important;
+    padding: 0 16px !important;
+    border: none !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    height: 100%;
+    line-height: 36px;
+    color: var(--text-color);
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    border-right: 1px solid var(--border-color) !important;
+}
+
+.setting-item .controls-group .scale-options button:last-child {
+    border-right: none !important;
+}
+
+.setting-item .controls-group .scale-options button.active {
+    background-color: var(--primary) !important;
+    color: #fff !important;
+}
+
+.setting-item .controls-group .scale-options button:not(.active):hover {
+    background-color: rgba(var(--primary-rgb), 0.1) !important;
+}
+
+/* 输入框和下拉菜单样式 */
 .controls-group input[type="password"],
 .controls-group input[type="text"],
 .controls-group select {
@@ -646,27 +514,15 @@ body.dark-theme .conversation-item:not(.active):hover .more-options-btn:hover {
     background-color: var(--input-bg);
     color: var(--text-color);
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
-
-    /* ★★★ 针对 select 的核心修改：使其下拉列表可控 ★★★ */
-    /* 移除原生外观，这是让 max-height 在部分浏览器生效的关键 */
     appearance: none;
-    -webkit-appearance: none; /* 针对 Webkit 浏览器 */
-
-    /* 显式设置定位，并赋予 z-index，这有时能帮助浏览器渲染自定义下拉 */
-    position: relative; /* 确保 z-index 生效 */
-    z-index: 5;         /* 确保下拉列表在其他元素之上，可以调整 */
-
-    /* 设置最大高度和滚动条 */
-    max-height: 250px; /* 你可以调整这个值 */
-    overflow-y: auto;  /* 如果内容超出，显示垂直滚动条 */
-
-    /* 确保自定义箭头样式被应用，并与 #model 一致 */
+    -webkit-appearance: none;
+    position: relative;
+    z-index: 5;
     background-repeat: no-repeat;
     background-position: right 0.8rem center;
     background-size: 1em;
 }
 
-/* 确保自定义箭头图片路径在主题模式下正确 */
 body.light-theme .controls-group select {
     background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23343a40' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
 }
@@ -674,7 +530,6 @@ body.light-theme .controls-group select {
 body.dark-theme .controls-group select {
     background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23a0aec0' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
 }
-
 
 .controls-group input[type="password"]:focus,
 .controls-group input[type="text"]:focus,
@@ -684,7 +539,6 @@ body.dark-theme .controls-group select {
     box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
 }
 
-/* 为下拉列表中的每个选项 (option) 添加样式 (保持不变) */
 .controls-group select option {
     white-space: nowrap;
     overflow: hidden;
@@ -694,12 +548,12 @@ body.dark-theme .controls-group select {
     color: var(--text-color);
 }
 
-/* --- 7. 开关（Switch）样式 --- */
+/* 开关（Switch）样式 */
 .controls-group .switch {
     position: relative;
     display: inline-block;
-    width: 40px;
-    height: 20px;
+    width: 44px;
+    height: 24px;
     flex-shrink: 0;
 }
 
@@ -724,8 +578,8 @@ body.dark-theme .controls-group select {
 .controls-group .slider:before {
     position: absolute;
     content: "";
-    height: 14px;
-    width: 14px;
+    height: 18px;
+    width: 18px;
     left: 3px;
     bottom: 3px;
     background-color: white;
@@ -756,7 +610,7 @@ body.light-theme .controls-group input:checked + .slider {
     border-color: var(--primary-light);
 }
 
-/* --- 8. API Key 管理组的特殊样式 --- */
+/* API Key 管理组的特殊样式 */
 .setting-group.api-key-management {
     padding-top: 20px;
 }
@@ -780,6 +634,7 @@ body.light-theme .controls-group input:checked + .slider {
     border-bottom: none;
     margin-bottom: 16px;
 }
+
 /* 设置区域 (settings-area) */
 .settings-area {
   flex: 1;
@@ -790,31 +645,23 @@ body.light-theme .controls-group input:checked + .slider {
   min-height: 0;
 }
 
-/* ★★★ 核心修复：新增设置区域的头部容器样式 ★★★ */
 .settings-header-container {
-    display: flex; /* 使用 Flexbox */
-    justify-content: space-between; /* 子元素两端对齐 */
-    align-items: center; /* 垂直居中对齐 */
-    margin-bottom: 24px; /* 标题与下方内容之间的间距 */
-    padding-bottom: 16px; /* 标题下方的内边距 */
-    border-bottom: 1px solid var(--border-color); /* 底部边框作为分隔线 */
-    flex-shrink: 0; /* 防止被压缩 */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
 }
 
-/* 设置区域的标题 h2 */
 .settings-area h2 {
-    margin: 0; /* 移除默认外边距，由父容器 .settings-header-container 控制布局 */
+    margin: 0;
     font-size: 1.6rem;
     font-weight: 600;
-    /* 移除所有 position, top, right, z-index 相关属性 */
-    /* 移除 padding-bottom 和 border-bottom，由父容器 .settings-header-container 控制 */
-    padding-bottom: 0;
-    border-bottom: none;
 }
 
-/* 返回聊天按钮 */
 #back-to-chat-btn {
-    /* 保持按钮的基本样式，但移除所有定位属性 */
     background: none;
     border: none;
     padding: 8px 12px;
@@ -827,8 +674,6 @@ body.light-theme .controls-group input:checked + .slider {
     gap: 6px;
     border-radius: var(--border-radius-md);
     transition: background-color 0.2s ease, color 0.2s ease;
-
-    /* ★ REMOVED: position: absolute; top; right; z-index; */
 }
 
 #back-to-chat-btn:hover {
@@ -838,13 +683,6 @@ body.light-theme .controls-group input:checked + .slider {
 #back-to-chat-btn::before {
   content: '←';
   font-weight: bold;
-}
-
-
-
-.controls-group {
-  display: flex;
-  gap: 10px;
 }
 
 /* ===== 5. 主区 ===== */
@@ -858,7 +696,7 @@ body.light-theme .controls-group input:checked + .slider {
   transition: background-color 0.3s ease;
 }
 
-/* 5-1 头部 */
+/* 头部 */
 .chat-header {
   display: flex;
   align-items: center;
@@ -881,8 +719,7 @@ body.light-theme .controls-group input:checked + .slider {
   max-width: 240px;
 }
 
-
-/* 5-2 聊天内容 */
+/* 聊天内容 */
 .chat-area {
   flex: 1;
   display: flex;
@@ -892,9 +729,9 @@ body.light-theme .controls-group input:checked + .slider {
 }
 
 .messages {
-  flex: 1 1 0; /* ★ 核心修复：这是 flex 布局的魔法。它告诉元素：可以伸展(1)，可以收缩(1)，但基础尺寸是0(0)。这会强制它填满所有“剩余”空间。*/
+  flex: 1 1 0; /* 核心修复：填满所有“剩余”空间 */
   overflow-y: auto; /* 当内容超出时，在这个区域内滚动 */
-  min-height: 0; /* ★ 核心修复：配合 flex: 1，防止子元素过多时撑开父容器 */
+  min-height: 0; /* 核心修复：配合 flex: 1，防止子元素过多时撑开父容器 */
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -913,12 +750,14 @@ body.light-theme .controls-group input:checked + .slider {
   flex-grow: 0 !important;
 }
 
+/* 消息包装器，用于定位消息气泡和操作按钮 */
 .message-wrapper {
-  display: flex;
+  position: relative;
+  display: inline-block; /* 让包装器宽度收缩以适应内容 */
   align-items: flex-start;
   gap: 8px;
   max-width: 90%;
-  position: relative;
+  padding-bottom: 32px; /* 在下方创建透明的悬浮缓冲区，作为“悬浮桥” */
 }
 
 .user-message-wrapper {
@@ -959,8 +798,6 @@ body.light-theme .message.assistant {
   color: var(--text-color);
   border: 1px solid rgba(0, 0, 0, 0.08);
 }
-
-
 
 .message .text table {
   width: auto;
@@ -1026,7 +863,136 @@ body.dark-theme .message .text tbody tr:nth-of-type(even) {
   text-align: right;
 }
 
-/* ===== 6. 输入区 (最终清理版) ===== */
+/* 消息操作按钮容器 */
+.message-actions-container {
+    position: absolute;
+    bottom: 0; /* 将容器定位在包装器的最底部 */
+    width: auto;
+    display: flex;
+    gap: 6px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(-4px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 5;
+}
+
+.assistant-message-wrapper .message-actions-container {
+    left: 0; /* 助手消息在左，按钮在左下角（外侧） */
+}
+.user-message-wrapper .message-actions-container {
+    right: 0; /* 用户消息在右，按钮在右下角（外侧） */
+}
+
+.message-wrapper:hover .message-actions-container {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.message-action-btn {
+    background-color: var(--bg-secondary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    box-shadow: var(--shadow-sm);
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.message-action-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary);
+    color: var(--primary);
+}
+
+.message-action-btn.delete-message-btn:hover,
+.message-action-btn.delete-branch-btn:hover {
+  background-color: #e53e3e;
+  border-color: #e53e3e;
+  color: #fff;
+}
+
+.message-action-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* 消息元信息 (模型名, Token数, 分支导航) */
+.message-meta-info {
+    font-size: 0.8em;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08); /* 深色模式下的分隔线 */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16px;
+}
+
+body.light-theme .message-meta-info {
+    border-top-color: rgba(0, 0, 0, 0.08); /* 浅色模式下的分隔线 */
+}
+
+.model-note {
+  margin: 0;
+}
+
+.token-count-note {
+  font-style: italic;
+  font-weight: 300;
+  margin: 0;
+}
+
+.branch-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background-color: rgba(var(--primary-rgb), 0.1);
+    padding: 3px 8px;
+    border-radius: var(--border-radius-full);
+    font-size: 0.85em;
+    font-weight: 500;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+}
+
+.branch-indicator span {
+    min-width: 3ch;
+    text-align: center;
+}
+
+.branch-nav-btn {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 2px 4px;
+    border-radius: 50%;
+    line-height: 1;
+    transition: background-color 0.2s, color 0.2s;
+}
+
+.branch-nav-btn:not([disabled]):hover {
+    background-color: rgba(var(--primary-rgb), 0.2);
+    color: var(--primary);
+}
+
+.branch-nav-btn[disabled] {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+
+/* ===== 6. 输入区 ===== */
 .input-area {
   flex-shrink: 0;
   padding: 10px 12px;
@@ -1040,8 +1006,8 @@ body.dark-theme .message .text tbody tr:nth-of-type(even) {
 
 .input-main-row {
   display: flex;
-  align-items: center; /* ★ 核心修复：添加此行，让所有子项底部对齐 */
-  gap: 8px; /* 可以保留或调整间距 */
+  align-items: center; /* 让所有子项底部对齐 */
+  gap: 8px;
   padding: 8px;
   position: relative;
   width: 100%;
@@ -1063,39 +1029,30 @@ body.dark-theme .message .text tbody tr:nth-of-type(even) {
 .input-action-btn:hover { border-color: var(--primary); background-color: rgba(var(--primary-rgb), 0.05); color: var(--primary); box-shadow: var(--shadow-sm); }
 .input-action-btn svg { width: 20px; height: 20px; stroke-width: 1.8; }
 
-/* 1. 包裹器：只负责布局和定位清空按钮 */
 .textarea-wrapper {
   position: relative;
   flex: 1 1 0;
   min-width: 0;
   display: flex;
-  align-items: flex-end; 
+  align-items: flex-end;
 }
 
-/* 2. Textarea 自身样式：这是唯一的、最终的规则 */
 .textarea-wrapper > textarea#prompt {
-  /* --- 尺寸与盒模型 --- */
   width: 100%;
   min-height: 42px;
   max-height: 200px;
   margin: 0;
   box-sizing: border-box;
-  padding: 9.5px 36px 9.5px 12px; /* 右侧为清空按钮留空 */
-  
-  /* ★★★ 核心修复：直接指定字体，而不是继承 ★★★ */
-  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  padding: 9.5px 36px 9.5px 12px;
+  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; /* 核心修复：直接指定字体 */
   font-size: 0.9rem;
   line-height: 1.5;
-  
-  /* --- 外观 --- */
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-md);
   background: var(--input-bg);
   color: var(--text-color);
-  
-  /* --- 行为与过渡 --- */
   resize: none;
-  overflow-y: hidden; /* 初始状态隐藏，由JS控制 */
+  overflow-y: hidden;
   white-space: pre-wrap;
   word-break: break-word;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, height 0.1s ease-out;
@@ -1107,7 +1064,6 @@ body.dark-theme .message .text tbody tr:nth-of-type(even) {
   box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
 }
 
-/* ★ 补全清空按钮的定位样式 ★ */
 #clear-prompt-btn {
     position: absolute;
     right: 8px;
@@ -1122,13 +1078,11 @@ body.dark-theme .message .text tbody tr:nth-of-type(even) {
     align-items: center;
     justify-content: center;
     transition: color 0.2s, background-color 0.2s;
-    padding: 0; /* 确保没有多余的内边距 */
+    padding: 0;
 }
 #clear-prompt-btn:hover { color: var(--text-color); background-color: rgba(128, 128, 128, 0.2); }
 body.dark-theme #clear-prompt-btn:hover { background-color: rgba(255, 255, 255, 0.1); }
 
-
-/* 发送按钮 (只定义一次) */
 #submit-action-btn {
   padding: 0 18px; height: 42px; background: var(--primary); color: #fff;
   border: none; border-radius: var(--border-radius-md);
@@ -1140,6 +1094,7 @@ body.dark-theme #clear-prompt-btn:hover { background-color: rgba(255, 255, 255, 
 #submit-action-btn:disabled { background-color: var(--border-color); color: var(--text-secondary); cursor: not-allowed; opacity: 0.7; }
 #submit-action-btn.is-stopping { background-color: #e53e3e; }
 #submit-action-btn.is-stopping:hover { background-color: #c53030; }
+
 .header-model-selector select#model {
   z-index: 10;
   min-width: 180px;
@@ -1182,27 +1137,19 @@ body.dark-theme .header-model-selector select#model option {
   box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
 }
 
-/* style.css (最终修复版) */
-
-/* 1. 按钮组的容器 (.header-actions) */
 .header-actions {
   margin-left: auto;
-  display: flex; /* 保持 flex 布局 */
-  align-items: center; /* 确保所有按钮垂直居中对齐 */
-  gap: 8px; /* 按钮之间的间距 */
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-
-
-
-/* --- 普通按钮的样式 --- */
-
-/* 4. ★★★ 核心修复：为普通按钮定义独立的、简单的样式 ★★★ */
+/* 普通按钮的样式 */
 #archive-current-btn,
 #clear-current-btn,
 #delete-current-btn {
-  height: 32px; /* ★ 统一高度 */
-  padding: 0 14px; /* 统一内边距 */
+  height: 32px;
+  padding: 0 14px;
   border-radius: var(--border-radius-md);
   font-size: 0.9rem;
   font-weight: 500;
@@ -1213,7 +1160,6 @@ body.dark-theme .header-model-selector select#model option {
   white-space: nowrap;
 }
 
-/* 5. 为不同类型的普通按钮上色 */
 #archive-current-btn {
   background: var(--bg-secondary);
   color: var(--text-color);
@@ -1235,27 +1181,22 @@ body.dark-theme .header-model-selector select#model option {
   background: #c53030;
 }
 
-/* 3. “系统指令”按钮的独特样式 */
+/* “系统指令”按钮的独特样式 */
 .system-prompt-header-btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    
-    padding: 6px 12px; /* 内边距比普通按钮稍小，更精致 */
-    
-    background-color: var(--input-bg); /* 使用与输入框/选择器一致的背景色 */
+    padding: 6px 12px;
+    background-color: var(--input-bg);
     border: 1px solid var(--border-color);
     border-radius: var(--border-radius-md);
-    
-    color: var(--text-secondary); /* 使用次要文字颜色 */
+    color: var(--text-secondary);
     font-size: 0.9rem;
     font-weight: 500;
-    
     cursor: pointer;
     transition: all 0.2s ease;
 }
 
-/* 4. 鼠标悬浮和激活状态的样式 */
 .system-prompt-header-btn:hover {
     border-color: var(--primary);
     color: var(--primary);
@@ -1265,18 +1206,8 @@ body.dark-theme .header-model-selector select#model option {
     background-color: rgba(var(--primary-rgb), 0.1);
 }
 
-/* 5. 按钮内部 SVG 图标的样式 */
 .system-prompt-header-btn svg {
-    stroke-width: 2; /* 确保图标线条粗细合适 */
-}
-
-/* 让整个显示框在可点击时有一个手型光标 */
-.system-prompt-display {
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-}
-.system-prompt-display:hover {
-    background-color: rgba(var(--primary-rgb), 0.15);
+    stroke-width: 2;
 }
 
 .system-prompt-editor textarea {
@@ -1284,20 +1215,16 @@ body.dark-theme .header-model-selector select#model option {
     box-sizing: border-box;
     padding: 12px;
     margin-bottom: 12px;
-    
     background-color: var(--input-bg);
-    border: 1px solid var(--primary); /* 编辑状态下用主色调边框高亮 */
+    border: 1px solid var(--primary);
     border-radius: var(--border-radius-md);
-    
     color: var(--text-color);
     font-family: inherit;
     font-size: 0.9rem;
-    line-height: 1.6; /* 增加行高，提升可读性 */
-    
-    resize: vertical; /* 只允许垂直调整大小 */
-    min-height: 120px; /* 设置一个合适的最小高度 */
-    
-    outline: none; /* 移除默认的焦点外框 */
+    line-height: 1.6;
+    resize: vertical;
+    min-height: 120px;
+    outline: none;
     transition: box-shadow 0.2s ease;
 }
 
@@ -1307,7 +1234,7 @@ body.dark-theme .header-model-selector select#model option {
 
 .system-prompt-editor .editor-actions {
     display: flex;
-    justify-content: flex-end; /* 按钮靠右 */
+    justify-content: flex-end;
     gap: 10px;
 }
 
@@ -1315,16 +1242,15 @@ body.dark-theme .header-model-selector select#model option {
 .system-prompt-display {
     cursor: pointer;
     transition: background-color 0.2s ease;
-}
-
-.system-prompt-editor .editor-actions button.danger {
-    background-color: #e53e3e; /* 红色背景 */
-    color: #fff; /* 白色文字 */
-    border-color: #e53e3e; /* 红色边框 */
-}
-.system-prompt-editor .editor-actions button.danger:hover {
-    background-color: #c53030; /* 更深的红色 */
-    border-color: #c53030;
+    background-color: rgba(var(--primary-rgb), 0.05); /* 使用变量作为背景色 */
+    color: var(--text-secondary); /* 使用变量作为文字颜色 */
+    font-size: 0.8em;
+    margin: 10px 5%;
+    border-radius: 4px;
+    border-left: 3px solid var(--border-color); /* 使用主题边框变量 */
+    font-style: italic;
+    padding: 16px;
+    position: relative;
 }
 
 /* 非编辑模式下悬浮才高亮 */
@@ -1335,15 +1261,14 @@ body.dark-theme .header-model-selector select#model option {
 /* 当进入编辑模式时，移除手型光标和悬浮效果 */
 .system-prompt-display.is-editing {
     cursor: default;
-    background-color: rgba(var(--primary-rgb), 0.1); /* 保持一个淡淡的背景色提示 */
+    background-color: rgba(var(--primary-rgb), 0.1);
 }
 .system-prompt-display.is-editing:hover {
-    background-color: rgba(var(--primary-rgb), 0.1); /* 悬浮时背景色不变 */
+    background-color: rgba(var(--primary-rgb), 0.1);
 }
 
-/* --- 操作按钮的具体样式 --- */
 .system-prompt-editor .editor-actions button {
-    padding: 4px 14px; /* 按钮可以小一点，更精致 */
+    padding: 4px 14px;
     font-size: 0.85rem;
     font-weight: 500;
     border-radius: var(--border-radius-sm);
@@ -1352,7 +1277,6 @@ body.dark-theme .header-model-selector select#model option {
     transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* “保存”按钮 (主操作) */
 .system-prompt-editor .editor-actions button.action-btn {
     background-color: var(--primary);
     color: #fff;
@@ -1361,18 +1285,26 @@ body.dark-theme .header-model-selector select#model option {
     background-color: rgba(var(--primary-rgb), 0.85);
 }
 
-/* “取消”按钮 (次要操作) */
 .system-prompt-editor .editor-actions button.secondary {
     background-color: transparent;
     color: var(--text-secondary);
     border: 1px solid var(--border-color);
 }
 .system-prompt-editor .editor-actions button.secondary:hover {
-    background-color: var(--bg-hover);
+    background-color: var(--bg-hover); /* 确保此变量已定义或替换为具体颜色 */
     border-color: var(--text-secondary);
 }
 
-/* --- (可选) 美化滚动条样式 --- */
+.system-prompt-editor .editor-actions button.danger {
+    background-color: #e53e3e;
+    color: #fff;
+    border-color: #e53e3e;
+}
+.system-prompt-editor .editor-actions button.danger:hover {
+    background-color: #c53030;
+    border-color: #c53030;
+}
+
 .system-prompt-editor textarea::-webkit-scrollbar {
     width: 8px;
 }
@@ -1386,8 +1318,6 @@ body.dark-theme .header-model-selector select#model option {
 .system-prompt-editor textarea::-webkit-scrollbar-thumb:hover {
     background-color: rgba(255, 255, 255, 0.3);
 }
-
-
 
 .action-btn-text {
   background: none;
@@ -1471,7 +1401,7 @@ body.dark-theme .preset-prompts-panel {
   scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
 }
 
-/* ===== 10. Helper 类 ===== */
+/* ===== 9. Helper 类 ===== */
 .hide {
   display: none !important;
 }
@@ -1500,10 +1430,7 @@ body.dark-theme .preset-prompts-panel {
   display: none;
 }
 
-.message.user .text {
-  white-space: pre-wrap;
-}
-
+.message.user .text,
 .message.assistant .text {
   white-space: pre-wrap;
 }
@@ -1578,6 +1505,44 @@ body.light-theme .message.user .text a:hover {
 #chat-title-input:focus {
   border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
+}
+
+/* 对话列表项内联编辑输入框样式 */
+.conversation-item .conversation-title-input {
+    flex-grow: 1;
+    width: 100%;
+    min-width: 0;
+    padding: 6px 8px;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius-md);
+    background-color: var(--input-bg);
+    color: var(--text-color);
+    font-size: 1.05rem;
+    font-family: inherit;
+    outline: none;
+    box-sizing: border-box;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+.conversation-item .conversation-title-input:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2);
+    background-color: var(--input-bg);
+}
+
+body.light-theme .conversation-item .conversation-title-input {
+    background-color: #ffffff;
+    border-color: #d1d5db;
+}
+
+body.light-theme .conversation-item .conversation-title-input:focus {
+    border-color: var(--primary-light);
+    box-shadow: 0 0 0 2px rgba(var(--primary-light-rgb), 0.2);
+}
+
+/* 编辑状态下，隐藏操作按钮，防止重叠 */
+.conversation-item.editing-title .conversation-item-actions {
+    display: none;
 }
 
 
@@ -1716,8 +1681,6 @@ body.light-theme .message.user .text a:hover {
   background-color: rgba(255, 255, 255, 0.2);
 }
 
-
-
 /* API Key 组 */
 .settings-area .api-key-group {
   display: flex;
@@ -1732,7 +1695,6 @@ body.light-theme .message.user .text a:hover {
   color: var(--text-color);
 }
 
-
 #temperature-value {
   display: inline-block;
   min-width: 2.8em;
@@ -1744,7 +1706,7 @@ body.light-theme .message.user .text a:hover {
 
 /* 空聊天状态占位提示 */
 .empty-chat-placeholder {
-  display: none; /* 默认不显示 */
+  display: none;
   position: absolute;
   top: 50%;
   left: 50%;
@@ -1985,7 +1947,7 @@ body.dark-theme .model-group-editor {
   box-shadow: var(--shadow-sm);
 }
 
-/* --- 模态对话框 (Modal) 最终美化版 --- */
+/* 模态对话框 (Modal) */
 .modal {
   position: fixed;
   z-index: 1001;
@@ -1998,16 +1960,16 @@ body.dark-theme .model-group-editor {
   align-items: center;
   justify-content: center;
   padding: 20px;
-  backdrop-filter: blur(4px); /* 背景模糊效果，更现代 */
+  backdrop-filter: blur(4px);
 }
 
 .modal-content {
   background-color: var(--bg-color);
   padding: 24px 28px;
   border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-lg); /* 使用更大的圆角 */
+  border-radius: var(--border-radius-lg);
   width: 90%;
-  max-width: 600px; /* 限制最大宽度 */
+  max-width: 600px;
   box-shadow: var(--shadow-lg);
   position: relative;
 }
@@ -2039,41 +2001,48 @@ body.dark-theme .model-group-editor {
   font-weight: 600;
 }
 
-/* --- 表单布局 (Form Layout) --- */
-/* ★ 核心修改：使用 Grid 布局 */
+/* 表单布局 */
 .form-group {
-  display: grid; /* 改为 grid */
-  grid-template-columns: 100px 1fr; /* 左列固定100px，右列占满剩余空间 */
-  align-items: flex-start; /* 顶部对齐 */
+  display: grid;
+  grid-template-columns: 100px 1fr;
+  align-items: flex-start;
   gap: 20px;
   margin-bottom: 20px;
 }
 
+/* Provider Form Modal 中的表单组垂直居中对齐 */
+#provider-form-modal .form-group {
+    align-items: center;
+}
+#provider-form-modal .form-group > label {
+    padding-top: 0; /* 移除上内边距，配合align-items: center */
+}
+#provider-form-modal .form-group:has(#provider-stream-support) .form-control-wrapper {
+    padding-top: 0;
+}
+
+
 .form-group label {
-  /* flex-basis 和 flex-shrink 不再需要 */
-  padding-top: 8px;
   font-weight: 500;
   font-size: 0.9rem;
-  text-align: right; /* label 右对齐 */
+  text-align: right;
   color: var(--text-secondary);
 }
 
 .form-control-wrapper {
-  /* flex-grow 不再需要 */
   display: flex;
   flex-direction: column;
 }
 
-/* --- 表单控件 (Input/Select/Textarea) 样式 --- */
-/* ★ 核心修改：统一控件样式 */
+/* 表单控件 (Input/Select/Textarea) 样式 */
 .modal input[type="text"],
-.modal input[type="password"], /* 以防万一 */
+.modal input[type="password"],
 .modal select,
 .modal textarea {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--border-color);
-  border-radius: var(--border-radius-md); /* 中等圆角 */
+  border-radius: var(--border-radius-md);
   background-color: var(--input-bg);
   color: var(--text-color);
   font-size: 0.95rem;
@@ -2089,7 +2058,7 @@ body.dark-theme .model-group-editor {
   box-shadow: 0 0 0 3px rgba(var(--primary-rgb), 0.2);
 }
 
-/* --- 辅助说明文字样式 --- */
+/* 辅助说明文字样式 */
 .form-group small {
   display: block;
   font-size: 0.8rem;
@@ -2114,14 +2083,7 @@ body.dark-theme #preset-form select {
   background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='none' stroke='%23a0aec0' stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m2 5 6 6 6-6'/%3e%3c/svg%3e");
 }
 
-.form-group small {
-  display: block;
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  margin-top: 8px;
-  line-height: 1.4;
-}
-
+/* 表单操作按钮 */
 .form-actions {
   margin-top: 28px;
   padding-top: 20px;
@@ -2135,18 +2097,18 @@ body.dark-theme #preset-form select {
   padding: 10px 24px;
   font-size: 0.95rem;
   border-radius: var(--border-radius-md);
-  border: 1px solid var(--border-color);
+  border: 1px solid transparent;
   font-weight: 500;
   transition: all 0.2s ease;
 }
 
-.form-actions button.action-btn {
+.form-actions button[type="submit"] {
   background-color: var(--primary);
   color: white;
   border-color: var(--primary);
 }
 
-.form-actions button.action-btn:hover {
+.form-actions button[type="submit"]:hover {
   background-color: rgba(var(--primary-rgb), 0.85);
   border-color: rgba(var(--primary-rgb), 0.85);
 }
@@ -2154,12 +2116,34 @@ body.dark-theme #preset-form select {
 .form-actions button.secondary {
   background-color: var(--bg-secondary);
   color: var(--text-color);
+  border-color: var(--border-color);
 }
 
 .form-actions button.secondary:hover {
   border-color: var(--primary);
   background-color: rgba(var(--primary-rgb), 0.1);
   color: var(--primary);
+}
+
+/* API 提供商选择卡片 */
+.setting-group:has(#api-provider-select) {
+    padding-top: 20px;
+    padding-bottom: 20px;
+}
+
+.setting-group:has(#api-provider-select) .setting-item {
+    border-bottom: none !important;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 16px;
+}
+
+.setting-group:has(#api-provider-select) .setting-item:last-child {
+    margin-bottom: 0;
+}
+
+.setting-group:has(#api-provider-select) .setting-item:has(#save-api-key-btn) .controls-group {
+    margin-top: 8px;
 }
 
 /* 文件预览区域 */
@@ -2177,42 +2161,38 @@ body.dark-theme #preset-form select {
   background-color: rgba(var(--primary-rgb), 0.02);
 }
 
-/* 1. 预览项容器的样式 */
 .file-preview-item-sleek {
-  position: relative; /* 让删除按钮可以相对于它定位 */
-  display: flex; /* 使用flex布局让内容居中 */
+  position: relative;
+  display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--input-bg-color);
+  background-color: var(--input-bg); /* 修复变量名 */
   border: 1px solid var(--border-color);
   border-radius: 8px;
   padding: 4px;
-  max-height: 120px; /* ★ 核心：限制预览项的最大高度 */
-  overflow: hidden; /* 隐藏超出的部分 */
+  max-height: 120px;
+  overflow: hidden;
 }
 
-/* 2. 预览图片的样式 */
 .file-preview-image {
-  max-width: 100%; /* 图片宽度最多占满容器 */
-  max-height: 100%; /* ★ 核心：图片高度最多占满容器 */
-  height: auto; /* 高度自动，保持图片比例 */
-  object-fit: cover; /* 裁剪图片以填充容器，保持比例不失真 */
-  border-radius: 6px; /* 给图片本身也加个小圆角 */
+  max-width: 100%;
+  max-height: 100%;
+  height: auto;
+  object-fit: cover;
+  border-radius: 6px;
 }
 
-/* 3. 文件名预览的样式 (这个可能已存在，确保它表现正常) */
 .file-name-sleek {
   padding: 8px 24px 8px 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-size: 0.9em;
-  color: var(--text-color-secondary);
+  color: var(--text-secondary); /* 修复变量名 */
 }
 
-/* 4. 删除按钮的样式 (确保它能覆盖在右上角) */
 .remove-file-btn-sleek {
-  position: absolute; /* ★ 核心：绝对定位 */
+  position: absolute;
   top: 4px;
   right: 4px;
   width: 20px;
@@ -2228,7 +2208,7 @@ body.dark-theme #preset-form select {
   font-size: 14px;
   line-height: 1;
   padding: 0;
-  z-index: 10; /* 确保在图片上层 */
+  z-index: 10;
   opacity: 0.8;
   transition: opacity 0.2s, background-color 0.2s;
 }
@@ -2623,8 +2603,8 @@ body:not(.dark-theme) .preset-prompts-panel::-webkit-scrollbar-thumb {
   list-style: none;
   padding: 0;
   margin: 0;
-  max-height: 200px; /* ★ 设置一个合理的最大高度，例如 300px ★ */
-  overflow-y: auto;  /* ★ 当列表项超出最大高度时，自动显示垂直滚动条 ★ */
+  max-height: 200px;
+  overflow-y: auto;
 }
 
 .preset-prompt-item {
@@ -2635,7 +2615,7 @@ body:not(.dark-theme) .preset-prompts-panel::-webkit-scrollbar-thumb {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-} 
+}
 
 .preset-prompt-item:last-child {
   margin-bottom: 0;
@@ -2646,21 +2626,6 @@ body:not(.dark-theme) .preset-prompts-panel::-webkit-scrollbar-thumb {
   color: #fff;
 }
 
-.system-prompt-display {
-  background-color: rgba(100, 100, 120, 0.1);
-  color: #888;
-  font-size: 0.8em;
-  margin: 10px 5%;
-  border-radius: 4px;
-  border-left: 3px solid #555;
-  font-style: italic;
-  padding: 16px;
-    position: relative; /* 为按钮定位做准备 */
-}
-:root .system-prompt-display {
-    /* 使用你定义好的浅色边框变量 */
-    border-left-color: var(--border-light); /* 值为 rgba(0, 0, 0, 0.12) */
-}
 .system-prompt-display strong {
   font-style: normal;
   margin-right: 5px;
@@ -2678,7 +2643,6 @@ body:not(.dark-theme) .preset-prompts-panel::-webkit-scrollbar-thumb {
 .toggle-group-visibility-btn {
   margin-right: 8px;
 }
-
 
 #scroll-to-bottom-btn {
   position: absolute;
@@ -2763,41 +2727,6 @@ body.dark-theme .toast.toast-error {
   border-color: #7f1d1d;
 }
 
-.message-meta-info {
-    font-size: 0.8em;
-    color: var(--text-secondary);
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-
-    /* ★★★ 核心：Flexbox 实现两端对齐 ★★★ */
-    display: flex;
-    justify-content: space-between; /* 关键：将子项推向两端 */
-    align-items: center;          /* 垂直居中 */
-    gap: 16px;                    /* 子项之间的最小间距 */
-    /* (移除了 flex-wrap: wrap; ) */
-}
-
-body.light-theme .message-meta-info {
-    border-top-color: rgba(0, 0, 0, 0.08);
-}
-
-
-/* （可选）确保右侧两个元素之间有间距 */
-.model-note + .token-count-note {
-    margin-left: 16px; /* 如果模型笔记和token计数同时存在，给它们之间加点距离 */
-}
-
-.model-note {
-  margin: 0;
-}
-
-.token-count-note {
-  font-style: italic;
-  font-weight: 300;
-  margin: 0;
-}
-
 .message.user .user-attachments-container {
   display: flex;
   flex-direction: column;
@@ -2837,23 +2766,26 @@ body.light-theme .message-meta-info {
 }
 
 .loading-indicator-bubble {
-  height: 38px;
-  width: fit-content;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 16px;
-  box-sizing: border-box;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  color: var(--text-secondary);
-  background-color: transparent;
-  font-size: 0.9rem;
-  animation: loading-pulse 2.5s infinite ease-in-out;
+    height: 38px;
+    width: fit-content;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 16px;
+    box-sizing: border-box;
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    color: var(--text-secondary);
+    background-color: var(--bg-secondary);
+    font-size: 0.9rem;
+    animation: loading-pulse 2.5s infinite ease-in-out;
+    flex-shrink: 0;
 }
 
-.loading-indicator-bubble > span {
-  line-height: 1;
+body.light-theme .loading-indicator-bubble {
+    background-color: #f0f2f5;
+    border-color: #d1d5db;
+    color: #52525b;
 }
 
 @keyframes loading-pulse {
@@ -3039,35 +2971,88 @@ body.light-theme #global-actions-menu .dropdown-item {
   font-size: 1.6rem;
 }
 
-.preset-management-controls button {
-  margin-left: 10px;
-  padding: 8px 16px;
-  font-size: 0.9rem;
-  border-radius: var(--border-radius-md);
-  border: 1px solid var(--border-color);
-  background-color: var(--bg-secondary);
-  color: var(--text-color);
-  font-weight: 500;
-  transition: all 0.2s ease;
+/* 统一所有管理页面的顶部控制区布局和按钮样式 */
+.model-management-controls,
+.preset-management-controls,
+#provider-management-area .settings-header-container .header-controls {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
 }
 
-.preset-management-controls button:hover {
-  border-color: var(--primary);
-  background-color: rgba(var(--primary-rgb), 0.1);
-  color: var(--primary);
+.model-management-controls button,
+.preset-management-controls button,
+#provider-management-area .settings-header-container .header-controls button {
+    padding: 8px 16px;
+    font-size: 0.9rem;
+    border-radius: var(--border-radius-md);
+    font-weight: 500;
+    transition: all 0.2s ease;
+    cursor: pointer;
+    white-space: nowrap;
+    flex-shrink: 0;
 }
 
-.preset-management-controls button.primary-action {
-  background-color: var(--primary);
-  color: white;
-  border-color: var(--primary);
+.model-management-controls button:not(.primary-action),
+.preset-management-controls button:not(.primary-action),
+#provider-management-area .settings-header-container .header-controls button:not(.primary-action) {
+    background-color: var(--bg-secondary);
+    color: var(--text-color);
+    border: 1px solid var(--border-color);
 }
 
-.preset-management-controls button.primary-action:hover {
-  background-color: rgba(var(--primary-rgb), 0.85);
-  border-color: rgba(var(--primary-rgb), 0.85);
-  color: white;
+.model-management-controls button:not(.primary-action):hover,
+.preset-management-controls button:not(.primary-action):hover,
+#provider-management-area .settings-header-container .header-controls button:not(.primary-action):hover {
+    border-color: var(--primary);
+    background-color: rgba(var(--primary-rgb), 0.1);
+    color: var(--primary);
+    box-shadow: var(--shadow-sm);
 }
+
+.model-management-controls button.primary-action,
+.preset-management-controls button.primary-action,
+#provider-management-area .settings-header-container .header-controls button.primary-action {
+    background-color: var(--primary);
+    color: white;
+    border: 1px solid var(--primary);
+}
+
+.model-management-controls button.primary-action:hover,
+.preset-management-controls button.primary-action:hover,
+#provider-management-area .settings-header-container .header-controls button.primary-action:hover {
+    background-color: rgba(var(--primary-rgb), 0.85);
+    border-color: rgba(var(--primary-rgb), 0.85);
+}
+
+/* 统一所有管理页面的“返回聊天”按钮样式 */
+#back-to-chat-from-model-management-btn,
+#back-to-chat-from-preset-management-btn,
+#back-to-chat-from-provider-management-btn {
+    background: none !important;
+    border: none !important;
+    color: var(--primary) !important;
+    font-size: 1rem !important;
+    padding: 8px 12px !important;
+}
+
+#back-to-chat-from-model-management-btn:hover,
+#back-to-chat-from-preset-management-btn:hover,
+#back-to-chat-from-provider-management-btn:hover {
+    background-color: rgba(var(--primary-rgb), 0.1) !important;
+    color: var(--primary) !important;
+    box-shadow: none !important;
+}
+
+#back-to-chat-from-model-management-btn::before,
+#back-to-chat-from-preset-management-btn::before,
+#back-to-chat-from-provider-management-btn::before {
+  content: '←';
+  font-weight: bold;
+  margin-right: 6px;
+}
+
 
 .markdown-content.typing-cursor::after {
   content: '';
@@ -3089,37 +3074,26 @@ body.light-theme #global-actions-menu .dropdown-item {
   }
 }
 
-/* 在 style.css 中 */
-
 .drag-handle {
-  cursor: grab; /* 鼠标悬浮时显示“可抓取”手型 */
-  color: var(--text-color-secondary);
+  cursor: grab;
+  color: var(--text-secondary); /* 修复变量名 */
   padding: 0 12px 0 4px;
   font-size: 20px;
   line-height: 1;
-  user-select: none; /* 防止拖动时选中文字 */
+  user-select: none;
 }
 
 .drag-handle:active {
-  cursor: grabbing; /* 鼠标按下时显示“抓取中”手型 */
+  cursor: grabbing;
 }
 
-/* 让模型组的头部和模型项的布局支持手柄 */
 .model-group-header,
 .model-option-editor {
   display: flex;
   align-items: center;
 }
 
-/* style.css */
-
-/* ======================================= */
-/*  特定设置项对齐修正 (最终精准版)
-/* ======================================= */
-
-/* --- 步骤 1: 识别并格式化“配置管理”这一行 --- */
-
-/* 选择器解释：找到一个 label 内容为“配置管理”的 .setting-item */
+/* 特定设置项对齐修正 */
 .setting-item:has(> label:first-child:is(:contains("配置管理"))) {
     display: grid;
     grid-template-columns: 150px 1fr;
@@ -3130,33 +3104,24 @@ body.light-theme #global-actions-menu .dropdown-item {
     justify-self: end;
 }
 
-
-/* --- 步骤 2: 识别并格式化“API 密钥管理”区块 --- */
-
-/* 2.1 - 为区块标题 h3 添加上边距，将其与上面内容分开 */
 h3:is(:contains("API 密钥管理")) {
     margin-top: 24px;
     padding-top: 24px;
     border-top: 1px solid var(--border-color);
 }
 
-/* 2.2 - 格式化标题后面的描述文字 */
 h3:is(:contains("API 密钥管理")) + p.description {
     color: var(--text-secondary);
     font-size: 0.9rem;
-    margin-top: -4px; /* 微调与标题的间距 */
+    margin-top: -4px;
     margin-bottom: 20px;
 }
 
-/* 2.3 - 核心：为 API Key 区块内的所有 .setting-item 应用 Grid 布局 */
-/* 选择器解释：选择所有在“API 密钥管理”标题之后的 .setting-item 兄弟元素 */
 h3:is(:contains("API 密钥管理")) ~ .setting-item {
     display: grid;
     grid-template-columns: 150px 1fr;
     gap: 16px;
     align-items: center;
-
-    /* 覆盖掉全局样式，让它们看起来像一个组 */
     border: none;
     background-color: transparent;
     padding: 0;
@@ -3164,79 +3129,67 @@ h3:is(:contains("API 密钥管理")) ~ .setting-item {
     min-height: auto;
 }
 
-/* 2.4 - 让这个区块内的 label 右对齐 */
 h3:is(:contains("API 密钥管理")) ~ .setting-item > label:not(.switch) {
     justify-self: end;
 }
 
-/* 2.5 - 处理没有 label 的按钮行，让它从第二列开始 */
-/* (假设您的 HTML 中按钮行有 .save-btn-wrapper) */
 h3:is(:contains("API 密钥管理")) ~ .setting-item > .save-btn-wrapper {
     grid-column-start: 2;
 }
 
-
-/* 当父容器 (.container) 拥有 .sidebar-collapsed 类时... */
+/* 侧边栏收起时的样式 */
 .container.sidebar-collapsed .sidebar {
   width: 0;
   min-width: 0;
   padding-left: 0;
   padding-right: 0;
-  overflow: hidden; /* 保持这个规则 */
-  border-right-width: 0; /* 收起时也隐藏边框 */
+  overflow: hidden;
+  border-right-width: 0;
 }
-.container.sidebar-collapsed .sidebar-toggle-btn:hover {
-    left: 0;
-}
-
 
 .container.sidebar-collapsed .sidebar > * {
     opacity: 0;
     pointer-events: none;
 }
-/* 主区域需要填满空间 */
+
 .container.sidebar-collapsed .main-area {
     margin-left: 0;
 }
 
-/* 调整器本身的位置和样式也需要变化 */
 .container.sidebar-collapsed .sidebar-resizer {
     left: 0;
 }
 
-
-/* 1. 拖拽条的样式 */
+/* 拖拽条的样式 */
 #sidebar-resizer {
   position: absolute;
   top: 0;
   bottom: 0;
-  /* ★ 核心：让它位于侧边栏的右侧 */
-  left: calc(var(--sidebar-width, 260px) - 2px); 
-  width: 5px; /* 拖拽的热区宽度 */
-  cursor: ew-resize; /* 显示拖拽光标 */
-  z-index: 9; /* 比按钮低，比侧边栏高 */
-  transition: left 0.3s ease; /* 跟随侧边栏平滑移动 */
+  left: calc(var(--sidebar-width, 260px) - 2px);
+  width: 5px;
+  cursor: ew-resize;
+  z-index: 9;
+  transition: left 0.3s ease;
 }
 
 body.management-view-active #sidebar-toggle-btn {
   display: none;
 }
 
-/* 1. 分裂按钮的容器 */
+/* 分裂按钮的容器 */
 .split-button-container {
-  display: inline-flex; /* 让内部按钮横向排列 */
+  display: inline-flex;
   box-shadow: var(--shadow-sm);
   border-radius: var(--border-radius-md);
-  overflow: hidden; /* 隐藏内部边框，让它看起来像一个整体 */
+  overflow: hidden;
 }
 
-/* 2. 两个按钮的通用样式 */
+/* 分裂按钮通用样式 */
 .split-button-action,
 .split-button-dropdown {
-  display: inline-flex; /* 使用 Flexbox 布局 */
-  align-items: center; /* 垂直居中内部所有元素！ */
-  justify-content: center; /* 水平居中 */
-  
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 6px 14px;
   background-color: var(--primary);
   color: #fff;
@@ -3247,22 +3200,23 @@ body.management-view-active #sidebar-toggle-btn {
   transition: background-color 0.2s ease;
 }
 
-/* 3. 主操作按钮的样式 */
+/* 主操作按钮的分隔线 */
 .split-button-action {
-  border-right: 1px solid rgba(255, 255, 255, 0.2); /* 中间的分隔线 */
+  border-right: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* 4. 下拉按钮的样式 */
+/* 下拉按钮的内边距 */
 .split-button-dropdown {
-  padding: 6px 8px; /* 下拉箭头区域可以窄一点 */
+  padding: 6px 8px;
 }
 
-/* 5. 悬浮效果 */
+/* 分裂按钮悬浮效果 */
 .split-button-action:hover,
 .split-button-dropdown:hover {
   background-color: rgba(var(--primary-rgb), 0.85);
 }
 
+/* 可折叠信息区域 */
 .collapsible-info-section {
   margin-top: 32px;
   padding-top: 24px;
@@ -3308,18 +3262,16 @@ body.management-view-active #sidebar-toggle-btn {
 
 /* 内容区域 */
 .collapsible-content {
-  max-height: 0; /* ★ 核心：默认高度为0，使其被隐藏 */
-  overflow: hidden; /* 隐藏超出的内容 */
-  transition: max-height 0.3s ease-out, padding 0.3s ease-out; /* 平滑过渡动画 */
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out, padding 0.3s ease-out;
   font-size: 0.9rem;
   color: var(--text-secondary);
   line-height: 1.7;
-  padding: 0 16px; /* 默认没有上下内边距 */
+  padding: 0 16px;
 }
-/* 展开状态下的内容区域 */
 .collapsible-trigger.active + .collapsible-content {
-  /* 当触发器有 .active 类时，内容区获得最大高度和内边距 */
-  max-height: 500px; /* 设置一个足够大的高度 */
+  max-height: 500px;
   padding: 0 16px 20px 16px;
 }
 .collapsible-content p {
@@ -3333,355 +3285,52 @@ body.management-view-active #sidebar-toggle-btn {
   color: var(--primary);
 }
 
-
-/* 1. 聊天消息容器 (.messages) */
-/* 确保它是 flex 容器，以便能控制子项的左右对齐 */
-.messages {
-    display: flex;
-    flex-direction: column;
-    gap: 16px; 
-    /* 其他 .messages 样式保持不变 */
-}
-
-/* 2. 消息包装器 (.message-wrapper) */
-/* 这是定位和“悬浮桥”的关键：确保宽度收缩以适应内容，并提供底部内边距 */
-.message-wrapper {
-    position: relative;
-    display: inline-block; /* 核心：让包装器宽度收缩以适应内容，解决短消息对齐问题 */
-    max-width: 90%; 
-    padding-bottom: 32px; /* 在下方创建透明的悬浮缓冲区，作为“悬浮桥” */
-}
-
-/* 3. 根据角色将包装器推到屏幕的左边或右边 */
-.user-message-wrapper {
-  align-self: flex-end;
-}
-.assistant-message-wrapper {
-  align-self: flex-start;
-}
-
-/* 4. 消息气泡本身 (.message) */
-/* 确保 MathJax 相关的元素可以被定位到 */
-.message {
-    position: relative; /* 确保 MathJax 内部定位正确 */
-    /* 其他 .message 样式保持不变 */
-}
-
-/* 5. 动作按钮容器 (.message-actions-container) */
-/* 这是按钮组的容器，它本身不可见 */
-.message-actions-container {
-    position: absolute;
-    bottom: 0; /* 将容器定位在包装器的最底部（padding 区域内） */
-    
-    width: auto; /* 宽度由内部按钮决定 */
-    display: flex;
-    gap: 6px; 
-    
-    /* 默认隐藏，并设置出现动画 */
-    opacity: 0;
-    pointer-events: none;
-    transform: translateY(-4px); /* 动画方向：初始向上偏移一点 */
-    transition: opacity 0.2s ease, transform 0.2s ease;
-    z-index: 5; /* 确保在消息气泡之上 */
-}
-
-/* 6. 悬浮在消息包装器上时显示按钮组 */
-.message-wrapper:hover .message-actions-container {
-    opacity: 1;
-    transform: translateY(0); /* 移动回最终位置 */
-    pointer-events: auto;
-}
-
-/* 7. 实现“外侧对齐”的水平定位 */
-.assistant-message-wrapper .message-actions-container {
-    left: 0; /* 助手消息在左，按钮在左下角（外侧） */
-}
-.user-message-wrapper .message-actions-container {
-    right: 0; /* 用户消息在右，按钮在右下角（外侧） */
-}
-
-/* 8. 内部按钮 (.message-action-btn) 的样式 */
-.message-action-btn {
-    background-color: var(--bg-secondary);
-    color: var(--text-secondary);
-    border: 1px solid var(--border-color);
-    border-radius: var(--border-radius-md);
-    box-shadow: var(--shadow-sm);
-    
-    width: 28px;
-    height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0; /* 确保按钮在空间不足时不会被压缩 */
-    
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-
-/* 9. 按钮的悬浮效果 */
-.message-action-btn:hover {
-    transform: translateY(-2px); /* 悬浮时轻微上浮 */
-    box-shadow: var(--shadow-md);
-    border-color: var(--primary);
-    color: var(--primary);
-}
-
-/* 10. 特定按钮的悬浮颜色（例如删除） */
-.message-action-btn.delete-message-btn:hover,
-.message-action-btn.delete-branch-btn:hover {
-  background-color: #e53e3e;
-  border-color: #e53e3e;
-  color: #fff;
-}
-
-/* 11. 按钮内部 SVG 图标的大小 */
-.message-action-btn svg {
-  width: 14px;
-  height: 14px;
-}
-
-/* =================================================================== */
-/* == Branch Indicator and Meta Info Layout                         == */
-/* =================================================================== */
-
-.message-meta-info {
-    font-size: 0.8em;
-    color: var(--text-secondary);
-    margin-top: 8px;
-    padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08); /* 深色模式下的分隔线 */
-
-    display: flex;
-    justify-content: space-between; /* 将子项推向两端 */
-    align-items: center;          /* 垂直居中 */
-    gap: 16px;                    /* 子项之间的最小间距 */
-}
-
-body.light-theme .message-meta-info {
-    border-top-color: rgba(0, 0, 0, 0.08); /* 浅色模式下的分隔线 */
-}
-
-/* 确保模型和Token信息在左侧，分支指示器在右侧 */
-/* ui.js 会将模型和token包裹在一个 div 中作为第一个子元素 */
-/* 分支指示器作为第二个子元素，justify-content: space-between 会自动推到右边 */
-
-/* 分支指示器本身的样式 */
-.branch-indicator {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    background-color: rgba(var(--primary-rgb), 0.1);
-    padding: 3px 8px;
-    border-radius: var(--border-radius-full);
-    font-size: 0.85em;
-    font-weight: 500;
-    color: var(--text-secondary);
-    /* 确保它不会被挤压 */
-    flex-shrink: 0; 
-}
-
-.branch-indicator span {
-    min-width: 3ch; /* 防止数字变化时抖动 */
-    text-align: center;
-}
-
-.branch-nav-btn {
-    background: none;
-    border: none;
-    color: var(--text-secondary);
-    cursor: pointer;
-    padding: 2px 4px;
-    border-radius: 50%;
-    line-height: 1;
-    transition: background-color 0.2s, color 0.2s;
-}
-
-.branch-nav-btn:not([disabled]):hover {
-    background-color: rgba(var(--primary-rgb), 0.2);
-    color: var(--primary);
-}
-
-.branch-nav-btn[disabled] {
-    opacity: 0.4;
-    cursor: not-allowed;
-}
-
-/* 模型和Token的默认样式（如果需要覆盖） */
-.model-note {
-  margin: 0; /* 移除可能的默认外边距 */
-}
-.token-count-note {
-  font-style: italic;
-  font-weight: 300;
-  margin: 0; /* 移除可能的默认外边距 */
-}
-
-/* 对话列表项内联编辑输入框样式 */
-.conversation-item .conversation-title-input {
-    flex-grow: 1;
-    width: 100%; /* 确保输入框填充可用空间 */
-    min-width: 0; /* 允许输入框在 Flex 容器中收缩 */
-    
-    /* ★★★ 核心优化：调整内边距和边框 ★★★ */
-    padding: 6px 8px; /* 调整内边距，使其更紧凑，与文字高度协调 */
-    border: 1px solid var(--border-color); /* 使用通用边框颜色，更柔和 */
-    border-radius: var(--border-radius-md); /* 使用中等圆角，与按钮、选择器协调 */
-    
-    background-color: var(--input-bg); /* 使用输入框背景色，与聊天输入框一致 */
-    color: var(--text-color); /* 文字颜色 */
-    font-size: 1.05rem; /* 与 .title 字体大小一致 */
-    font-family: inherit;
-    outline: none; /* 移除默认焦点外框 */
-    box-sizing: border-box; /* 确保 padding 和 border 不会增加元素总宽度 */
-    transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease; /* 增加背景色过渡 */
-}
-
-.conversation-item .conversation-title-input:focus {
-    border-color: var(--primary); /* 焦点时使用主色调边框 */
-    box-shadow: 0 0 0 2px rgba(var(--primary-rgb), 0.2); /* 焦点阴影 */
-    background-color: var(--input-bg); /* 确保焦点时背景色不变 */
-}
-
-/* 确保在亮色主题下也美观 */
-body.light-theme .conversation-item .conversation-title-input {
-    background-color: #ffffff; /* 亮色主题下更亮的背景 */
-    border-color: #d1d5db; /* 亮色主题下更浅的边框 */
-}
-
-body.light-theme .conversation-item .conversation-title-input:focus {
-    border-color: var(--primary-light);
-    box-shadow: 0 0 0 2px rgba(var(--primary-light-rgb), 0.2);
-}
-
-
-/* 编辑状态下，隐藏操作按钮，防止重叠 */
-.conversation-item.editing-title .conversation-item-actions {
-    display: none;
-}
-
-/* 1. 让最外层包装器居中 */
-.message-wrapper.temporary-initial-loading-message {
-    align-self: flex-start; /* ★ 核心修复：改为靠左对齐 */
-    /* 移除导致居中的 auto margin */
-    margin-left: unset; /* ★ 移除自动左外边距 */
-    margin-right: unset; /* ★ 移除自动右外边距 */
-
-    max-width: fit-content; 
-    box-shadow: none; 
-    background-color: transparent; 
-    border: none; 
-    padding: 0; 
-}
-
-/* 2. 消息气泡本身的样式调整 */
-.message-wrapper.temporary-initial-loading-message .message {
-    /* 移除消息气泡的默认边框/背景/阴影，因为它现在只是一个指示器 */
-    background-color: transparent; /* 透明背景 */
-    box-shadow: none; /* 移除阴影 */
-    border: none; /* 移除边框 */
-    padding: 0; /* 移除内边距 */
-}
-
-/* 3. 针对 .loading-indicator-bubble 的样式优化 */
-/* 这个类在 ui.appendLoading() 和 ui.createTemporaryMessageElement() 内部都使用了 */
-.loading-indicator-bubble {
-    height: 38px;
-    width: fit-content;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 16px;
-    box-sizing: border-box;
-    border: 1px solid var(--border-color); /* 使用主题边框色 */
-    border-radius: 999px; /* 椭圆形 */
-    color: var(--text-secondary); /* 使用次要文字颜色 */
-    background-color: var(--bg-secondary); /* 使用次要背景色，更柔和 */
-    font-size: 0.9rem;
-    animation: loading-pulse 2.5s infinite ease-in-out;
-    flex-shrink: 0; /* 防止被压缩 */
-}
-
-/* 亮色主题下的调整 */
-body.light-theme .loading-indicator-bubble {
-    background-color: #f0f2f5; /* 亮色下更浅的背景 */
-    border-color: #d1d5db; /* 亮色下更浅的边框 */
-    color: #52525b; /* 亮色下次要文字颜色 */
-}
-
-/* 动画保持不变 */
-@keyframes loading-pulse {
-  0%,
-  100% {
-    opacity: 0.9;
-  }
-  50% {
-    opacity: 0.5;
-  }
-}
-
-
-
-/* --- START OF FILE style.css (Relevant Snippet) --- */
-
-/* ... (其他不变的代码) ... */
-
-/* --- 代码块 (`pre`) 及其内部元素样式 --- */
+/* 代码块 (`pre`) 及其内部元素样式 */
 .message pre {
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
-  position: relative; /* 确保其内部的绝对定位按钮可以正确参照 */
-  
-  /* 统一背景、边框和内边距 */
+  position: relative;
   background-color: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--border-radius-md);
-  padding: 14px 16px; /* 正常代码内容左右和底部内边距 */
-  
-  /* ★★★ 核心修复：减小顶部内边距，允许代码内容向上延伸 ★★★ */
-  /* 当前按钮容器顶部是 4px，按钮高度 24px，所以按钮的视觉底部在 28px 处。 */
-  /* 如果希望代码内容从更上方开始，例如从 16px 处开始（这将使按钮覆盖部分代码）， */
-  /* 那么 padding-top 就设置为 16px。 */
-  padding-top: 12px; /* ★ 修正点：更小的顶部内边距 */
-
-  overflow-x: auto; /* 允许水平滚动 */
-  margin: 0.8em 0; /* 保持垂直外边距 */
-  line-height: 1.5; /* 增加行高，提高可读性 */
-  font-size: 0.9em; /* 稍微缩小字体，更适合代码 */
-  color: var(--text-color); /* 确保代码颜色与主题文字色一致 */
+  padding: 14px 16px;
+  padding-top: 12px; /* 更小的顶部内边距 */
+  overflow-x: auto;
+  margin: 0.8em 0;
+  line-height: 1.5;
+  font-size: 0.9em;
+  color: var(--text-color);
 }
 
-/* 亮色主题下代码块的微调（如果需要覆盖默认的主题变量行为） */
 body.light-theme .message pre {
-  background-color: #f8f9fa; /* 亮色主题下更浅的背景 */
-  border-color: #e9ecef; /* 亮色主题下更浅的边框 */
-  color: #212529; /* 亮色主题下更深的文字颜色 */
+  background-color: #f8f9fa;
+  border-color: #e9ecef;
+  color: #212529;
 }
 
-/* --- 行内代码 (`code`) 样式 --- */
+/* 行内代码 (`code`) 样式 */
 .message code {
   font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
-  background-color: rgba(var(--primary-rgb), 0.08); /* 使用主题色系的轻微透明背景 */
-  color: var(--primary); /* 使用主色调文字，使其突出 */
-  padding: 0.25em 0.5em; /* 增加内边距 */
-  border-radius: var(--border-radius-sm); /* 保持小圆角 */
-  font-size: 0.88em; /* 稍微调整字体大小 */
-  word-break: break-all; /* 确保长代码不会溢出 */
+  background-color: rgba(var(--primary-rgb), 0.08);
+  color: var(--primary);
+  padding: 0.25em 0.5em;
+  border-radius: var(--border-radius-sm);
+  font-size: 0.88em;
+  word-break: break-all;
 }
 
-/* 亮色主题下行内代码的微调 */
 body.light-theme .message code {
   background-color: rgba(var(--primary-light-rgb), 0.1);
   color: var(--primary-light);
 }
 
-/* --- 代码块操作按钮容器 (`.code-actions`) 样式 --- */
+/* 代码块操作按钮容器 (`.code-actions`) 样式 */
 .code-actions {
     position: absolute;
-    top: 4px; /* 保持距离 pre 顶部的距离 */
-    right: 8px; /* 保持距离 pre 右侧的距离 */
+    top: 4px;
+    right: 8px;
     display: flex;
-    gap: 6px; /* 按钮之间的间距，保持 6px */
-    z-index: 10; /* ★ 确保按钮层级在代码文本之上 ★ */
+    gap: 6px;
+    z-index: 10;
     opacity: 0;
     transform: translateY(-5px);
     pointer-events: none;
@@ -3696,237 +3345,45 @@ body.light-theme .message code {
     pointer-events: auto;
 }
 
-/* --- 单个代码操作按钮 (`.code-action-btn`) 样式 --- */
-/* 保持我们上次调整后的尺寸 */
+/* 单个代码操作按钮 (`.code-action-btn`) 样式 */
 .code-action-btn {
-    color: var(--text-color); 
+    color: var(--text-color);
     background-color: var(--input-bg);
     border: 1px solid var(--border-color);
-    padding: 3px 6px; /* 保持 3px 6px 内边距 */
+    padding: 3px 6px;
     border-radius: var(--border-radius-md);
     cursor: pointer;
-    font-size: 13px; /* 保持 13px 字体大小 */
+    font-size: 13px;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.1s ease, color 0.2s ease;
     white-space: nowrap;
-    height: 24px; /* 保持 24px 高度 */
+    height: 24px;
 }
 
 .controls-group .api-endpoint-note {
-    display: block; /* 强制换行，使其在输入框下方显示 */
-    margin-top: 5px; /* 可选：增加一些顶部间距，让它与输入框之间有一定距离 */
-    /* 如果你的 controls-group 是 flex 布局，你可能需要 flex-basis: 100%; 来确保它占据整行 */
-    flex-basis: 100%; 
+    display: block;
+    margin-top: 5px;
+    flex-basis: 100%;
 }
 
-/* 1. 统一所有管理页面的顶部控制区布局 */
-/* 这将确保 模型管理、预设管理、提供商管理 页面的顶部按钮组布局一致 */
-.model-management-header .model-management-controls,
-.preset-management-header .preset-management-controls,
-#provider-management-area .settings-header-container .header-controls { /* ★★★ 超高特异性选择器 ★★★ */
-    display: flex;
-    align-items: center;
-    gap: 10px; /* 按钮之间间距 */
-    margin-left: auto; /* 将按钮组推到右边 */
-}
-
-/* 2. 针对 API 提供商管理页面顶部的 '添加新提供商' 按钮样式 */
-/* 它应该是次要色（背景浅灰，文字主色） */
-#provider-management-area .settings-header-container .header-controls #add-new-provider-btn-header { /* ★★★ 超高特异性选择器 ★★★ */
-    /* 覆盖 action-btn 的蓝色默认样式 */
-    background-color: var(--bg-secondary) !important;
-    color: var(--text-color) !important;
-    border: 1px solid var(--border-color) !important;
-    padding: 8px 16px !important; /* 统一内边距 */
-    font-size: 0.9rem !important; /* 统一字体大小 */
-    border-radius: var(--border-radius-md) !important; /* 统一圆角 */
-    font-weight: 500 !important;
-    transition: all 0.2s ease !important;
-    white-space: nowrap !important;
-}
-
-#provider-management-area .settings-header-container .header-controls #add-new-provider-btn-header:hover {
-    border-color: var(--primary) !important;
-    background-color: rgba(var(--primary-rgb), 0.1) !important;
-    color: var(--primary) !important;
-    box-shadow: var(--shadow-sm) !important;
-}
-
-/* 3. 针对 API 提供商管理页面顶部的 '保存更改' 按钮样式 */
-/* 它应该是主色（蓝色） */
-#provider-management-area .settings-header-container .header-controls #save-providers-to-file-btn-header { /* ★★★ 超高特异性选择器 ★★★ */
-    /* 继承 primary-action 的蓝色，但确保它没有被其他规则覆盖 */
-    background-color: var(--primary) !important;
-    color: white !important;
-    border-color: var(--primary) !important;
-    padding: 8px 16px !important; /* 统一内边距 */
-    font-size: 0.9rem !important; /* 统一字体大小 */
-    border-radius: var(--border-radius-md) !important; /* 统一圆角 */
-    font-weight: 500 !important;
-    transition: all 0.2s ease !important;
-    white-space: nowrap !important;
-}
-
-#provider-management-area .settings-header-container .header-controls #save-providers-to-file-btn-header:hover {
-    background-color: rgba(var(--primary-rgb), 0.85) !important;
-    border-color: rgba(var(--primary-rgb), 0.85) !important;
-    color: white !important;
-    box-shadow: var(--shadow-sm) !important;
-}
-
-/* 4. 针对 API 提供商管理页面顶部的 '返回聊天' 按钮样式 */
-/* 它应该是一个文本链接样式，没有背景和边框，文字是蓝色 */
-#provider-management-area .settings-header-container .header-controls #back-to-chat-from-provider-management-btn { /* ★★★ 超高特异性选择器 ★★★ */
-    background: none !important; /* 移除背景 */
-    border: none !important; /* 移除边框 */
-    padding: 8px 12px !important; /* 调整内边距使其更像文本按钮 */
-    color: var(--primary) !important; /* 文本颜色为主色 */
-    font-size: 1rem !important; /* 字体大小，比其他按钮稍大 */
-    font-weight: 500 !important;
-    cursor: pointer !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    gap: 6px !important;
-    border-radius: var(--border-radius-md) !important;
-    transition: background-color 0.2s ease, color 0.2s ease !important;
-    white-space: nowrap !important;
-}
-
-#provider-management-area .settings-header-container .header-controls #back-to-chat-from-provider-management-btn:hover {
-    background-color: rgba(var(--primary-rgb), 0.1) !important;
-    color: var(--primary) !important;
-}
-
-/* 确保返回箭头符号是正确的 */
-#provider-management-area .settings-header-container .header-controls #back-to-chat-from-provider-management-btn::before {
-  content: '←' !important;
-  font-weight: bold !important;
-  margin-right: 6px !important; /* 增加箭头和文字的间距 */
-}
-
-
-/* 1. 为所有管理页面的顶部控制区设置通用布局 */
-.model-management-controls,
-.preset-management-controls,
-#provider-management-area .header-controls {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-left: auto; /* 确保所有按钮组都靠右对齐 */
-}
-
-/* 2. 统一所有管理页面顶部按钮的基础样式 */
-.model-management-controls button,
-.preset-management-controls button,
-#provider-management-area .header-controls button {
-    padding: 8px 16px;
-    font-size: 0.9rem;
-    border-radius: var(--border-radius-md);
-    font-weight: 500;
-    transition: all 0.2s ease;
-    cursor: pointer;
-    white-space: nowrap;
-    flex-shrink: 0;
-}
-
-/* 3. 统一所有管理页面顶部的“次要”按钮样式 */
-/* 例如: '添加新模型/模板/提供商' 和 '返回聊天' */
-.model-management-controls button:not(.primary-action),
-.preset-management-controls button:not(.primary-action),
-#provider-management-area .header-controls button:not(.primary-action) {
-    background-color: var(--bg-secondary);
-    color: var(--text-color);
-    border: 1px solid var(--border-color);
-}
-
-/* 4. 统一所有管理页面顶部的“次要”按钮悬浮效果 */
-.model-management-controls button:not(.primary-action):hover,
-.preset-management-controls button:not(.primary-action):hover,
-#provider-management-area .header-controls button:not(.primary-action):hover {
-    border-color: var(--primary);
-    background-color: rgba(var(--primary-rgb), 0.1);
-    color: var(--primary);
-    box-shadow: var(--shadow-sm);
-}
-
-/* 5. 统一所有管理页面顶部的“主操作”按钮样式 */
-/* 例如: '保存更改' */
-.model-management-controls button.primary-action,
-.preset-management-controls button.primary-action,
-#provider-management-area .header-controls button.primary-action {
-    background-color: var(--primary);
-    color: white;
-    border: 1px solid var(--primary);
-}
-
-/* 6. 统一所有管理页面顶部的“主操作”按钮悬浮效果 */
-.model-management-controls button.primary-action:hover,
-.preset-management-controls button.primary-action:hover,
-#provider-management-area .header-controls button.primary-action:hover {
-    background-color: rgba(var(--primary-rgb), 0.85);
-    border-color: rgba(var(--primary-rgb), 0.85);
-}
-
-/* 7. ★★★ 统一所有管理页面的“返回聊天”按钮样式 (使其像文本链接) ★★★ */
-/* 我们将通过 ID 来精确覆盖 */
-#back-to-chat-from-model-management-btn,
-#back-to-chat-from-preset-management-btn,
-#back-to-chat-from-provider-management-btn {
-    background: none !important; /* 强制移除背景 */
-    border: none !important; /* 强制移除边框 */
-    color: var(--primary) !important; /* 强制使用主色文字 */
-    font-size: 1rem !important; /* 统一字体大小 */
-    padding: 8px 12px !important;
-}
-
-#back-to-chat-from-model-management-btn:hover,
-#back-to-chat-from-preset-management-btn:hover,
-#back-to-chat-from-provider-management-btn:hover {
-    background-color: rgba(var(--primary-rgb), 0.1) !important;
-    color: var(--primary) !important;
-    box-shadow: none !important; /* 移除阴影 */
-}
-
-/* 确保返回箭头符号是正确的 */
-#back-to-chat-from-model-management-btn::before,
-#back-to-chat-from-preset-management-btn::before,
-#back-to-chat-from-provider-management-btn::before {
-  content: '←';
-  font-weight: bold;
-  margin-right: 6px;
-}
-
-/* --- 美化 "其他选项" 的 Checkbox --- */
-/* 1. 让包含复选框的 .form-control-wrapper 横向排列 */
+/* 美化 "其他选项" 的 Checkbox */
 .form-group:has(#provider-stream-support) .form-control-wrapper {
     flex-direction: row;
-    gap: 24px; /* 选项之间的间距 */
+    gap: 24px;
 }
 
-/* 2. 创建自定义的复选框样式 */
-.form-control-wrapper .switch-like-label {
-    display: inline-flex;
-    align-items: center;
-    cursor: pointer;
-    font-size: 0.9rem;
-    color: var(--text-color);
-}
-
-/* ★★★ 步骤 1: 使用高特异性选择器，确保这些规则只在提供商表单内生效 ★★★ */
-/* 选择器解释：在 ID 为 'provider-form-modal' 的模态框内，找到类为 'switch-like-label' 的元素 */
 #provider-form-modal .switch-like-label {
-    position: relative; /* 关键：作为绝对定位的 input 和对钩的参考系 */
+    position: relative;
     display: inline-flex;
     align-items: center;
     cursor: pointer;
     font-size: 0.9rem;
     color: var(--text-color);
-    padding: 2px 0; /* 给予一点垂直空间，防止被裁切 */
+    padding: 2px 0;
 }
 
-/* ★★★ 步骤 2: 彻底隐藏原始 input，但让它依然可交互 ★★★ */
 #provider-form-modal .switch-like-label input[type="checkbox"] {
     position: absolute;
     opacity: 0;
@@ -3936,38 +3393,34 @@ body.light-theme .message code {
     left: 0;
     margin: 0;
     padding: 0;
-    z-index: 1; /* 让透明的 input 浮在最上层，以接收点击事件 */
+    z-index: 1;
     cursor: pointer;
 }
 
-/* ★★★ 步骤 3 修正：微调未选中方框的样式，增加辨识度 ★★★ */
 #provider-form-modal .switch-like-label span::before {
     content: '';
     display: inline-block;
     width: 16px;
     height: 16px;
-    border: 2px solid var(--border-dark); /* ★ 核心修改：使用更亮的边框色 */
+    border: 2px solid var(--border-color); /* 统一使用主题边框色 */
     border-radius: var(--border-radius-sm);
     margin-right: 10px;
     vertical-align: -3px;
     transition: all 0.2s ease;
-    background-color: transparent; /* ★ 核心修改：未选中时背景透明，只留边框 */
+    background-color: transparent;
 }
 
-/* ★★★ 步骤 4: 当 input 被选中时，改变方框的样式 ★★★ */
 #provider-form-modal .switch-like-label input[type="checkbox"]:checked + span::before {
     background-color: var(--primary);
     border-color: var(--primary);
 }
 
-/* 步骤 5 和 6 保持不变，但对钩的位置需要微调 */
 #provider-form-modal .switch-like-label span::after {
     content: '';
     display: none;
     position: absolute;
-    /* ★★★ 核心修复：精确调整对钩的位置 ★★★ */
-    left: 5.5px;  /* 从 label 左边缘向内 5px */
-    top: 8px;   /* 从 label 上边缘向下 5px */
+    left: 5.5px;
+    top: 8px;
     width: 5px;
     height: 10px;
     border: solid white;
@@ -3975,146 +3428,56 @@ body.light-theme .message code {
     transform: rotate(45deg);
 }
 
-/* ★★★ 步骤 6: 当 input 被选中时，显示对钩 ★★★ */
 #provider-form-modal .switch-like-label input[type="checkbox"]:checked + span::after {
-    display: block; /* 选中时显示 */
+    display: block;
 }
 
-/* ★★★ 步骤 7: (可选但推荐) 增加悬浮效果，提升交互体验 ★★★ */
 #provider-form-modal .switch-like-label:hover span::before {
     border-color: var(--primary);
 }
 
-
-/* --- 底部操作按钮 (Form Actions) --- */
-.form-actions {
-  margin-top: 28px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  justify-content: flex-end; /* 按钮组靠右对齐 */
-  gap: 12px;
-}
-
-.form-actions button {
-  padding: 10px 24px;
-  font-size: 0.95rem;
-  border-radius: var(--border-radius-md);
-  border: 1px solid transparent; /* 默认无边框 */
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-/* 主操作按钮 (蓝色) */
-.form-actions button[type="submit"] {
-  background-color: var(--primary);
-  color: white;
-  border-color: var(--primary);
-}
-
-.form-actions button[type="submit"]:hover {
-  background-color: rgba(var(--primary-rgb), 0.85);
-  border-color: rgba(var(--primary-rgb), 0.85);
-}
-
-/* 次要操作按钮 (灰色) */
-.form-actions button.secondary {
-  background-color: var(--bg-secondary);
-  color: var(--text-color);
-  border-color: var(--border-color);
-}
-
-.form-actions button.secondary:hover {
-  border-color: var(--primary);
-  background-color: rgba(var(--primary-rgb), 0.1);
-  color: var(--primary);
-}
-
-
-.setting-group:has(#api-provider-select) {
-    /* 为整个卡片增加一点上下内边距，让它更有呼吸感 */
-    padding-top: 20px;
-    padding-bottom: 20px;
-}
-
-/* 2. ★★★ 核心修复：移除这个特定卡片内部所有 setting-item 的底边框 ★★★ */
-.setting-group:has(#api-provider-select) .setting-item {
-    border-bottom: none !important; /* 使用 !important 确保覆盖之前的规则 */
-    padding-top: 0;    /* 移除多余的内边距 */
-    padding-bottom: 0; /* 移除多余的内边距 */
-    margin-bottom: 16px; /* 用外边距来控制行间距，更灵活 */
-}
-
-/* 3. 针对最后一行（按钮行）移除底部外边距，使其紧贴卡片底部 */
-.setting-group:has(#api-provider-select) .setting-item:last-child {
-    margin-bottom: 0;
-}
-
-/* 4. （可选但推荐）微调按钮行的对齐方式，使其更美观 */
-.setting-group:has(#api-provider-select) .setting-item:has(#save-api-key-btn) .controls-group {
-    /* 增加一点上边距，将其与上方的输入框隔开 */
-    margin-top: 8px;
-}
-
-/* ★★★ 步骤 1: 核心修复 - 改变 Grid 的垂直对齐方式为居中 ★★★ */
-/* 我们使用高特异性选择器，确保只影响表单 */
-#provider-form-modal .form-group {
-    align-items: center; /* 从 flex-start 改为 center */
-}
-
-/* ★★★ 步骤 2: 移除之前为对齐而添加的、现在已多余的 padding-top ★★★ */
-/* 移除左侧 label 的上内边距 */
-#provider-form-modal .form-group > label {
-    padding-top: 0;
-}
-
-/* 移除右侧复选框容器的上内边距 */
-#provider-form-modal .form-group:has(#provider-stream-support) .form-control-wrapper {
-    padding-top: 0;
-}
-
-/* --- 样式：限制聊天中图片的初始大小 --- */
+/* 限制聊天中图片的初始大小 */
 .user-sent-image {
-    max-width: 250px;  /* 限制图片最大宽度 */
-    max-height: 200px; /* 限制图片最大高度 */
-    border-radius: 8px; /* 给图片也加上圆角，更美观 */
-    cursor: zoom-in;      /* 鼠标悬停时显示放大光标 */
+    max-width: 250px;
+    max-height: 200px;
+    border-radius: 8px;
+    cursor: zoom-in;
     transition: transform 0.2s ease-in-out;
-    object-fit: cover; /* 保证图片不变形地填满容器 */
+    object-fit: cover;
 }
 
 .user-sent-image:hover {
-    transform: scale(1.05); /* 悬停时轻微放大，增加交互感 */
+    transform: scale(1.05);
 }
 
-/* --- 样式：图片附件容器 --- */
+/* 图片附件容器 */
 .image-attachment {
-    padding: 0; /* 移除默认的附件内边距，让图片填充 */
-    background-color: transparent; /* 背景透明 */
+    padding: 0;
+    background-color: transparent;
 }
 
-/* --- 样式：图片放大模态框（灯箱效果） --- */
+/* 图片放大模态框（灯箱效果） */
 .image-modal {
-    position: fixed; /* 固定定位，覆盖整个视口 */
+    position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.85); /* 半透明黑色背景 */
+    background-color: rgba(0, 0, 0, 0.85);
     display: flex;
     justify-content: center;
     align-items: center;
-    z-index: 2000; /* 确保在最顶层 */
-    cursor: zoom-out; /* 提示用户点击背景可以关闭 */
+    z-index: 2000;
+    cursor: zoom-out;
     padding: 20px;
     box-sizing: border-box;
 }
 
 .image-modal img {
-    max-width: 95vw;  /* 放大后图片的最大宽度不超过视口宽度的95% */
-    max-height: 95vh; /* 放大后图片的最大高度不超过视口高度的95% */
-    object-fit: contain; /* 完整显示图片，不变形 */
-    cursor: default;  /* 在图片上恢复默认光标 */
+    max-width: 90vw;
+    max-height: 90vh;
+    object-fit: contain;
+    cursor: default;
     border-radius: 4px;
 }
 
@@ -4131,7 +3494,59 @@ body.light-theme .message code {
 
 .close-image-modal:hover {
     color: #bbb;
+    size: 0.9em;
 }
 
+.tool-message-wrapper {
+    display: flex;
+    justify-content: center; /* 居中显示 */
+    margin: 8px 0;
+    padding: 0 16px;
+}
+
+.tool-message-content {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    background-color: var(--background-modifier-accent); /* 使用一个中立的颜色 */
+    color: var(--text-muted); /* 字体颜色也更柔和 */
+    font-size: 0.85em;
+    border: 1px solid var(--background-modifier-border);
+}
+
+.tool-message-content svg {
+    flex-shrink: 0; /* 防止图标被压缩 */
+}
+
+/* 
+  这个规则选择同时拥有 .assistant-message-wrapper 和 .tool-result-message 的元素。
+  它将整个消息包装器居中。
+*/
+.assistant-message-wrapper.tool-result-message {
+    display: flex;
+    justify-content: center;
+}
+
+/* 
+  这个规则选择它内部的 .message.assistant 气泡，并改变其外观。
+*/
+.tool-result-message .message.assistant {
+    width: auto;                  /* 宽度由内容决定 */
+    max-width: fit-content;       /* 宽度不超过内容所需 */
+    background-color: var(--background-modifier-accent); /* 使用一个中立的颜色 */
+    color: var(--text-muted);     /* 字体颜色也更柔和 */
+    border: 1px solid var(--background-modifier-border);
+    padding: 6px 12px;
+    font-size: 0.85em;
+}
+
+/* 确保图标和文本对齐 */
+.tool-result-message .message.assistant .text {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
 
 /* --- END OF FILE style.css (Provider Management Button Styling - Ultra Precision) --- */

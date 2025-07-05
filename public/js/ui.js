@@ -1350,17 +1350,19 @@ export function appendMessage(role, messageContent, modelForNote, reasoningText,
     const actionsContainer = document.createElement('div');
     actionsContainer.className = 'message-actions-container';
     
-    // 7a. 复制按钮 (所有消息都有)
+     // 7a. 复制按钮 (所有消息都有)
     const copyMessageBtn = document.createElement('button');
     copyMessageBtn.className = 'message-action-btn copy-message-btn';
     copyMessageBtn.title = '复制消息内容';
     copyMessageBtn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-copy" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM2 5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-1h1v1a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h1v1z"/></svg>`;
     copyMessageBtn.addEventListener('click', () => { 
-        navigator.clipboard.writeText(finalMarkdown.trim()).then(() => {
+        // ★★★ 将 finalMarkdown 替换为 rawText ★★★
+        navigator.clipboard.writeText(rawText.trim()).then(() => {
             utils.showToast('消息内容已复制', 'success');
         }).catch(() => utils.showToast('复制失败。', 'error'));
     });
     actionsContainer.appendChild(copyMessageBtn);
+
 
      // 7b. ★ 核心修改：根据角色渲染不同的按钮 ★
     if (role === 'user') {

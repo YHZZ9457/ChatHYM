@@ -20,7 +20,7 @@
         <!-- ===== Sidebar ===== -->
         <aside class="sidebar">
             <div class="sidebar-header" id="sidebar-header">
-                <div class="logo" id="logo-display" title="点击搜索对话...">ChatHYM v1.3</div>
+                <div class="logo" id="logo-display" title="点击搜索对话...">ChatHYM v1.4</div>
                 <div class="search-wrapper" id="search-wrapper" style="display: none;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="search-icon">
                         <circle cx="11" cy="11" r="8"></circle>
@@ -168,7 +168,6 @@
                         <label>清除所有历史</label>
                         <div class="controls-group"><button id="clear-all-history-btn" class="danger">清除</button></div>
                     </div>
-                    <div class="setting-item"><input type="range" id="temperature-input-inline" name="temperature" min="0" max="2" step="0.01" value="0.70">
                         <label>聊天记录管理</label>
                         <div class="controls-group">
                             <button id="export-history-btn" class="action-btn">导出全部</button>
@@ -287,7 +286,7 @@
                             <svg class="collapsible-arrow" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
                         </button>
                         <div class="collapsible-content">
-                            <p>当前版本：v1.3 (构建日期：2025-06-26)<br>基于 LocalGPT 框架。</p>
+                            <p>当前版本：v1.4 (构建日期：2025-07-05)<br>基于 LocalGPT 框架。</p>
                         </div>
                     </div>
                 </div>
@@ -520,6 +519,7 @@
     <!-- ===== Scripts ===== -->
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.0.6/dist/purify.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/umd.js"></script>
     
     <script>

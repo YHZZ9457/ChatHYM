@@ -2109,6 +2109,48 @@ export function showLogoView() {
 }
 
 /**
+ * 实时渲染流式内容，包括 Markdown、代码块按钮和 MathJax。
+ * @param {HTMLElement} targetElement - 要更新内容的 DOM 元素 (例如 .markdown-content)。
+ * @param {string} fullText - 当前累积的完整回复文本。
+ */
+export function renderStreamedContent(targetElement, fullText) {
+    if (!targetElement) return;
+
+    // 1. 预处理文本（例如处理来源链接、自定义LaTeX等）
+    //    我们复用 renderMessageContent 中的逻辑
+    let processedText = preprocessLatex(fullText);
+    processedText = processedText.replace(
+        /\[Source:\s*(https?:\/\/[^\]\s]+)\]/g,
+        (match, url) => {
+            try {
+                const domain = new URL(decodeURIComponent(url)).hostname;
+                return `<a href="${decodeURIComponent(url)}" target="_blank" rel="noopener noreferrer" class="source-link" title="${decodeURIComponent(url)}">[${domain.replace('www.', '')}]</a>`;
+            } catch (e) {
+                return `<span class="invalid-source-link" title="无法解析的链接: ${utils.escapeHtml(url)}">[来源链接]</span>`; 
+            }
+        }
+    );
+
+    // 2. 使用 marked.js 解析 Markdown
+    const rawHtml = marked.parse(processedText);
+
+    // 3. ★★★ 使用 DOMPurify 净化 HTML，防止 XSS 攻击 ★★★
+    const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+
+    // 4. 更新 DOM
+    targetElement.innerHTML = sanitizedHtml;
+
+    // 5. 后处理：为代码块添加复制按钮
+    processPreBlocksForCopyButtons(targetElement);
+
+    // 6. 后处理：重新排版 MathJax 公式
+    if (window.MathJax?.typesetPromise) {
+        // 使用 then() 来避免在排版完成前执行其他操作
+        window.MathJax.typesetPromise([targetElement]).catch(err => console.error("MathJax typesetting failed during stream:", err));
+    }
+}
+
+/**
  * 显示导出选项的下拉菜单。
  * @param {HTMLElement} targetButton - 触发菜单的按钮元素。
  */

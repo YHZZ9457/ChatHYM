@@ -112,6 +112,12 @@ if (currentAccumulatedReasoning && currentAccumulatedReasoning.trim().length > 0
     currentThinkingText = extraction.thinkingText;
     currentReplyText = extraction.replyText;
 }
+if (tempMessageWrapper.contentSpan) {
+            // 不再使用 textContent，而是调用我们封装的渲染函数
+            ui.renderStreamedContent(tempMessageWrapper.contentSpan, currentReplyText);
+            // 仍然保存原始文本，以备后用
+            tempMessageWrapper.contentSpan.dataset.fullRawContent = currentAccumulatedReply;
+        }
         
          if (tempMessageWrapper.contentSpan) {
             tempMessageWrapper.contentSpan.textContent = currentReplyText;

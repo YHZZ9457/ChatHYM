@@ -15,7 +15,6 @@
   # 这个设置可以解决一些复杂的代理问题
   framework = "#static"
 
-# --- 核心修复：添加明确的重定向和代理规则 ---
 
 # 规则 1: 将所有对 /api/ 的请求代理到 Netlify Functions
 [[redirects]]

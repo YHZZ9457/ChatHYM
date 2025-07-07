@@ -14,6 +14,41 @@ import { mapMessagesForGemini, mapMessagesForStandardOrClaude } from './message_
 // 2. API 交互函数
 // ========================================================================
 
+const thinkingParamConfig = {
+    // 关键词 -> 参数生成函数
+    'qwen3': (isManual, isAuto) => {
+        if (isAuto) return {}; // Qwen 在自动模式下由模型自行决定，不加参数
+        return {
+            extra_body: {
+                chat_template_kwargs: {
+                    enable_thinking: isManual
+                }
+            }
+        };
+    },
+    'doubao': (isManual, isAuto) => {
+        if (isAuto) return { thinking_mode: 'auto' };
+        return { thinking_mode: isManual ? 'enabled' : 'disabled' };
+    },
+    'gemini-1.': (isManual, isAuto) => { // 匹配 Gemini 1.0 和 1.5
+        if (isAuto) return {}; // Gemini 1.x 在自动模式下不特殊处理
+        return { includeThoughts: isManual };
+    },
+    'gemini-2.5': (isManual, isAuto) => { // 匹配 Gemini 2.0 及以上
+        if (isAuto) return {}; // 假设自动模式下不开启
+        // Gemini 2.5 使用 thinking_budget
+        return { thinking_budget: isManual ? 8192 : 0 }; // 开启时给一个预算，关闭时为0
+    },
+    'claude': (isManual, isAuto) => {
+        if (isAuto) return {}; // Claude 没有 auto 模式
+        return {
+            thinking: {
+                type: isManual ? 'enabled' : 'disabled'
+            }
+        };
+    }
+};
+
 
 /**
  * 发送消息到后端 API。
@@ -74,6 +109,29 @@ export async function send(messagesHistory, onStreamChunk, signal) {
             } else {
                 bodyPayload.max_tokens = state.currentMaxTokens;
             }
+        }
+
+        // ★★★ 核心逻辑：根据模型和开关状态，动态添加思考参数 ★★★
+        const isManualThinkEnabled = state.isManualThinkModeEnabled;
+        const isAutoThinkEnabled = state.isAutoThinkModeEnabled;
+
+        for (const keyword in thinkingParamConfig) {
+            if (modelNameLower.includes(keyword)) {
+                const paramGenerator = thinkingParamConfig[keyword];
+                const thinkingParams = paramGenerator(isManualThinkEnabled, isAutoThinkEnabled);
+                
+                // 将生成的参数合并到 bodyPayload 中
+                Object.assign(bodyPayload, thinkingParams);
+                
+                // 匹配成功后即可退出循环，避免重复匹配 (例如 'gemini-1.' 和 'gemini-2.')
+                break; 
+            }
+        }
+                let forceSimpleContentForQwen = false;
+        if (modelNameLower.includes('qwen')) {
+            // 只要是 Qwen 模型，并且我们尝试控制思考（无论开关是true还是false），
+            // 都应该使用纯文本格式以确保开关生效。
+            forceSimpleContentForQwen = true;
         }
     
         switch (providerConfig.mapperType) {

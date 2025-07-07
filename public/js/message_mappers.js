@@ -107,70 +107,78 @@ export function mapMessagesForGemini(messagesHistory) {
 
 /**
  * 将内部对话历史映射为 OpenAI, Anthropic, Ollama 等 API 所需的 `messages` 格式。
- * (重构版 V2：默认使用 OpenAI 附件格式，仅对特例进行处理，增强可扩展性)
- * @param {Array} messagesHistory - 内部对话历史数组
- * @param {string} provider - API 提供商 ('openai', 'anthropic', 'ollama', etc.)
- * @returns {Array} - 符合 API规范的 messages 数组
+ * (V3 版：支持 forceSimpleContent 标志，并优化了代码结构)
+ *
+ * @param {Array} messagesHistory - 内部对话历史数组。
+ * @param {string} provider - API 提供商的小写标识符 ('openai', 'anthropic', 'ollama', etc.)。
+ * @param {boolean} [forceSimpleContent=false] - 如果为 true，则强制用户消息的 content 字段为纯字符串，忽略所有文件和富文本结构。
+ * @returns {Array} - 符合目标 API 规范的 messages 数组。
  */
-export function mapMessagesForStandardOrClaude(messagesHistory, provider) {
-    // 1. 直接遍历历史记录，一次性、完整地构建 API 所需的 messages 数组
+export function mapMessagesForStandardOrClaude(messagesHistory, provider, forceSimpleContent = false) {
     const mappedApiMessages = messagesHistory.map(msg => {
-        // --- 1a. 处理 System 消息 ---
+        // 1. 处理 System 消息
+        // Anthropic 和 Ollama 的 system 消息在 API 调用顶层单独处理，这里返回 null 以便过滤掉。
         if (msg.role === 'system') {
             if (provider === 'anthropic' || provider === 'ollama') return null;
             return { role: 'system', content: msg.content };
         }
 
-        // --- 1b. 处理 Assistant 消息 ---
+        // 2. 处理 Assistant 消息
         if (msg.role === 'assistant' || msg.role === 'model') {
-            const assistantContent = (typeof msg.content === 'string') ? msg.content : (msg.content?.text || JSON.stringify(msg.content));
+            // 确保 content 是字符串
+            const assistantContent = (typeof msg.content === 'string') 
+                ? msg.content 
+                : (msg.content?.text || ''); // 如果是对象，则取 text，否则为空字符串
             return { role: 'assistant', content: assistantContent };
         }
 
-        // --- 1c. 处理 User 消息 (核心重构部分) ---
+        // 3. 处理 User 消息 (核心逻辑)
         if (msg.role === 'user') {
-            const contentParts = [];
+            // 提取核心文本，无论 content 是字符串还是对象
             let mainText = '';
-            // ★ 新增：用于 Ollama 的图片数组
-            const ollamaImages = [];
-
-            // 提取文本内容
             if (typeof msg.content === 'string') {
                 mainText = msg.content;
             } else if (msg.content && typeof msg.content.text === 'string') {
                 mainText = msg.content.text;
             }
+
+            // ★ 如果设置了 forceSimpleContent，则直接返回纯文本格式的消息 ★
+            if (forceSimpleContent) {
+                return { role: 'user', content: mainText.trim() || ' ' };
+            }
+
+            // --- 以下是处理富文本和多模态内容的逻辑 ---
             
-            // 对于非 Ollama 的 provider，总是先添加文本部分
-            // 注意：Ollama的图片是独立字段，不通过contentParts
-            if (provider !== 'ollama' && (mainText.trim() || contentParts.length === 0)) { // 确保文本部分不为空，或无其他内容时作为占位符
+            const contentParts = [];
+            const ollamaImages = []; // Ollama 的图片是特殊字段
+            const files = msg.content?.files || [];
+
+            // 总是先添加文本部分 (除非是 Ollama 且没有文本)
+            if (provider !== 'ollama' || mainText.trim()) {
                 contentParts.push({ type: 'text', text: mainText.trim() || ' ' });
             }
 
-
-            // ★★★ 核心修复：重构文件处理逻辑为 "默认 + 特例" 模式 ★★★
-            const files = msg.content?.files || [];
+            // 遍历文件并根据 provider 规则进行处理
             if (files.length > 0) {
-                files.forEach(fileData => {
+                for (const fileData of files) {
                     const isImage = fileData.type?.startsWith('image/');
                     
-                    // --- 特例1：Ollama ---
-                    // 对于 Ollama，图片添加到 ollamaImages 数组，其他文件文本化
+                    if (!fileData.base64) continue; // 跳过没有 Base64 数据的文件
+
+                    // 特例 1: Ollama
                     if (provider === 'ollama') {
                         if (isImage) {
-                            // Ollama 通常期望纯 base64 字符串，不带 data URL 前缀
-                            ollamaImages.push(fileData.base64.split(',')[1]); 
-                        } else if (fileData.base64) { 
+                            ollamaImages.push(fileData.base64.split(',')[1]);
+                        } else {
                             try {
                                 const decodedContent = atob(fileData.base64.split(',')[1]);
                                 mainText += `\n\n--- 附件内容 (${fileData.name}): ---\n${decodedContent}\n--- 附件内容结束 ---`;
                             } catch (e) {
-                                mainText += `\n(无法解析附件: ${fileData.name})`;
+                                console.warn(`Failed to decode attachment for Ollama: ${fileData.name}`, e);
                             }
                         }
                     } 
-                    // --- 特例2：Anthropic ---
-                    // 对图片使用其专有格式
+                    // 特例 2: Anthropic 图片
                     else if (provider === 'anthropic' && isImage) {
                         contentParts.push({
                             type: "image",
@@ -181,17 +189,14 @@ export function mapMessagesForStandardOrClaude(messagesHistory, provider) {
                             }
                         });
                     } 
-                    // --- 默认行为 (适用于 OpenAI, Siliconflow, Deepseek, OpenRouter 等所有其他 provider) ---
+                    // 默认行为 (OpenAI 兼容)
                     else {
-                        // 如果是图片，使用 OpenAI 的 image_url 格式
                         if (isImage) {
                             contentParts.push({
                                 type: "image_url",
-                                image_url: { url: fileData.base64 } // 发送 base64 Data URL
+                                image_url: { url: fileData.base64 }
                             });
-                        } 
-                        // 如果是其他文件（非图片），将其内容作为文本 part 添加
-                        else if (fileData.base64) {
+                        } else {
                             try {
                                 const decodedContent = atob(fileData.base64.split(',')[1]);
                                 contentParts.push({
@@ -199,41 +204,37 @@ export function mapMessagesForStandardOrClaude(messagesHistory, provider) {
                                     text: `\n\n--- 附件内容 (${fileData.name}): ---\n${decodedContent}\n--- 附件内容结束 ---`
                                 });
                             } catch (e) {
-                                contentParts.push({
-                                    type: 'text',
-                                    text: `\n\n--- 附件 (无法解析): ${fileData.name} ---`
-                                });
+                                console.warn(`Failed to decode attachment for standard provider: ${fileData.name}`, e);
                             }
                         }
                     }
-                });
+                }
             }
 
-            // 返回最终构件好的消息对象
+            // 根据 provider 返回最终格式
             if (provider === 'ollama') {
                 const ollamaMessage = { role: 'user', content: mainText.trim() || ' ' };
-                // ★ 核心修复：只有当有图片时才添加 images 字段
                 if (ollamaImages.length > 0) {
                     ollamaMessage.images = ollamaImages;
                 }
                 return ollamaMessage;
             } else {
-                 // 如果 contentParts 为空（例如只发了一个不支持的文件），确保至少有一个文本 part
+                // 对于标准 provider，如果没有任何内容 parts，确保至少有一个空的文本 part
                 if (contentParts.length === 0) {
                     contentParts.push({ type: 'text', text: ' ' });
                 }
-                // 如果第一个文本 part 为空，但后面有其他内容，将其填充一下
+                // 如果第一个是空文本但后面有图片，确保它不是完全空的字符串
                 if (contentParts[0].type === 'text' && !contentParts[0].text.trim() && contentParts.length > 1) {
                     contentParts[0].text = ' ';
                 }
                 return { role: 'user', content: contentParts };
             }
         }
-        return null;
-    }).filter(Boolean); // 过滤掉返回 null 的消息 (例如 Anthropic 的 system 消息)
+        
+        return null; // 对于未处理的角色，返回 null
+    }).filter(Boolean); // 过滤掉所有返回 null 的条目
 
-    // 2. Anthropic 的特殊规则：不允许连续的用户消息
-    // 如果是 Anthropic，并且出现连续的用户消息，需要合并它们
+    // 4. 后处理：合并 Anthropic 的连续用户消息
     if (provider === 'anthropic' && mappedApiMessages.length > 1) {
         const mergedMessages = [mappedApiMessages[0]];
         for (let i = 1; i < mappedApiMessages.length; i++) {
@@ -241,7 +242,7 @@ export function mapMessagesForStandardOrClaude(messagesHistory, provider) {
             const currentMessage = mappedApiMessages[i];
 
             if (currentMessage.role === 'user' && prevMessage.role === 'user') {
-                // 合并内容
+                // 合并内容数组
                 prevMessage.content.push(...currentMessage.content);
             } else {
                 mergedMessages.push(currentMessage);

@@ -275,3 +275,67 @@ export async function deleteFilesFromDB(fileIds) {
         console.error(`Failed to delete files from IndexedDB:`, error);
     }
 }
+
+/**
+ * 在客户端调整图片尺寸。
+ * @param {File} file - 原始图片文件对象。
+ * @param {number} maxWidthOrHeight - 调整后的最大宽度或高度。
+ * @returns {Promise<File>} - 一个 Promise，解析为一个新的、被压缩后的 File 对象。
+ */
+export function resizeImage(file, maxWidthOrHeight = 1920) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let { width, height } = img;
+
+                // 计算缩放比例，保持宽高比
+                if (width > height) {
+                    if (width > maxWidthOrHeight) {
+                        height *= maxWidthOrHeight / width;
+                        width = maxWidthOrHeight;
+                    }
+                } else {
+                    if (height > maxWidthOrHeight) {
+                        width *= maxWidthOrHeight / height;
+                        height = maxWidthOrHeight;
+                    }
+                }
+
+                canvas.width = width;
+                canvas.height = height;
+
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
+
+                // 将 canvas 转换为 Blob 对象，并指定为 JPEG 格式以进行有损压缩
+                // 0.8 是一个比较均衡的图片质量设置
+                canvas.toBlob(
+                    (blob) => {
+                        if (blob) {
+                            // 创建一个新的 File 对象，保留原始文件名和类型
+                            const newFile = new File([blob], file.name, {
+                                type: 'image/jpeg',
+                                lastModified: Date.now(),
+                            });
+                            resolve(newFile);
+                        } else {
+                            reject(new Error('Canvas to Blob conversion failed.'));
+                        }
+                    },
+                    'image/jpeg',
+                    0.8 
+                );
+            };
+            img.onerror = reject;
+            // 将读取的文件数据（Base64）赋给 Image 对象的 src
+            img.src = event.target.result;
+        };
+        reader.onerror = reject;
+        // 以 Data URL (Base64) 形式读取文件，以便在 Image 对象中使用
+        reader.readAsDataURL(file);
+    });
+}

@@ -326,9 +326,6 @@ function loadConversationFlow(conversationId) {
 
 
 
-/**
- * 协调文件选择流程 (确保 fileObject 被存储)
- */
 async function handleFileSelection(event) {
     const files = event.target.files;
     if (!files || files.length === 0) return;
@@ -339,20 +336,45 @@ async function handleFileSelection(event) {
         return;
     }
 
-    for (const file of files) {
-        if (file.size > 10 * 1024 * 1024) { // 10MB
-            utils.showToast(`文件 "${file.name}" 过大 (超过 10MB)。`, 'warning');
-            continue; 
+    // 显示一个临时的加载提示
+    utils.showToast('正在处理文件...', 'info');
+
+    for (const originalFile of files) {
+        let fileToProcess = originalFile; // 默认使用原始文件
+
+        const isImage = fileToProcess.type.startsWith('image/');
+        const RESIZE_THRESHOLD_MB = 1; // 超过 1MB 的图片就进行压缩
+        const MAX_FILE_SIZE_MB = 10; // 非图片文件的最大限制
+
+        // highlight-start
+        // ★★★ 核心逻辑：如果是大图片，则进行压缩 ★★★
+        if (isImage && fileToProcess.size > RESIZE_THRESHOLD_MB * 1024 * 1024) {
+            try {
+                console.log(`Resizing image: ${fileToProcess.name}, original size: ${(fileToProcess.size / 1024 / 1024).toFixed(2)} MB`);
+                // 调用压缩工具，最大边长为 1920px
+                fileToProcess = await utils.resizeImage(fileToProcess, 1920);
+                console.log(`Resized image: ${fileToProcess.name}, new size: ${(fileToProcess.size / 1024 / 1024).toFixed(2)} MB`);
+            } catch (error) {
+                console.error("Image resize failed:", error);
+                utils.showToast(`图片 "${originalFile.name}" 压缩失败。`, 'error');
+                continue; // 跳过这个失败的文件
+            }
+        } 
+        // highlight-end
+        else if (!isImage && fileToProcess.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+             // 对于非图片文件，只做大小检查
+            utils.showToast(`文件 "${originalFile.name}" 过大 (超过 ${MAX_FILE_SIZE_MB}MB)。`, 'warning');
+            continue;
         }
+
+        // 使用处理后的文件（可能是原始的，也可能是压缩过的）
+        const objectURL = URL.createObjectURL(fileToProcess);
         
-        const objectURL = URL.createObjectURL(file);
-        
-        // ★★★ 关键：确保原始的 file 对象被存储在 fileObject 属性中 ★★★
         state.uploadedFilesData.push({ 
-            name: file.name, 
-            type: file.type, 
-            fileObject: file,      // 存储原始文件对象，用于在提交时读取
-            previewUrl: objectURL  // 存储临时URL，用于UI预览
+            name: fileToProcess.name, 
+            type: fileToProcess.type, 
+            fileObject: fileToProcess, // ★ 存储处理后的文件对象
+            previewUrl: objectURL
         });
     }
 

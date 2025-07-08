@@ -1162,10 +1162,10 @@ async function initializeApp() {
     loadConversationFlow(idToLoad);
 
     // 最后的UI更新
-    ui.renderConversationList(); // ★ 访问 ui.renderConversationList
-    ui.enableInlineTitleEdit(); // ★ 访问 ui.enableInlineTitleEdit
+    ui.renderConversationList(); 
+    ui.enableInlineTitleEdit(); 
     ui.enableConversationDrag(ui.ui.conversationList.querySelector('#draggable-conversation-list')); // ★ 访问 ui.ui.conversationList, ui.enableConversationDrag
-    ui.autoResizePromptInput(); // ★ 访问 ui.autoResizePromptInput
+    ui.autoResizePromptInput(); 
 }
 
 // ========================================================================

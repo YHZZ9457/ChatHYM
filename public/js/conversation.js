@@ -106,7 +106,6 @@ export function findChildrenOf(conv, parentId) {
 
 /**
  * 根据 activeMessageId，回溯查找并返回当前分支的线性消息历史。
- * (最终修正版，兼容旧数据，并确保系统指令始终包含在内)
  * @param {object} conv - 对话对象。
  * @returns {Array} - 一个线性的消息数组，按时间顺序排列。
  */
@@ -140,7 +139,7 @@ export function getCurrentBranchMessages(conv) {
         //     或者是一个全新的对话（activeMessageId 初始为 null）
         //     直接返回所有消息，并尝试自动设置 activeMessageId。
         
-        // ★ 自动升级逻辑：将所有消息视为一个线性分支，并设置 activeMessageId
+        // ★ 将所有消息视为一个线性分支，并设置 activeMessageId
         branch = [...conv.messages]; // 复制所有消息
         const lastMessage = branch[branch.length - 1];
         if (lastMessage) {

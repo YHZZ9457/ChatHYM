@@ -15,17 +15,20 @@ import { mapMessagesForGemini, mapMessagesForStandardOrClaude } from './message_
 // ========================================================================
 
 const thinkingParamConfig = {
-    // 关键词 -> 参数生成函数
+    // highlight-start
+    // ★★★ 核心修复：为 qwen3 添加配置 ★★★
     'qwen3': (isManual, isAuto) => {
         if (isAuto) return {}; // Qwen 在自动模式下由模型自行决定，不加参数
         return {
             extra_body: {
                 chat_template_kwargs: {
-                    enable_thinking: isManual
+                    // 请注意：这里使用的是 enable_thinking，修正了您问题中的拼写错误
+                    enable_thinking: isManual 
                 }
             }
         };
     },
+    // highlight-end
     'doubao': (isManual, isAuto) => {
         if (isAuto) return { thinking_mode: 'auto' };
         return { thinking_mode: isManual ? 'enabled' : 'disabled' };
@@ -120,19 +123,21 @@ export async function send(messagesHistory, onStreamChunk, signal) {
                 const paramGenerator = thinkingParamConfig[keyword];
                 const thinkingParams = paramGenerator(isManualThinkEnabled, isAutoThinkEnabled);
                 
-                // 将生成的参数合并到 bodyPayload 中
                 Object.assign(bodyPayload, thinkingParams);
                 
-                // 匹配成功后即可退出循环，避免重复匹配 (例如 'gemini-1.' 和 'gemini-2.')
                 break; 
             }
         }
-                let forceSimpleContentForQwen = false;
+        
+        // highlight-start
+        // ★★★ 核心修复：为 Qwen 模型设置强制纯文本内容的标志 ★★★
+        let forceSimpleContentForQwen = false;
         if (modelNameLower.includes('qwen')) {
-            // 只要是 Qwen 模型，并且我们尝试控制思考（无论开关是true还是false），
+            // 只要是 Qwen 模型（包括 qwen3），并且我们尝试控制思考（无论开关是true还是false），
             // 都应该使用纯文本格式以确保开关生效。
             forceSimpleContentForQwen = true;
         }
+        // highlight-end
     
         switch (providerConfig.mapperType) {
             case 'gemini':
@@ -155,7 +160,10 @@ export async function send(messagesHistory, onStreamChunk, signal) {
                 
             case 'standard':
             default:
-                bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower);
+                // highlight-start
+                // ★★★ 核心修复：将 forceSimpleContentForQwen 标志传递给映射函数 ★★★
+                bodyPayload.messages = mapMessagesForStandardOrClaude(messagesHistory, providerLower, forceSimpleContentForQwen);
+                // highlight-end
                 delete bodyPayload.contents;
                 break;
         }
@@ -237,24 +245,23 @@ export async function send(messagesHistory, onStreamChunk, signal) {
 
                                 if (replyDelta || usageForUnit) {
                                     if (replyDelta) accumulatedAssistantReply += replyDelta;
-                                    // Gemini 不提供独立思考过程流
                                     if (usageForUnit) {
                                         if (!usageData) usageData = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
                                         usageData.prompt_tokens = Math.max(usageData.prompt_tokens, usageForUnit.prompt_tokens || 0);
-                                        usageData.completion_tokens = usageForUnit.completion_tokens; // Gemini's is cumulative
+                                        usageData.completion_tokens = usageForUnit.completion_tokens; 
                                         usageData.total_tokens = usageData.prompt_tokens + usageData.completion_tokens;
                                     }
                                     onStreamChunk({
-        reply: accumulatedAssistantReply,     // <-- 修改这里
-        reasoning: accumulatedThinkingForDisplay, // <-- 修改这里
-        usage: usageForUnit                   // 这个保持不变
-    });
+                                        reply: accumulatedAssistantReply,
+                                        reasoning: accumulatedThinkingForDisplay,
+                                        usage: usageForUnit
+                                    });
                                 }
                             } catch (e) {
                                 console.warn('[API Stream Error - Gemini] Failed to parse JSON chunk:', e, `Raw: "${jsonDataString}"`);
                             }
                         } else {
-                            break; // 没有找到完整的 JSON，等待更多数据
+                            break; 
                         }
                     }
                     buffer = buffer.substring(processedLength);
@@ -309,20 +316,16 @@ export async function send(messagesHistory, onStreamChunk, signal) {
                                         usageForUnit = { output_tokens: chunkObj.usage.output_tokens };
                                     }
                                     break;
-                                default: // Default OpenAI compatible SSE
-    const delta = chunkObj.choices?.[0]?.delta;
-    if (delta) {
-        // highlight-start
-        // ★★★ 核心修复：明确提取 content 和 reasoning_content ★★★
-        replyDelta = delta.content || '';
-        // 兼容 'reasoning_content' 和 'reasoning' 两种可能的字段名
-        reasoningDelta = delta.reasoning_content || delta.reasoning || '';
-        // highlight-end
-    }
-    if (chunkObj.usage) {
-        usageForUnit = chunkObj.usage;
-    }
-    break;
+                                default: 
+                                    const delta = chunkObj.choices?.[0]?.delta;
+                                    if (delta) {
+                                        replyDelta = delta.content || '';
+                                        reasoningDelta = delta.reasoning_content || delta.reasoning || '';
+                                    }
+                                    if (chunkObj.usage) {
+                                        usageForUnit = chunkObj.usage;
+                                    }
+                                    break;
                             }
 
                             if (replyDelta || reasoningDelta || usageForUnit) {
@@ -335,18 +338,18 @@ export async function send(messagesHistory, onStreamChunk, signal) {
                                     
                                     const completionDelta = usageForUnit.completion_tokens || usageForUnit.output_tokens || 0;
                                     if (providerLower === 'anthropic' || providerLower === 'ollama') {
-                                        usageData.completion_tokens = completionDelta; // Cumulative
+                                        usageData.completion_tokens = completionDelta; 
                                     } else {
-                                        if (completionDelta > 0) usageData.completion_tokens = completionDelta; // Typically last chunk
+                                        if (completionDelta > 0) usageData.completion_tokens = completionDelta;
                                     }
                                     usageData.total_tokens = usageData.prompt_tokens + usageData.completion_tokens;
                                 }
 
                                 onStreamChunk({
-        reply: accumulatedAssistantReply, // 正确：传递累积后的完整回复
-        reasoning: accumulatedThinkingForDisplay,
-        usage: usageForUnit
-    });
+                                    reply: accumulatedAssistantReply,
+                                    reasoning: accumulatedThinkingForDisplay,
+                                    usage: usageForUnit
+                                });
                             }
                         } catch (e) {
                             console.warn('[API Stream Error - SSE/Line] Failed to parse JSON chunk:', e, `Raw: "${jsonDataString}"`);
@@ -399,7 +402,6 @@ export async function send(messagesHistory, onStreamChunk, signal) {
             accumulatedThinkingForDisplay = finalReasoning;
         }
 
-        // 最终返回前统一处理 accumulatedAssistantReply 和 accumulatedThinkingForDisplay
         if (!(accumulatedThinkingForDisplay?.trim()) && accumulatedAssistantReply.includes('<think>') && accumulatedAssistantReply.includes('</think>')) {
             const extraction = utils.extractThinkingAndReply(accumulatedAssistantReply, '<think>', '</think>');
             accumulatedAssistantReply = extraction.replyText.trim();
@@ -434,7 +436,7 @@ export async function send(messagesHistory, onStreamChunk, signal) {
 
             return {
                 success: true,
-                reply: (abortedReply || "") + "\n（state用户已中止）",
+                reply: (abortedReply || "") + "\n（用户已中止）",
                 reasoning: abortedReasoning,
                 usage: usageData,
                 role: providerLower === 'gemini' ? 'model' : 'assistant',
@@ -776,4 +778,3 @@ export async function getWebSearchStatus() {
         return { urlConfigured: false, keyConfigured: false };
     }
 }
-// --- END OF FILE js/api.js (Corrected) ---

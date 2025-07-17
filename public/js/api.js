@@ -178,7 +178,13 @@ export async function send(messagesHistory, onStreamChunk, signal) {
         if (!response.ok) {
             const errorBody = await response.text();
             console.error(`[API Send] API Error (${response.status} - ${providerLower}):`, errorBody);
+
+            let errorMessage = `API Error (${response.status}): ${errorBody}`; // 基本错误信息
+
             try {
+                if (response.status === 401) errorMessage = "认证失败：请检查您的 API 密钥。";
+                else if (response.status === 400) errorMessage = "请求错误：请检查您的输入或模型参数。";
+                else if (response.status >= 500) errorMessage = "服务器错误：请稍后再试。";
                 const errorJson = JSON.parse(errorBody);
                 throw new Error(errorJson.error?.message || JSON.stringify(errorJson));
             } catch (e) {
@@ -361,7 +367,7 @@ export async function send(messagesHistory, onStreamChunk, signal) {
             console.log("[API Send] Response is NOT streaming (or not detected as such). Processing as full JSON response.");
             const responseData = await response.json();
             if (!response.ok) throw new Error(responseData.error?.message || JSON.stringify(responseData));
-            
+
             let finalReply = '', finalReasoning = null;
             switch(providerLower) {
                 case 'gemini':

@@ -16,6 +16,10 @@ export const ui = {};
 let modelGroupSortable = null;
 const modelOptionSortables = [];
 let presetSortable = null;
+// highlight-start
+// ★ 新增：用于 MathJax 实时渲染的防抖计时器
+let mathjaxDebounceTimer = null;
+// highlight-end
 
 // ========================================================================
 // 3. UI 初始化
@@ -1123,7 +1127,9 @@ export function renderMessageContent(role, text, isApiError = false) {
         );
 
         // 进行 Markdown 渲染
-        renderedHtml = marked.parse(processedText);
+        const rawHtml = marked.parse(processedText);
+        // ★★★ 核心：使用 DOMPurify 净化 HTML，防止 XSS 攻击 ★★★
+        renderedHtml = DOMPurify.sanitize(rawHtml);
 
         // 后处理：移除代码块的额外空白行
         const tempDiv = document.createElement('div');
@@ -2143,11 +2149,23 @@ export function renderStreamedContent(targetElement, fullText) {
     // 5. 后处理：为代码块添加复制按钮
     processPreBlocksForCopyButtons(targetElement);
 
-    // 6. 后处理：重新排版 MathJax 公式
+    // highlight-start
+    // ★★★ 核心修改：对 MathJax 调用进行防抖处理，以实现流畅的实时渲染 ★★★
+    // 每次流更新时，Markdown 内容会立即更新。
+    // MathJax 的重新排版则会延迟一小段时间（例如 300ms）。
+    // 这可以防止在快速打字时，公式不断闪烁和重绘，大大提升视觉体验和性能。
     if (window.MathJax?.typesetPromise) {
-        // 使用 then() 来避免在排版完成前执行其他操作
-        window.MathJax.typesetPromise([targetElement]).catch(err => console.error("MathJax typesetting failed during stream:", err));
+        // 如果已有计时器在运行，则清除它
+        if (mathjaxDebounceTimer) {
+            clearTimeout(mathjaxDebounceTimer);
+        }
+        // 设置一个新的计时器
+        mathjaxDebounceTimer = setTimeout(() => {
+            window.MathJax.typesetPromise([targetElement])
+                .catch(err => console.error("MathJax typesetting failed during stream:", err));
+        }, 300); // 延迟300毫秒执行，这个值可以根据体验调整
     }
+    // highlight-end
 }
 
 /**

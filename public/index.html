@@ -237,8 +237,6 @@
                     </div>
                 </div>
                 
-                <!-- highlight-start -->
-                <!-- ★★★ 核心修复：联网搜索配置应该在这里，作为设置页面的一部分 ★★★ -->
                 <div class="setting-group">
                     <div class="setting-item">
                         <label>联网搜索配置</label>
@@ -265,8 +263,6 @@
                         </div>
                     </div>
                 </div>
-                <!-- highlight-end -->
-
                 <div class="collapsible-info-section">
                     <div class="collapsible-item">
                         <button type="button" class="collapsible-trigger">
@@ -320,7 +316,6 @@
             </section>
 
             <!-- highlight-start -->
-            <!-- ★★★ 核心修复：Provider Management Area 应该在 <main> 内部 ★★★ -->
             <section id="provider-management-area" class="settings-area" style="display: none;">
                 <div class="settings-header-container">
                     <h2>API 提供商管理</h2>
@@ -526,7 +521,7 @@
     <script>
         window.MathJax = {
             tex: {
-                inlineMath: [['\\(', '\\)']],
+                inlineMath: [['\\(', '\\)'],['$', '$']],
                 displayMath: [['$$', '$$'], ['\\[', '\\]']],
             },
             svg: {
@@ -536,10 +531,9 @@
     </script>
     <script defer id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 
-    <!-- highlight-start -->
-    <!-- ★★★ 核心修复：确保只有一个 script.js 引用 ★★★ -->
+
     <script type="module" src="./js/script.js"></script>
-    <!-- highlight-end -->
+
 
 </body>
 </html>

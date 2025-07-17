@@ -6,18 +6,18 @@
       "options": [
         {
           "text": "OR Deepseek-R1 8B",
-          "value": "openrouter::deepseek/deepseek-r1-0528-qwen3-8b",
+          "value": "openrouter::deepseek/deepseek-r1-0528-qwen3-8b:free",
           "isHidden": false
         },
         {
           "text": "OR Deepseek-R1",
           "value": "openrouter::deepseek/deepseek-r1-0528",
-          "isHidden": false
+          "isHidden": true
         },
         {
           "text": "OR Deepseek-V3",
           "value": "openrouter::deepseek/deepseek-chat-v3-0324",
-          "isHidden": false
+          "isHidden": true
         },
         {
           "text": "OR GPT4o-mini",
@@ -35,6 +35,16 @@
           "isHidden": false
         },
         {
+          "text": "OR Gemini 2.5 Flash",
+          "value": "openrouter::google/gemini-2.5-flash",
+          "isHidden": false
+        },
+        {
+          "text": "OR Gemini 2.5FL",
+          "value": "openrouter::google/gemini-2.5-flash-lite-preview-06-17",
+          "isHidden": false
+        },
+        {
           "text": "OR Qwen3-235B-A22B",
           "value": "openrouter::qwen/qwen3-235b-a22b",
           "isHidden": false
@@ -42,17 +52,7 @@
         {
           "text": "OR Gemma3 27B",
           "value": "openrouter::google/gemma-3-27b-it",
-          "isHidden": true
-        },
-        {
-          "text": "OR Deepseek R1 70B",
-          "value": "openrouter::deepseek/deepseek-r1-distill-llama-70b",
-          "isHidden": true
-        },
-        {
-          "text": "OR Mistal Nemo",
-          "value": "openrouter::mistralai/mistral-nemo",
-          "isHidden": true
+          "isHidden": false
         },
         {
           "text": "OR Grok3 Mini",
@@ -67,6 +67,11 @@
         {
           "text": "OR Qwen3-32B",
           "value": "openrouter::qwen/qwen3-32b",
+          "isHidden": true
+        },
+        {
+          "text": "OR GPT 4.1-mini",
+          "value": "openrouter::openai/gpt-4.1-mini",
           "isHidden": false
         },
         {
@@ -75,28 +80,28 @@
           "isHidden": false
         },
         {
-          "text": "OR Gemini 2.5FL",
-          "value": "openrouter::google/gemini-2.5-flash-lite-preview-06-17",
+          "text": "OR Magistral Small",
+          "value": "openrouter::mistralai/magistral-small-2506",
           "isHidden": false
         },
         {
-          "text": "OR Magistral Small",
-          "value": "openrouter::mistralai/magistral-small-2506",
-          "isHidden": true
-        },
-        {
-          "text": "OR Qwen3-8B",
-          "value": "openrouter::qwen/qwen3-8b-04-28",
-          "isHidden": true
-        },
-        {
-          "text": "OR Minimax-M1",
-          "value": "openrouter::minimax/minimax-m1",
-          "isHidden": true
+          "text": "OR Grok-4",
+          "value": "openrouter::x-ai/grok-4",
+          "isHidden": false
         },
         {
           "text": "OR Cypher Alpha",
           "value": "openrouter::openrouter/cypher-alpha:free",
+          "isHidden": true
+        },
+        {
+          "text": "OR Devstral Small",
+          "value": "openrouter::mistralai/devstral-small",
+          "isHidden": false
+        },
+        {
+          "text": "OR Devstral Medium",
+          "value": "openrouter::mistralai/devstral-medium",
           "isHidden": false
         }
       ]
@@ -204,6 +209,16 @@
         {
           "text": "SF GLM-4.1V 9B",
           "value": "siliconflow::Pro/THUDM/GLM-4.1V-9B-Thinking",
+          "isHidden": false
+        },
+        {
+          "text": "SF Pangu-72B",
+          "value": "siliconflow::ascend-tribe/pangu-pro-moe",
+          "isHidden": false
+        },
+        {
+          "text": "SF Kimi K2",
+          "value": "siliconflow::moonshotai/Kimi-K2-Instruct",
           "isHidden": false
         }
       ]
@@ -338,8 +353,8 @@
         },
         {
           "text": "Grok 4",
-          "value": "xai::grok-4-0629",
-          "isHidden": true
+          "value": "xai::grok-4-0709",
+          "isHidden": false
         }
       ]
     },

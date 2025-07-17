@@ -197,6 +197,7 @@ export function addMessageToConversation(targetConv, role, content, metadata = {
         parentId: targetConv.activeMessageId, 
         role,
         content, // content 现在应该已经包含了正确的 files 数组（只有ID，没有Base64）
+        timestamp: Date.now(), // 添加时间戳
         ...metadata,
     };
 

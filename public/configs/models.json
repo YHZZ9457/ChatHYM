@@ -11,8 +11,8 @@
         },
         {
           "text": "OR Deepseek-R1",
-          "value": "openrouter::deepseek/deepseek-r1-0528",
-          "isHidden": true
+          "value": "openrouter::deepseek/deepseek-r1-0528:free",
+          "isHidden": false
         },
         {
           "text": "OR Deepseek-V3",

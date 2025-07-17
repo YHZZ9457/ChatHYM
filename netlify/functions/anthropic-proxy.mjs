@@ -113,18 +113,39 @@ export default async function handler(request) {
     }
 
     if (isStream && apiResponse.body) {
-        // Anthropic's streaming response is text/event-stream (SSE).
-        // We directly pipe the raw stream to the client.
-        console.log("[Anthropic Proxy] Streaming response: Piping raw response body.");
-        return new Response(apiResponse.body, {
-            status: 200,
-            headers: {
-                'Content-Type': 'text/event-stream',
-                'Cache-Control': 'no-cache',
-                'Connection': 'keep-alive',
-                'Access-Control-Allow-Origin': '*',
-            },
-        });
+      // 手动处理流，添加结束标记
+      console.log("[Anthropic Proxy] Handling streaming response and adding end marker.");
+      const transformedStream = new ReadableStream({
+          async start(controller) {
+              const reader = apiResponse.body.getReader();
+              let done = false;
+              while (!done) {
+                  const { value, done: readerDone } = await reader.read();
+                  done = readerDone;
+                  if (value) {
+                      controller.enqueue(value); // 转发数据块
+                  }
+              }
+              // 在流结束时，添加 SSE 结束标记
+              const encoder = new TextEncoder();
+              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+              controller.close();
+              console.log("[Anthropic Proxy] Streaming response complete, end marker added.");
+          },
+          cancel() {
+              reader.cancel(); // 支持取消
+          }
+      });
+  
+      return new Response(transformedStream, {
+          status: 200,
+          headers: {
+              'Content-Type': 'text/event-stream',
+              'Cache-Control': 'no-cache',
+              'Connection': 'keep-alive',
+              'Access-Control-Allow-Origin': '*',
+          },
+      });
     } else {
       console.log("[Anthropic Proxy] Non-streaming response: Reading full JSON.");
       const json = await apiResponse.json();

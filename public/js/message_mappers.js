@@ -154,8 +154,10 @@ export function mapMessagesForStandardOrClaude(messagesHistory, provider, forceS
             const files = msg.content?.files || [];
 
             // 总是先添加文本部分 (除非是 Ollama 且没有文本)
-            if (provider !== 'ollama' || mainText.trim()) {
-                contentParts.push({ type: 'text', text: mainText.trim() || ' ' });
+            // ★ 核心修复：仅当 mainText 实际包含非空白内容时，才添加文本部分。
+            // 这可以防止在仅上传文件时，自动添加一个空的或只含空格的文本块，从而导致 Anthropic API 报错。
+            if (mainText.trim()) {
+                contentParts.push({ type: 'text', text: mainText.trim() });
             }
 
             // 遍历文件并根据 provider 规则进行处理

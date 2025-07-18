@@ -3599,3 +3599,31 @@ body.light-theme .message code {
     /* switch 本身的样式不需要大改，flexbox 会处理好它的位置 */
     margin: 0; /* 移除可能存在的默认 margin */
 }
+
+/* ========================================================================
+   20. Drag and Drop Overlay
+   ======================================================================== */
+.chat-area.drag-over {
+  position: relative; /* 为伪元素的绝对定位提供基准 */
+}
+
+/* 拖拽覆盖层的样式 */
+.chat-area.drag-over::before {
+  content: '拖拽文件到此处以上传';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(var(--primary-rgb), 0.3); /* 使用主题颜色并增加透明度 */
+  color: #ffffff; 
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 1.5rem;
+  font-weight: bold;
+  border: 3px dashed var(--primary); /* 使用主题的主色作为虚线边框 */
+  border-radius: var(--border-radius-lg);
+  z-index: 100; /* 确保覆盖层在最上方 */
+  pointer-events: none; /* 非常重要！让鼠标事件可以穿透这个覆盖层，否则 drop 事件不会触发 */
+}

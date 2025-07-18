@@ -325,9 +325,11 @@ function loadConversationFlow(conversationId) {
 
 
 
-
-async function handleFileSelection(event) {
-    const files = event.target.files;
+/**
+ * 处理文件选择或粘贴的通用函数。
+ * @param {FileList | File[]} files - 要处理的文件列表。
+ */
+async function processFiles(files) {
     if (!files || files.length === 0) return;
 
     const MAX_FILES = 5;
@@ -379,7 +381,13 @@ async function handleFileSelection(event) {
     }
 
     ui.renderFilePreview();
-    event.target.value = null; 
+}
+
+async function handleFileSelection(event) {
+    // 从文件输入事件中获取文件并处理
+    await processFiles(event.target.files);
+    // 清空文件输入框，以便下次可以选择相同的文件
+    event.target.value = null;
 }
 
 /**
@@ -570,7 +578,67 @@ function bindEventListeners() {
     bindEvent(ui.ui.uploadFileBtnInline, 'click', () => ui.ui.fileInputInline.click()); // ★ 访问 ui.ui.uploadFileBtnInline, ui.ui.fileInputInline
     bindEvent(ui.ui.fileInputInline, 'change', async (e) => {
         await handleFileSelection(e); 
-    });    
+    });
+
+    // ★★★ 新增：处理粘贴事件，支持从剪贴板粘贴文件/图片 ★★★
+    bindEvent(document, 'paste', async (e) => {
+        // 1. 检查事件是否发生在我们的主输入区域，避免干扰其他输入框
+        //    (例如设置页面的API Key输入框)
+        const isChatAreaActive = ui.ui.promptInput.contains(document.activeElement) || ui.ui.chatArea.contains(document.activeElement);
+        if (!isChatAreaActive) {
+            return;
+        }
+
+        const items = (e.clipboardData || e.originalEvent.clipboardData)?.items;
+        if (!items) return;
+
+        // 2. 筛选出文件
+        const files = [];
+        for (const item of items) {
+            if (item.kind === 'file') {
+                const file = item.getAsFile();
+                if (file) files.push(file);
+            }
+        }
+
+        // 3. 如果有文件，则处理它们
+        if (files.length > 0) {
+            e.preventDefault(); // 阻止默认的粘贴行为（如在输入框中显示文本路径）
+            await processFiles(files); // 使用新的通用函数处理文件
+        }
+    });
+
+    // ★★★ 新增：处理拖拽文件上传 ★★★
+    const chatAreaForDrop = ui.ui.chatArea;
+    if (chatAreaForDrop) {
+        // 1. 当文件被拖到区域上方时
+        bindEvent(chatAreaForDrop, 'dragover', (e) => {
+            e.preventDefault(); // 必须阻止默认行为，浏览器才会触发 drop 事件
+            e.stopPropagation();
+            // 添加视觉提示，告诉用户这里可以放置文件
+            chatAreaForDrop.classList.add('drag-over');
+        });
+
+        // 2. 当文件被拖离区域时
+        bindEvent(chatAreaForDrop, 'dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // 移除视觉提示
+            chatAreaForDrop.classList.remove('drag-over');
+        });
+
+        // 3. 当文件在区域内被释放（放下）时
+        bindEvent(chatAreaForDrop, 'drop', async (e) => {
+            e.preventDefault(); // 阻止浏览器默认的文件打开行为
+            e.stopPropagation();
+            chatAreaForDrop.classList.remove('drag-over'); // 移除视觉提示
+            const files = e.dataTransfer?.files;
+            if (files && files.length > 0) {
+                await processFiles(files); // 复用已有的文件处理函数
+            }
+        });
+    }
+
      bindEvent(document.getElementById('clear-prompt-btn'), 'click', () => {
         if (ui.ui.promptInput) {
             ui.ui.promptInput.value = '';

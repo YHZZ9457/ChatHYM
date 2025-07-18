@@ -3627,3 +3627,8 @@ body.light-theme .message code {
   z-index: 100; /* 确保覆盖层在最上方 */
   pointer-events: none; /* 非常重要！让鼠标事件可以穿透这个覆盖层，否则 drop 事件不会触发 */
 }
+
+/* 当拖拽覆盖层显示时，隐藏“空聊天”占位符 */
+.chat-area.drag-over .empty-chat-placeholder {
+  display: none !important;
+}

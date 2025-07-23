@@ -1365,6 +1365,7 @@ button.danger:hover {
   border-radius: 4px;
   border: 2px solid transparent;
   background-clip: content-box;
+  transition: background-color 0.2s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -1377,6 +1378,16 @@ body.dark-theme ::-webkit-scrollbar-thumb {
 
 body.dark-theme ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.5);
+}
+
+/* Firefox 滚动条优化 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.3) transparent;
+}
+
+body.dark-theme * {
+  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
 }
 
 /* Firefox 滚动条 */

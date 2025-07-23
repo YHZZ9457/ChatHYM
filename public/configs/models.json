@@ -45,8 +45,8 @@
           "isHidden": false
         },
         {
-          "text": "OR Qwen3-235B-A22B",
-          "value": "openrouter::qwen/qwen3-235b-a22b",
+          "text": "OR Qwen3-235B-2507",
+          "value": "openrouter::qwen/qwen3-235b-a22b-07-25",
           "isHidden": false
         },
         {
@@ -219,6 +219,11 @@
         {
           "text": "SF Kimi K2",
           "value": "siliconflow::moonshotai/Kimi-K2-Instruct",
+          "isHidden": false
+        },
+        {
+          "text": "SF Qwen3-235B 2507",
+          "value": "siliconflow::Qwen/Qwen3-235B-A22B-Instruct-2507",
           "isHidden": false
         }
       ]

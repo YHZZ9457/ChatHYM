@@ -574,7 +574,9 @@ function bindEventListeners() {
         if (currentConv && !state.isConversationGenerating(currentConv.id)) {
             utils.updateSubmitButtonState(false, ui.ui.submitActionBtn); // 按钮始终启用
         }
-    });    bindEvent(ui.ui.promptInput, 'paste', () => setTimeout(ui.autoResizePromptInput, 0)); // ★ 访问 ui.ui.promptInput, ui.autoResizePromptInput
+    });
+    
+    bindEvent(ui.ui.promptInput, 'paste', () => setTimeout(ui.autoResizePromptInput, 0)); // ★ 访问 ui.ui.promptInput, ui.autoResizePromptInput
     bindEvent(ui.ui.uploadFileBtnInline, 'click', () => ui.ui.fileInputInline.click()); // ★ 访问 ui.ui.uploadFileBtnInline, ui.ui.fileInputInline
     bindEvent(ui.ui.fileInputInline, 'change', async (e) => {
         await handleFileSelection(e); 

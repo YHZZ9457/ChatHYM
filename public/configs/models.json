@@ -65,6 +65,11 @@
           "isHidden": false
         },
         {
+          "text": "OR Qwen3-235B-2507tk",
+          "value": "openrouter::qwen/qwen3-235b-a22b-thinking-2507",
+          "isHidden": false
+        },
+        {
           "text": "OR Qwen3-32B",
           "value": "openrouter::qwen/qwen3-32b",
           "isHidden": true
@@ -224,6 +229,21 @@
         {
           "text": "SF Qwen3-235B 2507",
           "value": "siliconflow::Qwen/Qwen3-235B-A22B-Instruct-2507",
+          "isHidden": false
+        },
+        {
+          "text": "SF Qwen3-235B 2507tk",
+          "value": "siliconflow::Qwen/Qwen3-235B-A22B-Thinking-2507",
+          "isHidden": false
+        },
+        {
+          "text": "SF GLM-4.5",
+          "value": "siliconflow::zai-org/GLM-4.5",
+          "isHidden": false
+        },
+        {
+          "text": "SF GLM-4.5 Air",
+          "value": "siliconflow::zai-org/GLM-4.5-Air",
           "isHidden": false
         }
       ]

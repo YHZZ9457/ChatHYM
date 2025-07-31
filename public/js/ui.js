@@ -485,6 +485,7 @@ export function enableConversationDrag(listElement) { // ★ 接收一个元素�
     // 如果这个元素上已经有实例，先销毁
     if (listElement.sortableInstance) {
         listElement.sortableInstance.destroy();
+        delete listElement.sortableInstance; // 清除引用
     }
 
     // ★★★ 终极简化版 onEnd 逻辑 ★★★
